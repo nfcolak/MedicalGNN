@@ -50,7 +50,7 @@ MIMIC_RAW_DIR=/path/to/raw MEDGNN_DATA_ROOT=/path/to/data_root EXECUTE=1 bash co
 
 Without `EXECUTE=1` the script only prints the commands, and a stage can be run alone (`events|stays|labels|graph|k4`). It refuses to write into an output folder that already exists. Optional: `MEDGNN_EVENT_INPUTS` (real older event manifests; the tests that need them are skipped when it is unset).
 
-Rough durations (single machine, SSD): the `events` stage scans `labevents.csv` four times (legacy and v5 index, each uncapped and capped at 6 visits per subject), about 20 minutes per scan, then the repairs and the +60 min index; `stays` and `labels` take seconds; the `graph` build takes about 1.5 hours; `k4` fits three states (K = 10, 20, 30).
+Measured durations of a full from-raw rebuild on one laptop (Apple silicon, SSD), about 65 minutes in total: the `events` stage takes about 48 minutes (four `labevents.csv` scans of 7-18 minutes each, legacy and v5 index, each uncapped and capped at 6 visits per subject, then the repairs and the +60 min index); `stays` and `labels` take a few seconds; the `graph` build takes about 12 minutes; `k4` takes about 4 minutes for the three states (K = 10, 20, 30).
 
 Check the rebuild against these sha256 values (`sha256sum` or `shasum -a 256`; the paths are relative to `MEDGNN_DATA_ROOT/comparison/standardized/event_inputs/`):
 
@@ -65,7 +65,7 @@ Check the rebuild against these sha256 values (`sha256sum` or `shasum -a 256`; t
 | `v3_state_L4_v5c_v10t_top30_20261011/K4.json` | `e0354e283804dca9ad63d9654161df07081f4b8a928a577673d936a8a2f58afb` |
 | `clinical_graph_L4_plus60_v5c_20261009/graphs.jsonl` | `3aa1dc658e7153faf045bb70f43ca065b222e362ea0c86bcb4a60a35666858dd` |
 
-The graph hash is that of the `graphs.jsonl` file as produced by this repository.
+The graph hash is that of the `graphs.jsonl` file as produced by this repository. A full rebuild from the raw files reproduced all eight values.
 
 ## Final commands
 
