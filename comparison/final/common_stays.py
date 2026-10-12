@@ -1,37 +1,33 @@
-"""Common stays of the 4 fair_v3 cohorts INCLUDING test rows (the fair_v10t test-label restriction; same intersection
-rule as the old common_stays_v5 file, which skipped test). Checks that the train+validation part equals the old file.
+"""Common stays of the 3 cohorts INCLUDING test rows (the fair_v10t test-label restriction).
 
-Usage: python3 -m comparison.final.common_stays OUT_DIR [--v5-root EVENT_INPUTS_DIR]
-The two old cohorts are read from the directory in the env var MEDGNN_OLD_EVENT_INPUTS; the two v5 cohorts and the old
-common-stay file are read from --v5-root (default: the env var MEDGNN_V5_EVENT_INPUTS).
+The legacy plus-60 cohort has exactly the same stays as the legacy max-6 cohort, so the intersection of the
+legacy max-6, v5 max-6 and v5 plus-60 cohorts equals the intersection of all 4 cohorts used before.
+
+Usage: python3 -m comparison.final.common_stays OUT_DIR --legacy-max6 DIR --v5-max6 DIR --v5-plus60 DIR
+                                                [--check-against FILE]
+Each DIR is an event-input cohort directory holding cohort.csv. Writes OUT_DIR/stays.txt and OUT_DIR/report.json.
+--check-against FILE: optional stays file; its stay ids must equal the train+validation part of the common stays.
 """
 import argparse
 import csv
 import json
-import os
 import sys
 from pathlib import Path
 
-OLD_ROOT = Path(os.environ['MEDGNN_OLD_EVENT_INPUTS']) if os.environ.get('MEDGNN_OLD_EVENT_INPUTS') else None
-V5_ROOT = Path(os.environ['MEDGNN_V5_EVENT_INPUTS']) if os.environ.get('MEDGNN_V5_EVENT_INPUTS') else None
-NAMES = ['old_firstlab', 'old_plus60', 'v5_firstlab', 'v5_plus60']
+NAMES = ['legacy_max6', 'v5_max6', 'v5_plus60']
+SPLITS = ('train', 'validation', 'test')
 
 
 def main(argv=None):
     ap = argparse.ArgumentParser(prog='comparison.final.common_stays')
     ap.add_argument('output')
-    ap.add_argument('--v5-root', default=str(V5_ROOT) if V5_ROOT else None)
+    ap.add_argument('--legacy-max6', required=True, help='legacy cohort (first_lab all-numeric-known-unit, max 6 visits)')
+    ap.add_argument('--v5-max6', required=True, help='v5 cohort (representable-v5, max 6 visits)')
+    ap.add_argument('--v5-plus60', required=True, help='v5 +60 min cohort')
+    ap.add_argument('--check-against', default=None, help='optional stays file to compare with the train+validation part')
     a = ap.parse_args(argv)
-    if OLD_ROOT is None:
-        sys.exit('set MEDGNN_OLD_EVENT_INPUTS to the directory holding the two old event_inputs cohorts')
-    if not a.v5_root:
-        sys.exit('set MEDGNN_V5_EVENT_INPUTS or pass --v5-root with the directory holding the two v5 event_inputs cohorts')
-    v5 = Path(a.v5_root)
     out = Path(a.output)
-    paths = [OLD_ROOT / 'first_recorded_lab_all_visits_v2_max6/cohort.csv',
-             OLD_ROOT / 'first_recorded_lab_plus60_max6_20261005/cohort.csv',
-             v5 / 'first_recorded_lab_all_visits_max6_v5_20261009/cohort.csv',
-             v5 / 'first_recorded_lab_plus60_max6_v5_20261009/cohort.csv']
+    paths = [Path(a.legacy_max6) / 'cohort.csv', Path(a.v5_max6) / 'cohort.csv', Path(a.v5_plus60) / 'cohort.csv']
     cohorts = {}
     for name, path in zip(NAMES, paths):
         with open(path, newline='') as f:
@@ -42,19 +38,20 @@ def main(argv=None):
         bad = [s for s in common if cohorts[name][s] != ref[s]]
         if bad:
             sys.exit(f'{name}: sample_id/subject/split differ for {len(bad)} common stays')
-    old_file = v5 / 'common_stays_v5_20261009/stays.txt'
-    if old_file.exists():
-        old = set(old_file.read_text().split())
+    checked = None
+    if a.check_against:
+        old = set(Path(a.check_against).read_text().split())
         trval = {s for s in common if ref[s][2] != 'test'}
         if trval != old:
-            sys.exit(f'train+validation common stays differ from {old_file}: +{len(trval - old)} -{len(old - trval)}')
+            sys.exit(f'train+validation common stays differ from {a.check_against}: +{len(trval - old)} -{len(old - trval)}')
+        checked = True
     out.mkdir(parents=True, exist_ok=False)
     (out / 'stays.txt').write_text(''.join(s + '\n' for s in sorted(common)))
-    report = {'scope': 'train, validation AND test rows (test opened, design decision 2026-10-11)',
-              'common_stays': len(common), 'train_validation_equal_old_file': old_file.exists(),
-              'common_by_split': {sp: sum(1 for s in common if ref[s][2] == sp) for sp in ('train', 'validation', 'test')},
+    report = {'scope': 'train, validation AND test rows',
+              'common_stays': len(common), 'train_validation_equal_check_file': checked,
+              'common_by_split': {sp: sum(1 for s in common if ref[s][2] == sp) for sp in SPLITS},
               'cohorts': {n: {'path': str(p), 'by_split': {sp: sum(1 for v in cohorts[n].values() if v[2] == sp)
-                                                           for sp in ('train', 'validation', 'test')}}
+                                                           for sp in SPLITS}}
                           for n, p in zip(NAMES, paths)}}
     (out / 'report.json').write_text(json.dumps(report, indent=2, sort_keys=True) + '\n')
     print(json.dumps(report, indent=2, sort_keys=True))

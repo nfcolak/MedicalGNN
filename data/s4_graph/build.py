@@ -584,7 +584,7 @@ def run(args, *, inherited_validator=None, decision_policy=None, manifest_extra=
         sources['thresholds'] = thresholds_path.resolve()
     if args.with_diagnosis:
         sources['diagnosis'] = args.raw_root / 'diagnosis.csv'
-        sources['icd_map'] = args.raw_root / 'icd9_to_icd10_mapping.csv'
+        sources['icd_map'] = REPO_ROOT / 'data/reference/icd9_to_icd10_mapping.csv'  # CMS GEM table, tracked
         if diagnosis_policy == 'v5':
             sources['icd_overrides'] = Path(icd_mapping_v2.OVERRIDES_PATH).resolve()
 

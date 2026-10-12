@@ -26,10 +26,12 @@ from data.s3_labels.icd_mapping_v2 import (ICD_MAPPING_POLICY_V2, load_icd_map_v
                                            overrides_sha256)
 from data.s3_labels.labels import REPO, sha256, _load_labels, _load_disease_merges, _json_save
 from data.s3_labels.local_labels_v2 import literal_ids
-from data.s3_labels.local_labels_v3 import (GRAPH_REL, LABELS_REL, HISTORICAL_REL, OVERRIDES,
-                                            _apply_overrides)
+from data.s3_labels.local_labels_v3 import OVERRIDES, _apply_overrides
 
 LABEL_POLICY_VERSION = 'primary_dx_v4'
+# Tracked inputs (this repo): the frozen 30-class order + historical source hashes, and the CMS GEM table.
+LABEL_REFERENCE_REL = 'data/reference/label_reference_v1.json'
+ICD_MAPPING_REL = 'data/reference/icd9_to_icd10_mapping.csv'
 # Cosmetic names for tables; class strings in targets/contract stay frozen.
 CLASS_DISPLAY_NAMES = {
     'Hypokalemia': 'Fluid, electrolyte or acid-base disorder (E87)',
@@ -94,27 +96,26 @@ def _primary_reason(row_frame, labels):
     return reason
 
 
-def build(output, graph_root=None, source_root=None, restrict_stays=None):
+def build(output, graph_root, raw_root, restrict_stays=None):
     output = Path(output)
     if output.exists():
         raise FileExistsError(output)
-    source_root = Path(source_root if source_root is not None else REPO).resolve()
-    raw_root = source_root / 'data/raw/Original CSVs'
-    labels_path = source_root / LABELS_REL
-    graph_root = Path(graph_root if graph_root is not None else source_root / GRAPH_REL).resolve()
+    raw_root = Path(raw_root).resolve()
+    reference_path = REPO / LABEL_REFERENCE_REL
+    icd_mapping_path = REPO / ICD_MAPPING_REL
+    graph_root = Path(graph_root).resolve()
     from data.s2_events.repair_metadata import LOCK, PENDING, validate_index_ready
     if (graph_root / PENDING).exists() or (graph_root / LOCK).exists():
         raise ValueError('Graph/index metadata is locked or repair is incomplete')
-    historical_path = source_root / HISTORICAL_REL
-    historical = json.loads(historical_path.read_text())
+    historical = json.loads(reference_path.read_text())
     source_hashes = {
         'raw_diagnosis_sha256': sha256(raw_root / 'diagnosis.csv'),
-        'icd_mapping_sha256': sha256(raw_root / 'icd9_to_icd10_mapping.csv'),
+        'icd_mapping_sha256': sha256(icd_mapping_path),
         'merge_policy_sha256': sha256(REPO / 'data/s1_clean/merge_ed.py'),
     }
     if any(historical[k] != v for k, v in source_hashes.items()):
         raise ValueError('Original ontology source changed; refuse new-outcome reconstruction')
-    labels = _load_labels(labels_path)
+    labels = _load_labels(reference_path)
     missing = [c for c in PINNED_TOP10 + list(CLASS_DISPLAY_NAMES) if c not in labels]
     if missing:
         raise ValueError('Pinned/display class outside frozen classes: ' + repr(missing))
@@ -147,7 +148,7 @@ def build(output, graph_root=None, source_root=None, restrict_stays=None):
 
     # Inherited ontology: reconstructed with the ORIGINAL GEM pick (identical to v3), so the
     # class set / category map cannot drift with the new mapping.
-    crosswalk, _ = load_icd_map(raw_root / 'icd9_to_icd10_mapping.csv')
+    crosswalk, _ = load_icd_map(icd_mapping_path)
     old_icd10 = pd.Series([normalize_icd10(v, c, crosswalk) or '' for c, v in zip(d.icd_code, d.icd_version)],
                           index=d.index)
     old_cat3 = old_icd10.str[:3]
@@ -159,7 +160,7 @@ def build(output, graph_root=None, source_root=None, restrict_stays=None):
     category_map = {k: merges.get(v, v) for k, v in cat_title.items() if merges.get(v, v) in labels}
 
     # Labelling mapping: v2 (reviewed overrides); None = no defensible single ICD-10 target.
-    crosswalk2, approx2 = load_icd_map_v2(raw_root / 'icd9_to_icd10_mapping.csv')
+    crosswalk2, approx2 = load_icd_map_v2(icd_mapping_path)
     d['icd10_code'] = [normalize_icd10_v2(v, c, crosswalk2) or '' for c, v in zip(d.icd_code, d.icd_version)]
     d['cat3'] = d.icd10_code.str[:3]
     d['usable_label'] = ~d.cat3.str[:1].isin(['V', 'W', 'X', 'Y', 'Z', 'R', ''])
@@ -253,8 +254,9 @@ def build(output, graph_root=None, source_root=None, restrict_stays=None):
         'graph_artifact': str(graph_root), 'graph_manifest_sha256': graph_manifest_hash,
         'graph_sha256': graph_hash, 'cohort_sha256': cohort_hash,
         'target_binding_scope': binding_scope,
-        'labels': labels, 'labels_path': str(labels_path), 'labels_sha256': sha256(labels_path), **source_hashes,
-        'source_code_sha256': sha256(Path(__file__)), 'historical_binding_sha256': sha256(historical_path),
+        'labels': labels, 'label_reference_path': LABEL_REFERENCE_REL, 'label_reference_sha256': sha256(reference_path),
+        'icd_mapping_path': ICD_MAPPING_REL, **source_hashes,
+        'source_code_sha256': sha256(Path(__file__)),
         **icd_policy_fields,
         'restriction': restriction,
         'target_policy': "Exact literal subject_id+stay_id; the label is the frozen class of the stay's seq_num == 1 diagnosis only (after overrides S76->'Limb injury or pain', T81 only T814->'Skin or soft-tissue infection', I25 no class); an unusable or unmapped primary code gets target=-1 (label_reason says why). ICD-9 reaches ICD-10 through icd_mapping_v2 (reviewed tie-break overrides; no defensible single target = no label). The label comes from the primary code's 3-character category; a missing ICD-10 title for the exact mapped code does not block it. ICD strings preserve leading zeros. Stays outside --restrict-stays get target=-1, label_status outside_common_stays.",
@@ -275,11 +277,11 @@ if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser(description=__doc__.split('\n')[0])
     parser.add_argument('--output', type=Path, required=True)
-    parser.add_argument('--source-root', type=Path, default=REPO,
-                        help='Root holding git-ignored inputs (raw CSVs, event_inputs, native contract)')
-    parser.add_argument('--graph-root', type=Path, default=None,
-                        help='Explicit completed graph or repaired index_ready cohort to bind; never overwrites old targets')
+    parser.add_argument('--raw-root', type=Path, required=True,
+                        help='Folder with the decompressed MIMIC-IV-ED / hosp CSVs (diagnosis.csv is read)')
+    parser.add_argument('--graph-root', type=Path, required=True,
+                        help='Completed graph or repaired index_ready cohort to bind; never overwrites old targets')
     parser.add_argument('--restrict-stays', type=Path, default=None,
                         help='File with one stay_id per line; other cohort stays get target -1 / outside_common_stays')
     args = parser.parse_args()
-    build(args.output, graph_root=args.graph_root, source_root=args.source_root, restrict_stays=args.restrict_stays)
+    build(args.output, graph_root=args.graph_root, raw_root=args.raw_root, restrict_stays=args.restrict_stays)

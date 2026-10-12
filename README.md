@@ -15,18 +15,57 @@ conda activate protgnn-mimic
 
 Run Python as `env -u PYTHONPATH PYTHONDONTWRITEBYTECODE=1 /usr/bin/python3` from the repo root.
 
-## Data access
+## Reproduce the data from raw
 
-The data is MIMIC-IV-ED, available through PhysioNet credentialed access (https://physionet.org/content/mimic-iv-ed/). You must complete the PhysioNet credentialing and sign the data use agreement yourself. The raw CSVs and everything derived from them (cohorts, graphs, targets, predictions) are not included in this repository.
+The data is MIMIC-IV-ED and MIMIC-IV, available through PhysioNet credentialed access (https://physionet.org/content/mimic-iv-ed/ and https://physionet.org/content/mimiciv/). You must complete the PhysioNet credentialing and sign the data use agreements yourself. The raw CSVs and everything derived from them (cohorts, graphs, targets, predictions) are not included in this repository. With the raw files and this repository alone, the pipeline rebuilds every final input.
 
-Two environment variables point the scripts at your copy:
+Download these 9 files and decompress them (`gunzip`) into ONE folder (`MIMIC_RAW_DIR`):
+
+| File | Module | Read by the pipeline |
+|---|---|---|
+| `edstays.csv` | MIMIC-IV-ED 2.2 (`ed/`) | yes: event index, graph |
+| `diagnosis.csv` | MIMIC-IV-ED 2.2 | yes: labels, graph |
+| `triage.csv` | MIMIC-IV-ED 2.2 | yes: graph |
+| `vitalsign.csv` | MIMIC-IV-ED 2.2 | no (listed for completeness) |
+| `medrecon.csv` | MIMIC-IV-ED 2.2 | no (listed for completeness) |
+| `pyxis.csv` | MIMIC-IV-ED 2.2 | no (listed for completeness) |
+| `patients.csv` | MIMIC-IV 3.x (`hosp/`); 364,627 rows | yes: graph (age) |
+| `omr.csv` | MIMIC-IV 3.x (`hosp/`) | no (listed for completeness) |
+| `labevents.csv` | MIMIC-IV 3.x (`hosp/`), about 18 GB | yes: event index |
+
+The two reference tables the label step needs are tracked in `data/reference/`: `icd9_to_icd10_mapping.csv` (the CMS General Equivalence Mappings ICD-9 -> ICD-10 table, not MIMIC data) and `label_reference_v1.json` (the frozen 30-class order and the hashes of the historical label sources, which the label step checks).
+
+Then run all five stages (`events`, `stays`, `labels`, `graph`, `k4`):
+
+```bash
+MIMIC_RAW_DIR=/path/to/raw MEDGNN_DATA_ROOT=/path/to/data_root EXECUTE=1 bash comparison/final/pipeline.sh all
+```
 
 | Variable | Meaning |
 |---|---|
-| `MEDGNN_SOURCE_ROOT` | directory holding `data/raw/Original CSVs`, the old cohorts and the native class contract (read by `comparison/final/pipeline.sh`) |
+| `MIMIC_RAW_DIR` | required: the one folder with the decompressed raw CSVs |
 | `MEDGNN_DATA_ROOT` | root under which `comparison/standardized/event_inputs` is built and read (default: the repo root) |
+| `EXECUTE` | `1` runs the commands; otherwise they are only printed |
+| `PYTHON` | Python interpreter (default `python3`) |
 
-Optional: `MEDGNN_OLD_EVENT_INPUTS` and `MEDGNN_V5_EVENT_INPUTS` (event-input directories read by `comparison/final/common_stays.py`) and `MEDGNN_EVENT_INPUTS` (real older event manifests; the tests that need them are skipped when it is unset).
+Without `EXECUTE=1` the script only prints the commands, and a stage can be run alone (`events|stays|labels|graph|k4`). It refuses to write into an output folder that already exists. Optional: `MEDGNN_EVENT_INPUTS` (real older event manifests; the tests that need them are skipped when it is unset).
+
+Rough durations (single machine, SSD): the `events` stage scans `labevents.csv` four times (legacy and v5 index, each uncapped and capped at 6 visits per subject), about 20 minutes per scan, then the repairs and the +60 min index; `stays` and `labels` take seconds; the `graph` build takes about 1.5 hours; `k4` fits three states (K = 10, 20, 30).
+
+Check the rebuild against these sha256 values (`sha256sum` or `shasum -a 256`; the paths are relative to `MEDGNN_DATA_ROOT/comparison/standardized/event_inputs/`):
+
+| File | sha256 |
+|---|---|
+| `common_stays_withtest_v5_20261011/stays.txt` | `2d43991be35bb6ba88b867a847b64a97642766504546063ff1acaaa1c42c13d9` |
+| `targets_primary_v4_v5plus60_v5_test_20261011/targets.csv` | `6b251176949593c38c0ed2c5fd0bd1d7d620a92f89db1a71de47966574a40f39` |
+| `clinical_graph_L4_plus60_v5c_20261009/cohort.csv` | `2c531e7abbf4a7f4628c1494606cfc8f1d6f12d6eb1c044801f8dc7e36af68a9` |
+| `clinical_graph_L4_plus60_v5c_20261009/visit_membership.jsonl` | `9e2399f39c57ef0fb8831eccd8f118e5315a3cb1fd781f1161685881300090ed` |
+| `v3_state_L4_v5c_v10t_top10_20261011/K4.json` | `602cfcad3b7159239c2406291ef415c492617dca49ec742910bb89bbf30a8458` |
+| `v3_state_L4_v5c_v10t_top20_20261011/K4.json` | `76d730398aeff69889933f04cdb0617fd66e9823d54d29822de4e0c5a157de17` |
+| `v3_state_L4_v5c_v10t_top30_20261011/K4.json` | `e0354e283804dca9ad63d9654161df07081f4b8a928a577673d936a8a2f58afb` |
+| `clinical_graph_L4_plus60_v5c_20261009/graphs.jsonl` | `3aa1dc658e7153faf045bb70f43ca065b222e362ea0c86bcb4a60a35666858dd` |
+
+The graph hash is that of the `graphs.jsonl` file as produced by this repository.
 
 ## Final commands
 
@@ -108,9 +147,12 @@ Methods are found automatically: `core/registry.py` imports every `plugin_*.py` 
 
 ```
 data/
+├── reference/         tracked inputs of the label step (not MIMIC data)
+│   ├── icd9_to_icd10_mapping.csv   ICD-9 -> ICD-10 table (CMS General Equivalence Mappings, GEMs)
+│   └── label_reference_v1.json     frozen 30-class order + historical source hashes checked by the labels
 ├── s1_clean/          historical cleaning code (FROZEN: never edit, import or run)
 ├── s2_events/         event index + cohort
-│   ├── first_lab.py           first-lab cohort scan (--lab-scope representable-v5)
+│   ├── first_lab.py           first-lab cohort scan (--lab-scope representable-v5; all-numeric-known-unit for the legacy cohort)
 │   ├── event_store_v5.py      v5 event store
 │   ├── repair_metadata.py     max-6-visit cap check, marks the index ready
 │   ├── first_lab_delay.py     +60 min variant of the index (used by the final graph)
@@ -127,7 +169,7 @@ data/
     └── selection.py           top-K labels, train/dev/validation id selection
 ```
 
-Raw MIMIC-IV ED CSVs are NOT in this repo (see "Data access").
+Raw MIMIC CSVs are NOT in this repo (see "Reproduce the data from raw").
 
 ## 5. `comparison/` (run, compare, store)
 
@@ -136,9 +178,9 @@ comparison/
 ├── canonical_split.json      patient split 80/10/10 train/validation/test (FROZEN, never regenerate)
 ├── final/                    everything for the final results
 │   ├── run.py                runs the 45 final trainings (5 methods x K 10/20/30 x 3 seeds); --plan = dry run
-│   ├── pipeline.sh           prints (EXECUTE=1 runs) the steps that built the final inputs:
-│   │                         events -> stays -> labels -> graph -> k4
-│   ├── common_stays.py       stay list incl. test rows, used to restrict the labels
+│   ├── pipeline.sh           prints (EXECUTE=1 runs) the steps that build the final inputs from the raw CSVs:
+│   │                         events -> stays -> labels -> graph -> k4 (needs MIMIC_RAW_DIR)
+│   ├── common_stays.py       stay list incl. test rows (legacy max6, v5 max6, v5 +60 cohorts), used to restrict the labels
 │   ├── fit_k4.py             fits the CEI v3 state for one K
 │   └── hpo.py                the light hyper-parameter search (K=17, 10k sample, 20 epochs, dev only)
 ├── top3/
@@ -187,7 +229,7 @@ Prefix every command with `env -u PYTHONPATH PYTHONDONTWRITEBYTECODE=1 /usr/bin/
 | Task | Command | Trains? |
 |---|---|---|
 | Check that all 15 final plans are valid | `-m comparison.final.run --plan` | no |
-| Show the input-building steps | `bash comparison/final/pipeline.sh all` (no prefix) | no |
+| Show the input-building steps | `MIMIC_RAW_DIR=<raw folder> bash comparison/final/pipeline.sh all` (no prefix) | no |
 | Compare the runs of one K | `-m comparison.top3.compare --run <run dir> ... --out <new path>` | no |
 | Show one training plan | `-m core.train <method args> --top-k-labels <K> --artifact ... --targets ... --output ... --seed 1234` | no |
 | Re-run the final trainings | `-m comparison.final.run [--ks 10,20,30]` | yes, needs approval |
