@@ -1,0 +1,231 @@
+icd9,icd10,reason
+4019,I10,fixplan-fable-icd proposal: hypertension NOS = essential hypertension; I16.9 is hypertensive crisis
+2720,E7800,"fixplan-fable-icd proposal: pure hypercholesterolemia unspecified; E78.5 (plan v1) is not a GEM candidate, E78.01 is familial"
+2724,E785,fixplan-fable-icd proposal: hyperlipidemia NEC/NOS = E78.5 unspecified; E78.4 is other hyperlipidemia (least-specific rule picks E784)
+78909,R1010,fixplan-fable-icd proposal: any R10 candidate; no label effect; keep current to limit churn
+7840,R51,fixplan-fable-icd proposal: headache; G44.1 is vascular headache NEC
+78060,R509,fixplan-fable-icd proposal: fever unspecified
+78079,R5383,fixplan-fable-icd proposal: other fatigue; G93.3 (least-specific pick) is postviral fatigue syndrome
+7245,M549,fixplan-fable-icd proposal: dorsalgia unspecified
+78791,R197,fixplan-fable-icd proposal: diarrhea unspecified; K52.x are noninfective gastroenteritis
+95901,S0990XA,fixplan-fable-icd proposal: unspecified injury of head; S09.8 is other specified injury
+4280,I509,"fixplan-fable-icd proposal: heart failure unspecified, not I50.814"
+78609,R0689,fixplan-fable-icd proposal: other abnormalities of breathing; R06.3 is periodic breathing
+5609,K56609,fixplan-fable-icd proposal: unspecified intestinal obstruction unspecified as to partial/complete
+6823,L03119,fixplan-fable-icd proposal: cellulitis of unspecified part of limb; L03.129 is acute lymphangitis
+6824,L03119,fixplan-fable-icd proposal: cellulitis of unspecified part of limb; current pick L03.129 is lymphangitis
+6826,L03119,fixplan-fable-icd proposal: cellulitis of unspecified part of limb; current pick L03.129 is lymphangitis
+6827,L03119,fixplan-fable-icd proposal: cellulitis of unspecified part of limb
+6820,L03211,fixplan-fable-icd proposal: cellulitis of face; K12.2 (mouth) is wrong
+6822,L03319,fixplan-fable-icd proposal: cellulitis of trunk unspecified
+68110,L03039,fixplan-fable-icd proposal: cellulitis of unspecified toe; L03.049 is lymphangitis
+7820,R209,fixplan-fable-icd proposal: unspecified disturbance of skin sensation
+78659,R0789,fixplan-fable-icd proposal: other chest pain
+78703,R1110,fixplan-fable-icd proposal: vomiting unspecified; R11.12 is projectile vomiting
+34580,G40802,fixplan-fable-icd proposal: other epilepsy not intractable without status (current pick is right; least-specific picks G40.109 localization-related)
+34590,G40909,fixplan-fable-icd proposal: epilepsy unspecified not intractable without status
+99859,T814XXA,fixplan-fable-icd proposal: infection following a procedure; K68.11 (retroperitoneal abscess) would drop 287 Skin stays
+5589,K529,fixplan-fable-icd proposal: noninfective gastroenteritis unspecified
+E9270,X500XXA,fixplan-fable-icd proposal: external cause: always 7th character A (initial); current pick is D (subsequent)
+E9278,X509XXA,fixplan-fable-icd proposal: external cause 7th character A
+E9208,W268XXA,fixplan-fable-icd proposal: contact with other sharp objects initial; W45.8 is foreign body entering skin
+E8849,W1789XA,fixplan-fable-icd proposal: other fall from one level to another; W14 is fall from tree
+7291,M791,fixplan-fable-icd proposal: myalgia; M60.9 (myositis) is wrong
+8470,S134XXA,fixplan-fable-icd proposal: sprain of ligaments of cervical spine
+64893,O99283,fixplan-fable-icd proposal: no clean candidate for 648.93; keep current (O99) rather than gestational malnutrition O25
+41091,I219,"fixplan-fable-icd proposal: AMI unspecified, not STEMI"
+42789,I498,fixplan-fable-icd proposal: other specified cardiac arrhythmias; R00.1 is bradycardia unspecified
+920,S0093XA,fixplan-fable-icd proposal: contusion of unspecified part of head
+5770,K8590,fixplan-fable-icd proposal: acute pancreatitis without necrosis or infection; K85.92 (current) is with infected necrosis
+25080,E1169,fixplan-fable-icd proposal: type 2 DM with other specified complication; E11.618 (current) is diabetic neuropathic arthropathy
+25081,E1069,fixplan-fable-icd proposal: type 1 DM with other specified complication
+25010,E1110,fixplan-fable-icd proposal: DKA type 2 / unspecified type with ketoacidosis without coma
+25012,E1110,fixplan-fable-icd proposal: DKA type 2 / unspecified type with ketoacidosis without coma
+9597,S8990XA,fixplan-fable-icd proposal: unspecified injury of unspecified lower leg; S99 are ankle/foot
+4871,J111,fixplan-fable-icd proposal: influenza with other respiratory manifestations unidentified virus; J10 requires identified virus
+5715,K7460,fixplan-fable-icd proposal: unspecified cirrhosis of liver; K74.0 (current and least-specific) is hepatic fibrosis
+78009,R401,fixplan-fable-icd proposal: stupor
+7823,R609,fixplan-fable-icd proposal: edema unspecified; R60.0 is localized edema
+7842,R221,fixplan-fable-icd proposal: localized swelling head/neck: R22.0 face or R22.1 neck both defensible; keep current
+V5869,Z79899,fixplan-fable-icd proposal: other long term drug therapy
+9100,S0091XA,fixplan-fable-icd proposal: abrasion of unspecified part of head; S10.11 (current) is abrasion of throat (+18 primary stays to Head injury)
+49390,J45909,fixplan-fable-icd proposal: unspecified asthma uncomplicated; J45.998 (current) is other asthma
+84500,S93409A,fixplan-fable-icd proposal: sprain of unspecified ligament of unspecified ankle; S96.919 (current) is strain of muscle at ankle (+12 primary stays to Limb class)
+30590,F1910,fixplan-fable-icd proposal: other psychoactive substance abuse uncomplicated; F18.10 (current) is inhalant abuse
+4359,G459,fixplan-fable-icd proposal: TIA unspecified; I67.848 (current) is cerebrovascular vasospasm
+7881,R300,fixplan-fable-icd proposal: dysuria (exact match); R30.9 is painful micturition unspecified
+78652,R071,fixplan-fable-icd proposal: chest pain on breathing
+4241,I359,fixplan-fable-icd proposal: nonrheumatic aortic valve disorder unspecified; I35.0 (current) is stenosis
+0340,J020,fixplan-fable-icd proposal: streptococcal pharyngitis
+7873,R143,fixplan-fable-icd proposal: flatulence
+20280,C8580,fixplan-fable-icd proposal: other specified NHL unspecified site
+8910,S81809A,fixplan-fable-icd proposal: unspecified open wound of unspecified lower leg; S91 is ankle/foot
+3079,R451,fixplan-fable-icd proposal: restlessness and agitation; F63.3 is trichotillomania
+6259,N9489,fixplan-fable-icd proposal: other specified conditions of female genital organs (organ-specific; R10.2 is pelvic pain)
+6089,N509,fixplan-fable-icd proposal: disorder of male genital organs unspecified; R10.2 (current) is pelvic pain
+5722,K7290,fixplan-fable-icd proposal: hepatic failure unspecified without coma; K72.91 (current) is with coma
+8028,S0292XA,fixplan-fable-icd proposal: unspecified fracture of facial bones; S02.42 (least-specific) is maxilla
+8026,S0230XA,fixplan-fable-icd proposal: fracture of orbital floor unspecified side; S02.31 (current) is right side
+6202,N83209,fixplan-fable-icd proposal: unspecified ovarian cyst unspecified side
+9130,S50819A,fixplan-fable-icd proposal: abrasion of unspecified forearm; S60.819 (current) is wrist; note S50 has no class so 8 primary stays leave Limb class (LAB-10 class definition issue not a mapping issue)
+82021,S72143A,fixplan-fable-icd proposal: displaced intertrochanteric fracture of unspecified femur (ICD-10 convention: fracture not specified as nondisplaced = displaced)
+8082,S32509A,fixplan-fable-icd proposal: unspecified fracture of unspecified pubis
+72885,M6240,fixplan-fable-icd proposal: contracture of muscle unspecified site
+30981,F4310,fixplan-fable-icd proposal: PTSD unspecified
+566,K610,fixplan-fable-icd proposal: anal abscess
+78720,R1310,fixplan-fable-icd proposal: dysphagia unspecified; R13.0 (current) is aphagia
+7813,R279,fixplan-fable-icd proposal: unspecified lack of coordination
+5569,K5190,fixplan-fable-icd proposal: ulcerative colitis unspecified without complications; K59.31 (current) is slow transit constipation
+45341,I824Y9,fixplan-fable-icd proposal: acute embolism and thrombosis of unspecified deep veins of unspecified proximal lower extremity (exact ICD-10 analogue; I82.419 is femoral vein)
+45342,I824Z9,fixplan-fable-icd proposal: acute embolism and thrombosis of unspecified deep veins of unspecified distal lower extremity
+51881,J9600,fixplan-fable-icd proposal: acute respiratory failure unspecified whether with hypoxia or hypercapnia; J96.90 (current) is not acute
+99673,T82898A,fixplan-fable-icd proposal: other specified complication of vascular prosthetic devices (most generic candidate)
+99674,T829XXA,fixplan-fable-icd proposal: unspecified complication of cardiac/vascular prosthetic device
+99676,T839XXA,fixplan-fable-icd proposal: unspecified complication of GU prosthetic device
+99679,T85898A,fixplan-fable-icd proposal: other specified complication of other internal prosthetic devices
+7244,M5417,fixplan-fable-icd proposal: lumbosacral radiculopathy
+9694,T424X1A,fixplan-fable-icd proposal: benzodiazepine poisoning accidental (ICD-10 convention: intent not stated = accidental)
+8449,S8390XA,fixplan-fable-icd proposal: sprain of unspecified site of unspecified knee; S86.919 (current) is strain of muscle
+8448,S838X9A,fixplan-fable-icd proposal: other sprain of unspecified knee
+9592,S4990XA,fixplan-fable-icd proposal: unspecified injury of unspecified shoulder/upper arm
+9593,S59909A,fixplan-fable-icd proposal: unspecified injury of unspecified forearm
+82525,S92309A,fixplan-fable-icd proposal: fracture of unspecified metatarsal bone unspecified foot; S99.199 (current) is physeal fracture (+6 primary stays to Limb class)
+7801,R443,fixplan-fable-icd proposal: hallucinations unspecified (current is right; least-specific picks R44.0 auditory)
+72210,M5126,fixplan-fable-icd proposal: other intervertebral disc displacement lumbar region; M51.27 (current) is lumbosacral
+60490,N453,fixplan-fable-icd proposal: epididymo-orchitis (covers orchitis and epididymitis unspecified)
+80502,S12100A,fixplan-fable-icd proposal: unspecified displaced fracture of second cervical vertebra
+87320,S0120XA,fixplan-fable-icd proposal: unspecified open wound of nose
+8409,S43409A,fixplan-fable-icd proposal: sprain of unspecified ligament of unspecified shoulder joint
+5959,N3090,fixplan-fable-icd proposal: cystitis unspecified without hematuria
+6110,N610,fixplan-fable-icd proposal: mastitis without abscess
+38010,H60399,fixplan-fable-icd proposal: other infective otitis externa unspecified ear (current is right)
+4254,I428,fixplan-fable-icd proposal: other cardiomyopathies
+7234,M5413,fixplan-fable-icd proposal: cervicothoracic radiculopathy
+99811,,"wide code: 60 GEM candidates across 12 categories, no defensible single target"
+99812,,"wide code: 60 GEM candidates across 12 categories, no defensible single target"
+6268,N938,"ambiguous primary code (gaudit-labels), reviewed: fallback pick accepted (stem 9 > 8 > shortest > alphabetical)"
+8488,,"ambiguous primary code (gaudit-labels), reviewed: sprain/strain other sites: jaw, thoracic or low back candidates, none defensible"
+570,K7200,"ambiguous primary code (gaudit-labels), reviewed: acute necrosis of liver = acute hepatic failure"
+5733,K759,"ambiguous primary code (gaudit-labels), reviewed: fallback pick accepted (stem 9 > 8 > shortest > alphabetical)"
+51882,J80,"ambiguous primary code (gaudit-labels), reviewed: fallback pick accepted (stem 9 > 8 > shortest > alphabetical)"
+73390,M899,"ambiguous primary code (gaudit-labels), reviewed: bone disorder unspecified"
+80120,S02109A,"ambiguous primary code (gaudit-labels), reviewed: skull base fracture with intracranial injury: the fracture code"
+78499,R196,"ambiguous primary code (gaudit-labels), reviewed: head and neck symptoms other: halitosis; keeps the old pick (breathing codes do not fit head/neck)"
+95909,S199XXA,"ambiguous primary code (gaudit-labels), reviewed: fallback pick accepted (stem 9 > 8 > shortest > alphabetical)"
+64894,,"ambiguous primary code (gaudit-labels), reviewed: other maternal conditions antepartum: candidates are unrelated O-chapter conditions, none defensible"
+73313,M8468XA,"ambiguous primary code (gaudit-labels), reviewed: pathologic fracture of vertebrae; keeps the old pick"
+9110,S2091XA,"ambiguous primary code (gaudit-labels), reviewed: abrasion of trunk: unspecified part of thorax; old S30815A is genital abrasion"
+99813,,"wide code: 31 GEM candidates across 12 categories, no defensible single target"
+5110,R091,"ambiguous primary code (gaudit-labels), reviewed: pleurisy without effusion = R09.1; keeps the old pick"
+72293,M5186,"ambiguous primary code (gaudit-labels), reviewed: other disc disorder, lumbar region"
+7906,R7989,"ambiguous primary code (gaudit-labels), reviewed: other abnormal blood chemistry"
+8250,S92009A,"ambiguous primary code (gaudit-labels), reviewed: closed fracture of calcaneus; old S99099A is a physeal fracture code"
+67434,O902,"ambiguous primary code (gaudit-labels), reviewed: other complication of obstetric surgical wound (hematoma/dehiscence); O86.0 is infection"
+514,J182,"ambiguous primary code (gaudit-labels), reviewed: fallback pick accepted (stem 9 > 8 > shortest > alphabetical)"
+4599,I999,"ambiguous primary code (gaudit-labels), reviewed: circulatory system disorder unspecified"
+3009,F99,"ambiguous primary code (gaudit-labels), reviewed: nonpsychotic mental disorder unspecified; keeps the old pick"
+78099,R6889,"ambiguous primary code (gaudit-labels), reviewed: fallback pick accepted (stem 9 > 8 > shortest > alphabetical)"
+80126,S02109A,"ambiguous primary code (gaudit-labels), reviewed: skull base fracture with intracranial injury: the fracture code"
+99939,T8029XA,"ambiguous primary code (gaudit-labels), reviewed: fallback pick accepted (stem 9 > 8 > shortest > alphabetical)"
+7265,M7060,"ambiguous primary code (gaudit-labels), reviewed: hip enthesopathy: trochanteric bursitis unspecified"
+7292,M792,"ambiguous primary code (gaudit-labels), reviewed: fallback pick accepted (stem 9 > 8 > shortest > alphabetical)"
+7048,L738,"ambiguous primary code (gaudit-labels), reviewed: fallback pick accepted (stem 9 > 8 > shortest > alphabetical)"
+42781,I495,"ambiguous primary code (gaudit-labels), reviewed: sinoatrial node dysfunction = sick sinus syndrome, not bradycardia R00.1"
+9839,T5491XA,"ambiguous primary code (gaudit-labels), reviewed: fallback pick accepted (stem 9 > 8 > shortest > alphabetical)"
+80026,S020XXA,"ambiguous primary code (gaudit-labels), reviewed: skull vault fracture with intracranial injury: the fracture code (S06 candidates are the associated haemorrhage)"
+9982,,"ambiguous primary code (gaudit-labels), reviewed: accidental puncture/laceration: wide candidate set across body systems"
+5238,K055,"ambiguous primary code (gaudit-labels), reviewed: other periodontal disease"
+56889,K668,"ambiguous primary code (gaudit-labels), reviewed: other specified disorders of peritoneum"
+8408,S43499A,"ambiguous primary code (gaudit-labels), reviewed: fallback pick accepted (stem 9 > 8 > shortest > alphabetical)"
+6071,N481,"ambiguous primary code (gaudit-labels), reviewed: balanitis"
+51189,J948,"ambiguous primary code (gaudit-labels), reviewed: other specified forms of pleural effusion; keeps the old pick"
+80020,S020XXA,"ambiguous primary code (gaudit-labels), reviewed: skull vault fracture with intracranial injury: the fracture code (S06 candidates are the associated haemorrhage)"
+60889,N5089,"ambiguous primary code (gaudit-labels), reviewed: other specified disorders of male genital organs (wide GEM set, but N50.89 is the matching one)"
+80320,S0291XA,"ambiguous primary code (gaudit-labels), reviewed: other/unqualified skull fracture with intracranial injury: the fracture code"
+9160,S70219A,"ambiguous primary code (gaudit-labels), reviewed: fallback pick accepted (stem 9 > 8 > shortest > alphabetical)"
+9114,S2096XA,"ambiguous primary code (gaudit-labels), reviewed: insect bite of trunk: unspecified part of thorax; old S30867A is genital"
+99529,,"wide code: 159 GEM candidates across 15 categories, no defensible single target"
+6269,N939,"ambiguous primary code (gaudit-labels), reviewed: fallback pick accepted (stem 9 > 8 > shortest > alphabetical)"
+88122,S61509A,"ambiguous primary code (gaudit-labels), reviewed: fallback pick accepted (stem 9 > 8 > shortest > alphabetical)"
+9529,,"ambiguous primary code (gaudit-labels), reviewed: spinal cord injury, site unspecified: cervical/thoracic/lumbar/sacral candidates, none defensible"
+80121,S02109A,"ambiguous primary code (gaudit-labels), reviewed: skull base fracture with intracranial injury: the fracture code"
+4870,J1100,"ambiguous primary code (gaudit-labels), reviewed: influenza with pneumonia; keeps the old pick"
+51919,J9809,"ambiguous primary code (gaudit-labels), reviewed: fallback pick accepted (stem 9 > 8 > shortest > alphabetical)"
+36816,H5316,"ambiguous primary code (gaudit-labels), reviewed: psychophysical visual disturbance"
+3089,F430,"ambiguous primary code (gaudit-labels), reviewed: acute stress reaction"
+9949,T7589XA,"ambiguous primary code (gaudit-labels), reviewed: other effects of external causes; keeps the old pick"
+9039,S45909A,"ambiguous primary code (gaudit-labels), reviewed: fallback pick accepted (stem 9 > 8 > shortest > alphabetical)"
+80130,S02109A,"ambiguous primary code (gaudit-labels), reviewed: skull base fracture with intracranial injury: the fracture code"
+8439,S73109A,"ambiguous primary code (gaudit-labels), reviewed: fallback pick accepted (stem 9 > 8 > shortest > alphabetical)"
+9551,S4410XA,"ambiguous primary code (gaudit-labels), reviewed: fallback pick accepted (stem 9 > 8 > shortest > alphabetical)"
+82535,S92309B,"ambiguous primary code (gaudit-labels), reviewed: fallback pick accepted (stem 9 > 8 > shortest > alphabetical)"
+72292,M5184,"ambiguous primary code (gaudit-labels), reviewed: other disc disorder, thoracic region"
+83412,S63279A,"ambiguous primary code (gaudit-labels), reviewed: open dislocation of finger joint; S61 candidates are open wounds"
+80122,S02109A,"ambiguous primary code (gaudit-labels), reviewed: skull base fracture with intracranial injury: the fracture code"
+73381,,"wide code: 25 GEM candidates across 7 categories, no defensible single target"
+78899,R3989,"ambiguous primary code (gaudit-labels), reviewed: fallback pick accepted (stem 9 > 8 > shortest > alphabetical)"
+1369,B999,"ambiguous primary code (gaudit-labels), reviewed: unspecified infectious and parasitic disease"
+7098,L988,"ambiguous primary code (gaudit-labels), reviewed: fallback pick accepted (stem 9 > 8 > shortest > alphabetical)"
+9115,L0889,"ambiguous primary code (gaudit-labels), reviewed: infected insect bite of trunk: other local skin infection"
+99581,T7411XA,"ambiguous primary code (gaudit-labels), reviewed: fallback pick accepted (stem 9 > 8 > shortest > alphabetical)"
+99709,G9782,"ambiguous primary code (gaudit-labels), reviewed: other nervous system complication; keeps the old pick"
+30759,F5089,"ambiguous primary code (gaudit-labels), reviewed: other eating disorder"
+55329,K439,"ambiguous primary code (gaudit-labels), reviewed: fallback pick accepted (stem 9 > 8 > shortest > alphabetical)"
+80321,S0291XA,"ambiguous primary code (gaudit-labels), reviewed: other/unqualified skull fracture with intracranial injury: the fracture code"
+3209,G009,"ambiguous primary code (gaudit-labels), reviewed: bacterial meningitis unspecified"
+7249,M539,"ambiguous primary code (gaudit-labels), reviewed: fallback pick accepted (stem 9 > 8 > shortest > alphabetical)"
+80032,S020XXA,"ambiguous primary code (gaudit-labels), reviewed: skull vault fracture with intracranial injury: the fracture code (S06 candidates are the associated haemorrhage)"
+84200,S63509A,"ambiguous primary code (gaudit-labels), reviewed: fallback pick accepted (stem 9 > 8 > shortest > alphabetical)"
+86810,S3690XA,"ambiguous primary code (gaudit-labels), reviewed: unspecified intra-abdominal organ injury; keeps the old pick"
+84509,S93499A,"ambiguous primary code (gaudit-labels), reviewed: ankle sprain other; keeps the old pick (S86.019A is Achilles strain)"
+27549,E8359,"ambiguous primary code (gaudit-labels), reviewed: disorder of calcium metabolism unspecified"
+99559,T7492XA,"ambiguous primary code (gaudit-labels), reviewed: fallback pick accepted (stem 9 > 8 > shortest > alphabetical)"
+65683,O68,"ambiguous primary code (gaudit-labels), reviewed: keeps the old pick; no single ICD-10 equivalent"
+6208,N838,"ambiguous primary code (gaudit-labels), reviewed: fallback pick accepted (stem 9 > 8 > shortest > alphabetical)"
+7019,L909,"ambiguous primary code (gaudit-labels), reviewed: fallback pick accepted (stem 9 > 8 > shortest > alphabetical)"
+9175,L0889,"ambiguous primary code (gaudit-labels), reviewed: infected insect bite of foot: other local skin infection"
+80322,S0291XA,"ambiguous primary code (gaudit-labels), reviewed: other/unqualified skull fracture with intracranial injury: the fracture code"
+9975,N9989,"KDX-06: sole GEM candidate (other postprocedural genitourinary complication); kept, row documents the review"
+3572,E1142,KDX-06: polyneuropathy in diabetes; type 2 diabetic polyneuropathy (E13.42 is other specified diabetes)
+59970,R319,"KDX-06: sole GEM candidate (hematuria unspecified); kept, row documents the review"
+0663,,"wide code: 7 GEM candidates across 3 categories, no defensible single target"
+07989,,"wide code: 8 GEM candidates across 3 categories, no defensible single target"
+24950,,"wide code: 17 GEM candidates across 3 categories, no defensible single target"
+24960,,"wide code: 20 GEM candidates across 3 categories, no defensible single target"
+24980,,"wide code: 27 GEM candidates across 3 categories, no defensible single target"
+2798,,"wide code: 8 GEM candidates across 3 categories, no defensible single target"
+29285,,"wide code: 15 GEM candidates across 5 categories, no defensible single target"
+29289,,"wide code: 106 GEM candidates across 9 categories, no defensible single target"
+41511,,"wide code: 7 GEM candidates across 4 categories, no defensible single target"
+64131,,"wide code: 25 GEM candidates across 3 categories, no defensible single target"
+65681,,"wide code: 8 GEM candidates across 3 categories, no defensible single target"
+7018,,"wide code: 9 GEM candidates across 7 categories, no defensible single target"
+73382,,"wide code: 40 GEM candidates across 11 categories, no defensible single target"
+75881,,"wide code: 8 GEM candidates across 3 categories, no defensible single target"
+75989,,"wide code: 9 GEM candidates across 3 categories, no defensible single target"
+8068,,"wide code: 8 GEM candidates across 6 categories, no defensible single target"
+8069,,"wide code: 8 GEM candidates across 6 categories, no defensible single target"
+8190,,"wide code: 8 GEM candidates across 3 categories, no defensible single target"
+8191,,"wide code: 8 GEM candidates across 3 categories, no defensible single target"
+8280,,"wide code: 10 GEM candidates across 5 categories, no defensible single target"
+8281,,"wide code: 10 GEM candidates across 5 categories, no defensible single target"
+9052,,"wide code: 8 GEM candidates across 4 categories, no defensible single target"
+9054,,"wide code: 17 GEM candidates across 5 categories, no defensible single target"
+9056,,"wide code: 13 GEM candidates across 9 categories, no defensible single target"
+9057,,"wide code: 16 GEM candidates across 15 categories, no defensible single target"
+9061,,"wide code: 11 GEM candidates across 6 categories, no defensible single target"
+9062,,"wide code: 19 GEM candidates across 10 categories, no defensible single target"
+9063,,"wide code: 18 GEM candidates across 10 categories, no defensible single target"
+9064,,"wide code: 16 GEM candidates across 10 categories, no defensible single target"
+9073,,"wide code: 7 GEM candidates across 3 categories, no defensible single target"
+9079,,"wide code: 9 GEM candidates across 9 categories, no defensible single target"
+9083,,"wide code: 8 GEM candidates across 8 categories, no defensible single target"
+9085,,"wide code: 7 GEM candidates across 5 categories, no defensible single target"
+9089,,"wide code: 16 GEM candidates across 11 categories, no defensible single target"
+98989,,"wide code: 27 GEM candidates across 3 categories, no defensible single target"
+E959,,"wide code: 20 GEM candidates across 11 categories, no defensible single target"
+E969,,"wide code: 12 GEM candidates across 10 categories, no defensible single target"
+V5412,,"wide code: 533 GEM candidates across 3 categories, no defensible single target"
+V5416,,"wide code: 528 GEM candidates across 4 categories, no defensible single target"
+V5417,,"wide code: 145 GEM candidates across 3 categories, no defensible single target"
+V5419,,"wide code: 129 GEM candidates across 5 categories, no defensible single target"

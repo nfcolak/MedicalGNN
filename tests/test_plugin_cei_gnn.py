@@ -1,0 +1,413 @@
+def _fixture():
+    import torch
+    from torch_geometric.data import Data
+    from core.registry import METHOD_REGISTRY
+
+    torch.manual_seed(20260927)
+    adapter = METHOD_REGISTRY["cei_gnn"](
+        num_tokens=8, node_dim=3, edge_dim=2, num_classes=3, hidden=8,
+        layers=1, dropout=0.0, token_dim=4, num_triples=3, args={})
+    graph = Data(
+        x=torch.tensor([[0.2, -0.3, 0.5], [0.8, 0.1, -0.4], [-0.1, 0.7, 0.2]]),
+        token=torch.tensor([1, 2, 3]), node_type=torch.tensor([0, 1, 2]),
+        edge_index=torch.tensor([[0, 1, 0], [1, 2, 1]]),
+        edge_attr=torch.tensor([[0.2, 0.1], [0.4, -0.3], [-0.2, 0.6]]),
+        edge_relation=torch.tensor([0, 1, 0]), edge_triple=torch.tensor([0, 1, 2]))
+    return adapter.eval(), graph
+
+
+def test_cei_is_independent_registered_method():
+    from core.registry import METHOD_REGISTRY
+
+    assert "cei_gnn" in METHOD_REGISTRY, "independent evidence-interaction method absent"
+
+
+def test_continuous_core_is_exact_and_uses_supplied_channels_not_metadata_x():
+    import torch
+
+    adapter, graph = _fixture()
+    features = adapter.continuous_inputs(graph)
+    ordinary = adapter(graph, epoch=0).logits
+    continuous = adapter.forward_continuous(features, graph.edge_index, graph)
+    torch.testing.assert_close(ordinary, continuous, rtol=0, atol=0)
+
+    altered = features.clone()
+    altered[:, :adapter.node_dim] += 0.7
+    supplied_changed = adapter.forward_continuous(altered, graph.edge_index, graph)
+    assert not torch.allclose(ordinary, supplied_changed), "supplied numeric channels were ignored"
+
+    metadata_changed = graph.clone()
+    metadata_changed.x = metadata_changed.x + 100
+    held_features = adapter.forward_continuous(features, graph.edge_index, metadata_changed)
+    torch.testing.assert_close(ordinary, held_features, rtol=0, atol=0)
+
+    embedded_changed = features.clone()
+    embedded_changed[:, adapter.node_dim:adapter.node_dim + adapter.token_dim] += 0.6
+    embedded_logits = adapter.forward_continuous(embedded_changed, graph.edge_index, graph)
+    assert not torch.allclose(ordinary, embedded_logits), "supplied embedding channels were ignored"
+
+
+def test_ordered_low_rank_product_has_nonzero_endpoint_cross_difference():
+    import torch
+    import torch.nn.functional as F
+
+    adapter, graph = _fixture()
+    net = adapter.network
+    features = adapter.continuous_inputs(graph)
+    h = F.gelu(net.node_norm(net.node_encoder(features)))
+    context = (net.relation_embedding(graph.edge_relation)
+               + net.triple_embedding(graph.edge_triple)
+               + net.edge_feature_projection(graph.edge_attr))
+    source, target, fixed_context = h[0], h[1], context[0]
+
+    def product(left, right):
+        return (net.endpoint_source(left).tanh()
+                * net.endpoint_target(right).tanh()
+                * net.interaction_context(fixed_context).sigmoid())
+
+    delta_source = torch.tensor([0.3, -0.2, 0.1, 0.4, -0.5, 0.2, 0.1, -0.3])
+    delta_target = torch.tensor([-0.1, 0.4, 0.2, -0.3, 0.2, 0.5, -0.4, 0.1])
+    cross = (product(source + delta_source, target + delta_target)
+             - product(source + delta_source, target)
+             - product(source, target + delta_target) + product(source, target))
+    assert cross.abs().sum() > 1e-7, "ordered endpoint product collapsed to an additive response"
+
+
+def test_edge_mask_is_applied_once_to_numerator_and_denominator_and_parts_reconstruct():
+    import torch
+    import torch.nn.functional as F
+
+    adapter, graph = _fixture()
+    features = adapter.continuous_inputs(graph)
+    net = adapter.network
+    src, dst = graph.edge_index
+    h = F.gelu(net.node_norm(net.node_encoder(features)))
+    node_vote, node_gate_logits = net.node_head(h).chunk(2, dim=-1)
+    node_gate = node_gate_logits.sigmoid()
+    context = (net.relation_embedding(graph.edge_relation)
+               + net.triple_embedding(graph.edge_triple)
+               + net.edge_feature_projection(graph.edge_attr))
+    q = (net.endpoint_source(h[src]).tanh() * net.endpoint_target(h[dst]).tanh()
+         * net.interaction_context(context).sigmoid())
+    edge_input = torch.cat((h[src], h[dst], context, q), dim=-1)
+    edge_vote, edge_gate_logits = net.edge_head(edge_input).chunk(2, dim=-1)
+    edge_gate = edge_gate_logits.sigmoid()
+
+    mask = torch.tensor([0.2, 0.6, 0.9])
+    node_term = (node_gate * node_vote).sum(0) / (1 + node_gate.sum(0))
+
+    def explicit(mask_value):
+        numerator = (mask_value[:, None] * edge_gate * edge_vote).sum(0)
+        denominator = 1 + (mask_value[:, None] * edge_gate).sum(0)
+        return net.bias + node_term + numerator / denominator
+
+    adapter.network.set_edge_mask(mask)
+    parts = adapter.forward_continuous(features, graph.edge_index, graph, return_parts=True)
+    torch.testing.assert_close(parts["logits"][0], explicit(mask), rtol=1e-6, atol=1e-6)
+    torch.testing.assert_close(parts["logits"][0], parts["bias"]
+                               + parts["node_contributions"].sum(0)
+                               + parts["edge_contributions"].sum(0), rtol=1e-6, atol=1e-6)
+    assert not torch.allclose(explicit(mask), explicit(mask.square())), "fractional mask cannot distinguish squared-mask mutant"
+
+    adapter.network.set_edge_mask(torch.ones_like(mask))
+    all_ones = adapter.forward_continuous(features, graph.edge_index, graph)
+    adapter.network.set_edge_mask(None)
+    ordinary = adapter.forward_continuous(features, graph.edge_index, graph)
+    torch.testing.assert_close(all_ones, ordinary)
+    adapter.network.set_edge_mask(torch.zeros_like(mask))
+    zero_parts = adapter.forward_continuous(features, graph.edge_index, graph, return_parts=True)
+    torch.testing.assert_close(zero_parts["logits"][0], net.bias + node_term)
+    torch.testing.assert_close(zero_parts["edge_contributions"], torch.zeros_like(edge_vote))
+    adapter.zero_grad(set_to_none=True)
+    zero_parts["logits"].sum().backward()
+    for name in ("edge_head.0.weight", "edge_head.0.bias", "edge_head.3.weight",
+                 "edge_head.3.bias", "endpoint_source.weight", "endpoint_target.weight",
+                 "interaction_context.weight", "interaction_context.bias"):
+        parameter = dict(net.named_parameters())[name]
+        assert parameter.grad is not None and torch.isfinite(parameter.grad).all(), name
+
+
+def test_pyg_raw_logit_mask_algebra_and_parts_reconstruct():
+    import torch
+    import torch.nn.functional as F
+    from torch_geometric.explain.algorithm.utils import set_masks, clear_masks
+
+    adapter, graph = _fixture()
+    network = adapter.network
+    features = adapter.continuous_inputs(graph)
+    src, dst = graph.edge_index
+    h = F.gelu(network.node_norm(network.node_encoder(features)))
+    node_vote, node_gate_logits = network.node_head(h).chunk(2, dim=-1)
+    node_gate = node_gate_logits.sigmoid()
+    context = (network.relation_embedding(graph.edge_relation)
+               + network.triple_embedding(graph.edge_triple)
+               + network.edge_feature_projection(graph.edge_attr))
+    q = (network.endpoint_source(h[src]).tanh() * network.endpoint_target(h[dst]).tanh()
+         * network.interaction_context(context).sigmoid())
+    edge_vote, edge_gate_logits = network.edge_head(
+        torch.cat((h[src], h[dst], context, q), dim=-1)).chunk(2, dim=-1)
+    edge_gate = edge_gate_logits.sigmoid()
+    raw_mask = torch.nn.Parameter(torch.tensor([-0.9, 0.3, 1.1]))
+    effective_mask = raw_mask.sigmoid()
+    node_term = (node_gate * node_vote).sum(0) / (1 + node_gate.sum(0))
+    numerator = (effective_mask[:, None] * edge_gate * edge_vote).sum(0)
+    denominator = 1 + (effective_mask[:, None] * edge_gate).sum(0)
+    expected = network.bias + node_term + numerator / denominator
+
+    set_masks(network, raw_mask, graph.edge_index, apply_sigmoid=True)
+    parts = adapter.forward_continuous(features, graph.edge_index, graph, return_parts=True)
+    torch.testing.assert_close(parts["logits"][0], expected, rtol=1e-6, atol=1e-6)
+    torch.testing.assert_close(parts["logits"][0], parts["bias"]
+                               + parts["node_contributions"].sum(0)
+                               + parts["edge_contributions"].sum(0), rtol=1e-6, atol=1e-6)
+    assert not torch.allclose(effective_mask, effective_mask.sigmoid()), "raw-logit mask must be sigmoid'ed exactly once"
+    clear_masks(network)
+    network.set_edge_mask(effective_mask.detach())
+    direct_parts = adapter.forward_continuous(features, graph.edge_index, graph, return_parts=True)
+    torch.testing.assert_close(direct_parts["logits"], parts["logits"], rtol=0, atol=0)
+    torch.testing.assert_close(direct_parts["edge_contributions"],
+                               parts["edge_contributions"], rtol=0, atol=0)
+    clear_masks(network)
+
+
+def test_direct_mask_clear_then_pyg_mask_switch_preserves_masking_and_gradient():
+    import torch
+    from torch_geometric.explain.algorithm.utils import set_masks, clear_masks
+
+    adapter, graph = _fixture()
+    network = adapter.network
+    features = adapter.continuous_inputs(graph)
+    unmasked = adapter.forward_continuous(features, graph.edge_index, graph)
+    network.set_edge_mask(torch.ones(graph.num_edges))
+    network.set_edge_mask(None)
+    raw_mask = torch.nn.Parameter(torch.tensor([-1.2, -0.3, 0.8]))
+    set_masks(network, raw_mask, graph.edge_index, apply_sigmoid=True)
+    masked = adapter.forward_continuous(features, graph.edge_index, graph)
+    assert not torch.allclose(masked, unmasked), "PyG mask was skipped after clearing a direct mask"
+    (masked * torch.tensor([[0.2, -0.7, 1.1]])).sum().backward()
+    assert raw_mask.grad is not None and torch.isfinite(raw_mask.grad).all()
+    assert raw_mask.grad.abs().sum() > 0, "PyG edge-mask gradient disconnected after direct-mask clear"
+    clear_masks(network)
+
+
+def test_pyg_clear_then_direct_probability_tensor_including_zero_mask():
+    import torch
+    from torch_geometric.explain.algorithm.utils import set_masks, clear_masks
+
+    adapter, graph = _fixture()
+    network = adapter.network
+    features = adapter.continuous_inputs(graph)
+    raw_mask = torch.nn.Parameter(torch.tensor([-0.8, 0.2, 1.0]))
+    set_masks(network, raw_mask, graph.edge_index, apply_sigmoid=True)
+    clear_masks(network)
+
+    zero_mask = torch.zeros(graph.num_edges)
+    try:
+        network.set_edge_mask(zero_mask)
+    except TypeError as error:
+        assert False, f"PyG Parameter slot rejected a direct tensor mask: {error}"
+    assert network.edge_aggregator._apply_sigmoid is False
+    parts = adapter.forward_continuous(features, graph.edge_index, graph, return_parts=True)
+    h = torch.nn.functional.gelu(network.node_norm(network.node_encoder(features)))
+    node_vote, node_gate_logits = network.node_head(h).chunk(2, dim=-1)
+    node_term = (node_gate_logits.sigmoid() * node_vote).sum(0) / (
+        1 + node_gate_logits.sigmoid().sum(0))
+    torch.testing.assert_close(parts["logits"][0], network.bias + node_term)
+    torch.testing.assert_close(parts["edge_contributions"],
+                               torch.zeros_like(parts["edge_contributions"]))
+    torch.testing.assert_close(parts["logits"][0], parts["bias"]
+                               + parts["node_contributions"].sum(0)
+                               + parts["edge_contributions"].sum(0), rtol=1e-6, atol=1e-6)
+
+
+def test_batch_permutation_parallel_edges_and_empty_edge_graphs_are_supported():
+    import torch
+    from torch_geometric.data import Batch, Data
+
+    adapter, graph = _fixture()
+    second = graph.clone()
+    second.x = second.x * -0.4
+    second.token = torch.tensor([4, 5, 6])
+    batched = Batch.from_data_list([graph, second])
+    batch_logits = adapter(batched, epoch=0).logits
+    torch.testing.assert_close(batch_logits[0], adapter(graph, epoch=0).logits[0])
+    torch.testing.assert_close(batch_logits[1], adapter(second, epoch=0).logits[0])
+
+    node_order = torch.tensor([2, 0, 1])
+    old_to_new = torch.empty_like(node_order)
+    old_to_new[node_order] = torch.arange(node_order.numel())
+    edge_order = torch.tensor([2, 1, 0])
+    permuted = graph.clone()
+    for key in ("x", "token", "node_type"):
+        setattr(permuted, key, getattr(graph, key)[node_order])
+    permuted.edge_index = old_to_new[graph.edge_index[:, edge_order]]
+    for key in ("edge_attr", "edge_relation", "edge_triple"):
+        setattr(permuted, key, getattr(graph, key)[edge_order])
+    torch.testing.assert_close(adapter(permuted, epoch=0).logits,
+                               adapter(graph, epoch=0).logits, rtol=1e-6, atol=1e-6)
+
+    empty = Data(x=torch.ones((1, 3)), token=torch.tensor([2]), node_type=torch.tensor([0]),
+                 edge_index=torch.empty((2, 0), dtype=torch.long),
+                 edge_attr=torch.empty((0, 2)), edge_relation=torch.empty((0,), dtype=torch.long),
+                 edge_triple=torch.empty((0,), dtype=torch.long))
+    output = adapter(empty, epoch=0).logits
+    assert output.shape == (1, 3) and torch.isfinite(output).all()
+
+
+def test_directed_edge_reversal_changes_asymmetric_predictions():
+    import torch
+
+    adapter, graph = _fixture()
+    reversed_graph = graph.clone()
+    reversed_graph.edge_index = graph.edge_index.flip(0)
+    forward_logits = adapter(graph, epoch=0).logits
+    reversed_logits = adapter(reversed_graph, epoch=0).logits
+    difference = (forward_logits - reversed_logits).abs().max()
+    assert difference > 1e-6, f"directed reversal was invariant: max delta={difference.item()}"
+
+
+def test_all_active_predictive_blocks_receive_finite_gradients():
+    import torch
+
+    adapter, graph = _fixture()
+    features = adapter.continuous_inputs(graph).detach().requires_grad_(True)
+    # Unequal class weights avoid cancellation in the small synthetic graph.
+    weights = torch.tensor([[0.2, -0.7, 1.1]])
+    logits = adapter.forward_continuous(features, graph.edge_index, graph)
+    (logits * weights).sum().backward()
+    assert features.grad is not None and torch.isfinite(features.grad).all()
+    network = adapter.network
+    for name, parameter in network.named_parameters():
+        if "endpoint_" in name or "interaction_context" in name or "edge_head" in name or "node_head" in name or "relation_embedding" in name or "triple_embedding" in name or "edge_feature_projection" in name:
+            assert parameter.grad is not None, f"active parameter block disconnected: {name}"
+            assert torch.isfinite(parameter.grad).all(), f"nonfinite gradient: {name}"
+            assert parameter.grad.abs().sum() > 0, f"zero gradient: {name}"
+
+    adapter.zero_grad(set_to_none=True)
+    graph.x.requires_grad_(True)
+    graph.edge_attr.requires_grad_(True)
+    ordinary = adapter(graph, epoch=0).logits
+    (ordinary * weights).sum().backward()
+    assert graph.x.grad is not None and graph.x.grad.abs().sum() > 0
+    assert graph.edge_attr.grad is not None and graph.edge_attr.grad.abs().sum() > 0
+    token_grad = network.token_embedding.weight.grad
+    assert token_grad is not None and torch.isfinite(token_grad).all() and token_grad.abs().sum() > 0
+    for name, parameter in network.named_parameters():
+        assert parameter.grad is not None, f"parameter is disconnected: {name}"
+        assert torch.isfinite(parameter.grad).all(), f"nonfinite parameter gradient: {name}"
+
+
+def test_constructor_rejects_unsupported_depth_unknown_options_and_cross_graph_edges():
+    import pytest
+    import torch
+    from torch_geometric.data import Batch
+    from core.registry import METHOD_REGISTRY
+
+    adapter_type = METHOD_REGISTRY["cei_gnn"]
+    with pytest.raises(ValueError, match="layers=1"):
+        adapter_type(num_tokens=8, node_dim=3, edge_dim=2, num_classes=3, hidden=8,
+                     layers=2, dropout=0, token_dim=4, num_triples=3, args={})
+    with pytest.raises(ValueError, match="unknown method option"):
+        adapter_type(num_tokens=8, node_dim=3, edge_dim=2, num_classes=3, hidden=8,
+                     layers=1, dropout=0, token_dim=4, num_triples=3,
+                     args={"method_options": {"use_interactons": False}})
+
+    adapter, graph = _fixture()
+    batched = Batch.from_data_list([graph, graph.clone()])
+    batched.edge_index[:, 0] = torch.tensor([0, graph.num_nodes])
+    with pytest.raises(ValueError, match="cross-graph"):
+        adapter(batched, epoch=0)
+
+
+def test_product_off_is_same_capacity_control_and_interaction_changes_predictions():
+    import torch
+    from argparse import Namespace
+    from core.registry import METHOD_REGISTRY
+
+    _, graph = _fixture()
+    cls = METHOD_REGISTRY["cei_gnn"]
+    common = dict(num_tokens=8, node_dim=3, edge_dim=2, num_classes=3, hidden=8,
+                  layers=1, dropout=0.0, token_dim=4, num_triples=3)
+    enabled = cls(**common, args=Namespace(method_options={"interaction_rank": 4,
+                                                           "use_interactions": True})).eval()
+    disabled = cls(**common, args=Namespace(method_options={"interaction_rank": 4,
+                                                            "use_interactions": False})).eval()
+    disabled.load_state_dict(enabled.state_dict())
+    assert sorted(tuple(p.shape) for p in enabled.parameters()) == sorted(
+        tuple(p.shape) for p in disabled.parameters())
+    assert sum(p.numel() for p in enabled.parameters()) == sum(
+        p.numel() for p in disabled.parameters())
+    assert enabled.run_config()["architecture"]["active_parameter_count"] == sum(
+        p.numel() for p in enabled.parameters())
+    assert disabled.run_config()["architecture"]["inactive_parameter_count"] > 0
+    inactive_expected = (disabled.network.endpoint_source.weight.numel()
+                         + disabled.network.endpoint_target.weight.numel()
+                         + disabled.network.interaction_context.weight.numel()
+                         + disabled.network.interaction_context.bias.numel()
+                         + disabled.network.edge_head[0].weight[:, -disabled.interaction_rank:].numel())
+    assert disabled.run_config()["architecture"]["inactive_parameter_count"] == inactive_expected
+    assert not torch.allclose(enabled(graph, epoch=0).logits,
+                              disabled(graph, epoch=0).logits), "explicit q product had no predictive effect"
+
+
+def test_invalid_continuous_inputs_masks_and_metadata_fail_closed():
+    import pytest
+    import torch
+
+    adapter, graph = _fixture()
+    features = adapter.continuous_inputs(graph)
+    with pytest.raises(ValueError, match="finite"):
+        invalid = features.clone()
+        invalid[0, 0] = float("nan")
+        adapter.forward_continuous(invalid, graph.edge_index, graph)
+    with pytest.raises(ValueError, match="edge_index differs"):
+        adapter.forward_continuous(features, graph.edge_index.roll(1, dims=1), graph)
+    with pytest.raises(ValueError, match="edge mask length"):
+        adapter.network.set_edge_mask(torch.ones(graph.num_edges + 1))
+        adapter.forward_continuous(features, graph.edge_index, graph)
+    adapter.network.set_edge_mask(None)
+    for bad_mask in (torch.tensor([float("nan")] * graph.num_edges),
+                     torch.full((graph.num_edges,), 1.1)):
+        with pytest.raises(ValueError, match="edge mask"):
+            adapter.network.set_edge_mask(bad_mask)
+
+
+def test_float_category_and_index_dtypes_are_rejected_before_shared_casting():
+    import pytest
+    import torch
+    from torch_geometric.data import Batch
+
+    adapter, graph = _fixture()
+    for field in ("token", "node_type", "edge_relation", "edge_triple", "edge_index"):
+        malformed = graph.clone()
+        value = getattr(malformed, field)
+        setattr(malformed, field, value.to(torch.float32) + 0.5)
+        with pytest.raises(ValueError, match="integer dtype"):
+            adapter(malformed, epoch=0)
+
+    batched = Batch.from_data_list([graph.clone(), graph.clone()])
+    batched.batch = batched.batch.to(torch.float32) + 0.5
+    with pytest.raises(ValueError, match="integer dtype"):
+        adapter(batched, epoch=0)
+
+
+def test_invalid_vocabulary_indices_and_edge_payloads_are_rejected():
+    import pytest
+    from core import NODE_KINDS
+
+    adapter, graph = _fixture()
+    cases = (
+        ("token", 0, adapter.num_tokens, "token index"),
+        ("node_type", 0, len(NODE_KINDS), "node_type index"),
+        ("edge_relation", 0, adapter.num_relations, "edge_relation index"),
+        ("edge_triple", 0, adapter.num_triples, "edge_triple index"),
+    )
+    for field, row, invalid_value, message in cases:
+        malformed = graph.clone()
+        getattr(malformed, field)[row] = invalid_value
+        with pytest.raises(ValueError, match=message):
+            adapter(malformed, epoch=0)
+    malformed = graph.clone()
+    malformed.edge_attr[0, 0] = float("inf")
+    with pytest.raises(ValueError, match="finite"):
+        adapter(malformed, epoch=0)
