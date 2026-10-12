@@ -35,6 +35,7 @@ BASE = {
         'mp_root=bias']), []),
 }
 # previous settings (trial 0); gsat weight_decay 0.0 -> 1e-6 (log-space floor)
+# cei_mp2 trial 0 is the AdamW+cosine recipe of the mp2 study, not the old v3 Adam setting; with optimizer=adamw_cosine the sampled weight_decay is ignored (mp_weight_decay 0.01 is applied), only optimizer=adam applies it as coupled L2.
 DEFAULTS = {
     'gsat': dict(lr=1e-3, weight_decay=1e-6, dropout=0.3, optimizer='native', info_loss_coef=1.0),
     'graphcare': dict(lr=1e-3, weight_decay=1e-5, dropout=0.3, optimizer='native', decay_rate=0.03),
@@ -46,6 +47,7 @@ DEFAULTS = {
 
 def space(model, trial):
     opts = ['adam', 'adamw_cosine'] if model == 'cei_mp2' else ['native', 'adamw_cosine']
+    # NOTE cei_mp2: the weight_decay axis only matters for optimizer='adam'; with 'adamw_cosine' (mp_optimizer=adamw) the adapter applies mp_weight_decay 0.01 and ignores it.
     p = dict(lr=trial.suggest_float('lr', 3e-4, 5e-3, log=True),
              weight_decay=trial.suggest_float('weight_decay', 1e-6, 1e-3, log=True),
              dropout=trial.suggest_float('dropout', 0.1, 0.6),

@@ -81,6 +81,8 @@ protgnn    --method protgnn --optimizer adamw_cosine --lr 0.00261 --weight-decay
 gchm_pna   --method clinical_gnn --conv gchm
 ```
 
+The `--weight-decay 1.03e-6` flag of the cei_mp2 command is ignored: CEI-GNN builds its own AdamW with decoupled weight decay 0.01 on weight matrices only (0 on biases, norms and embeddings; `mp_weight_decay`, `cei/options.py`), a cosine schedule, label smoothing 0.1 and DropEdge 0.2. The other methods use no label smoothing and no DropEdge: GSAT, GraphCare and ProtGNN use AdamW with their tuned weight decay (6.17e-5, 1.05e-6, 4.42e-6) on all parameters and the same cosine schedule; GCHM-PNA keeps its defaults (AdamW, weight decay 1e-5, constant learning rate).
+
 `python3 -m comparison.final.run [--ks 10,20,30]` builds these commands for all 45 runs (`--plan` only checks them).
 
 ## Results

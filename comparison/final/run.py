@@ -34,10 +34,11 @@ class Paths:
         return self.events / V3_STATE.format(K=K)
 
 
-def args(P, m, K):   # HPO-tuned settings (comparison/final/hpo.py), the same for every K
+def args(P, m, K):   # HPO-tuned settings for gsat/graphcare/protgnn/cei_mp2 (comparison/final/hpo.py; cei_mp2 weight decay is mp_weight_decay 0.01, not the flag), GCHM-PNA = defaults; same for every K
     return {
         'gsat': '--method gsat --optimizer adamw_cosine --lr 0.00369 --weight-decay 6.17e-5 --dropout 0.137 --gsat-info-loss-coef 0.104',
         'graphcare': '--method graphcare --optimizer adamw_cosine --lr 0.00281 --weight-decay 1.05e-6 --dropout 0.286 --graphcare-decay-rate 0.0116',
+        # NOTE: --weight-decay 1.03e-6 is ignored by cei_mp2 (mp_optimizer=adamw uses mp_weight_decay=0.01 on weight matrices only, cei/plugin_cei_gnn_mp2.py); label smoothing 0.1 and DropEdge 0.2 (mp_dropedge default) are CEI-only.
         'cei_mp2': (f'--method cei_gnn_mp2 --method-option arm=C --method-option k=4 --method-option v3_state={P.v3_state(K)} '
                     '--method-option mp_feed=dual --method-option mp_hub_max=1 --method-option mp_dedup=1 --method-option mp_ctx=table '
                     '--method-option mp_root=bias --method-option mp_optimizer=adamw --method-option mp_lr_schedule=cosine '
