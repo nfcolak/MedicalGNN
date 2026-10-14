@@ -17,7 +17,7 @@ from core.explain.graphxai_wrapper import (
     GraphCareGraphXAIWrapper,
 )
 from core.tensorize import ALL_RELATIONS
-from tests.test_clinical_method_adapters import (
+from tests.graphxai_fixtures import (
     EDGE_DIM, NODE_DIM, NUM_CLASSES, NUM_TOKENS, NUM_TRIPLES, method_args, synthetic_graph,
 )
 from tests.test_clinical_graphxai_wrapper import build_adapter

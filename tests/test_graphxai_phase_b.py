@@ -22,7 +22,7 @@ from core.explain import graphxai_standardized as gx
 from core.schema import sha256
 from tests.test_explain_runner import train_one
 from tests.test_fidelity_v2 import WRAPPERS, seven_node_graph
-from tests.test_real_graphxai import Tiny
+from tests.graphxai_fixtures import Tiny
 
 
 # ------------------------------------------------------------------ B1 eligibility / cap / sparsity

@@ -18,7 +18,7 @@ from core.explain import graphxai_standardized as gx
 from core.explain import runner
 from core.explain.explanation_contract_v2 import build_cohort_v2, validate_cohort_v2
 from tests.test_explain_runner import train_one
-from tests.test_real_graphxai import Tiny
+from tests.graphxai_fixtures import Tiny
 
 IDS = ["s1", "s2", "s3", "s4"]
 

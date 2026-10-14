@@ -3,7 +3,7 @@ method, via the one shared ClinicalGraphXAIWrapper (GraphCare is the sole
 exception -- GraphCareGraphXAIWrapper, below -- it needs extra
 visit-membership context the others don't).
 
-Reuses test_clinical_method_adapters.py's exact synthetic-graph helper and
+Reuses graphxai_fixtures.py's exact synthetic-graph helper and
 dimension conventions (same NODE_DIM/EDGE_DIM/etc., same build_method() path)
 so there is one definition of what a valid synthetic clinical graph looks
 like, not two drifting copies.
@@ -17,7 +17,7 @@ from core.explain.graphxai_wrapper import (
 )
 from core.registry import build_method
 from core.tensorize import ALL_RELATIONS
-from tests.test_clinical_method_adapters import (
+from tests.graphxai_fixtures import (
     EDGE_DIM,
     NODE_DIM,
     NUM_CLASSES,

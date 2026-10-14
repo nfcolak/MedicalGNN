@@ -81,7 +81,7 @@ def test_relation_vs_payload_contribution_runs_on_a_real_adapter(name):
             GraphCareGraphXAIWrapper,
         )
         from tests.test_clinical_graphxai_wrapper import build_adapter
-        from tests.test_clinical_method_adapters import EDGE_DIM, NODE_DIM, NUM_TOKENS, NUM_TRIPLES
+        from tests.graphxai_fixtures import EDGE_DIM, NODE_DIM, NUM_TOKENS, NUM_TRIPLES
 
         model = build_adapter("graphcare")
         model.eval()

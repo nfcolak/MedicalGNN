@@ -3,7 +3,7 @@
 Neither is a ClinicalMethodAdapter (not in METHOD_REGISTRY; train.py builds
 and calls them through a separate path -- see gchm_v2.py/gchm_v3.py), so
 they're wrapped via ClinicalGraphXAIWrapper(..., is_method_adapter=False)
-rather than build_method(). Reuses test_clinical_method_adapters.py's exact
+rather than build_method(). Reuses graphxai_fixtures.py's exact
 synthetic-graph helper and dimension conventions.
 """
 import math
@@ -15,7 +15,7 @@ from gchm_pna.gchm_v2 import GCHMv2
 from gchm_pna.gchm_v3 import GCHMv3
 from core.explain.graphxai_wrapper import ClinicalGraphXAIWrapper
 from core.tensorize import ALL_RELATIONS
-from tests.test_clinical_method_adapters import (
+from tests.graphxai_fixtures import (
     EDGE_DIM, NODE_DIM, NUM_CLASSES, NUM_TOKENS, NUM_TRIPLES, synthetic_graph,
 )
 

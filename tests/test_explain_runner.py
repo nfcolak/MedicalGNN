@@ -16,7 +16,7 @@ import torch
 
 from core import train
 from core.explain import runner as explain
-from tests.test_gchm_v2 import artifact, run_args
+from tests.graphxai_fixtures import artifact, run_args
 
 
 def train_one(tmp_path, out_name, **overrides):
