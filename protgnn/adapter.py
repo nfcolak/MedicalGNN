@@ -178,6 +178,10 @@ class ProtGNNAdapter(ClinicalMethodAdapter):
                                float, minimum=0.0)
         if self.min_atoms > self.max_atoms:
             raise ValueError("min_atoms cannot exceed max_atoms")
+        # Default off: every epoch may be selected (historical behaviour).
+        self.select_after_projection = bool(
+            _arg_value(args, ("select_after_projection",), False))
+        self._epoch_projection_record = None
 
         self.num_prototypes = self.num_classes * self.prototypes_per_class
         self.token_embedding = nn.Embedding(self.num_tokens, self.token_dim,
@@ -548,6 +552,7 @@ class ProtGNNAdapter(ClinicalMethodAdapter):
                         candidates[label].append(candidate)
 
         projected = 0
+        distance_before = distance_after = 0.0
         with torch.no_grad():
             for class_id, class_candidates in enumerate(candidates):
                 if not class_candidates:
@@ -562,7 +567,12 @@ class ProtGNNAdapter(ClinicalMethodAdapter):
                         if vector is not None and similarity > best_similarity:
                             best_vector, best_similarity = vector, similarity
                     if best_vector is not None:
+                        # Squared L2 to the chosen training subgraph embedding, before/after the copy.
+                        distance_before += float(
+                            (self.prototype_vectors[prototype_id] - best_vector).square().sum().item())
                         self.prototype_vectors[prototype_id].copy_(best_vector)
+                        distance_after += float(
+                            (self.prototype_vectors[prototype_id] - best_vector).square().sum().item())
                         projected += 1
         counts = {str(class_id): len(graphs)
                   for class_id, graphs in enumerate(candidates)}
@@ -572,6 +582,23 @@ class ProtGNNAdapter(ClinicalMethodAdapter):
             "unmatched_prototypes": int(self.num_prototypes - projected),
             "candidate_graphs_by_class": counts,
         }
+        self._epoch_projection_record = {
+            "epoch": int(epoch) + 1,
+            "epoch_index": int(epoch),
+            "prototypes_projected": int(projected),
+            "prototypes_unmatched": int(self.num_prototypes - projected),
+            "mean_distance_before": distance_before / projected if projected else None,
+            "mean_distance_after": distance_after / projected if projected else None,
+        }
+
+    def selection_start_epoch(self):
+        """Runner hook: first epoch index eligible for checkpoint selection (None = all)."""
+        return int(self.proj_epochs) if self.select_after_projection else None
+
+    def epoch_record(self):
+        """Runner hook: projection record of the epoch that just started, else None."""
+        record, self._epoch_projection_record = self._epoch_projection_record, None
+        return record
 
     def on_epoch_start(self, epoch: int, train_loader) -> None:
         epoch = int(epoch)
