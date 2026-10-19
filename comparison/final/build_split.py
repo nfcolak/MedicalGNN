@@ -15,8 +15,13 @@ line-for-line in behaviour so that the output is byte-identical to the frozen fi
 Modes (the frozen file is never written):
   --check     (default) rebuild in memory and compare with --split byte for byte; exit 0 only if identical
   --out PATH  also write the rebuilt split to PATH; refuses an existing path and the frozen file itself
+  --seed N    rng seed of the per-class shuffle (default 1234 = the frozen split). Another seed gives a new split of
+              the same patients and classes (same fold sizes); it differs from the frozen file, so the comparison
+              is then structural (same classes, patients and fold sizes) and the exit code says whether that holds.
+              With --out, a sidecar PATH.provenance.json records the seed and the input sha256 (the split bytes
+              themselves are not changed by it).
 
-Usage: python -m comparison.final.build_split [--merged-ed FILE] [--split FILE] [--out NEW_PATH]
+Usage: python -m comparison.final.build_split [--merged-ed FILE] [--split FILE] [--seed N] [--out NEW_PATH]
 Prints aggregated counts only (no subject ids).
 """
 import argparse
@@ -96,7 +101,7 @@ def stratified_split_indices(labels, split_sizes, seed):
     return train, eval_, test
 
 
-def build(merged_ed):
+def build(merged_ed, seed=SEED):
     df = pd.read_csv(merged_ed, low_memory=False)
     n_codes = code_counts(df)
     dis = df['disease_1'].fillna('').astype(str)
@@ -109,13 +114,13 @@ def build(merged_ed):
     if len(np.unique(groups_k)) < len(groups_k):
         raise SystemExit('REFUSED: repeated subject_id in the input; the frozen split was built from one row per '
                          'patient (the original subject-aware branch is not ported)')
-    tr, va, te = stratified_split_indices(y[keep], SPLIT_RATIO, SEED)
+    tr, va, te = stratified_split_indices(y[keep], SPLIT_RATIO, seed)
     fold = {}
     for part, k in ((tr, 0), (va, 1), (te, 2)):
         for local in part:
             fold[str(int(subj[keep[local]]))] = k
     data = {'fold': fold, 'classes': classes, 'n_kept': len(keep),
-            'split': 'stratified (subjects unique = single-visit)', 'seed': SEED, 'ratio': SPLIT_RATIO}
+            'split': 'stratified (subjects unique = single-visit)', 'seed': seed, 'ratio': SPLIT_RATIO}
     buf = io.StringIO()
     json.dump(data, buf)
     return data, buf.getvalue().encode(), len(df), (len(tr), len(va), len(te))
@@ -125,6 +130,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser(prog='comparison.final.build_split')
     ap.add_argument('--merged-ed', default=DEFAULT_INPUT, help='input table (one row per patient), read only')
     ap.add_argument('--split', default=DEFAULT_SPLIT, help='frozen split to compare with (read only, never written)')
+    ap.add_argument('--seed', type=int, default=SEED, help='rng seed (default 1234 = the frozen split)')
     ap.add_argument('--out', default=None, help='optional NEW path for the rebuilt split (never the frozen file)')
     a = ap.parse_args(argv)
 
@@ -133,13 +139,14 @@ def main(argv=None):
         out = Path(a.out).resolve()
         if out == frozen or out == Path(DEFAULT_SPLIT).resolve():
             raise SystemExit('REFUSED: --out points at the frozen split; it is never regenerated')
-        if out.exists():
-            raise SystemExit(f'REFUSED: {a.out} exists; write to a new path')
+        side = out.with_name(out.name + '.provenance.json')
+        if out.exists() or side.exists():
+            raise SystemExit(f'REFUSED: {a.out} or its provenance sidecar exists; write to a new path')
 
     digest = sha256(a.merged_ed)
     print(f'input: {a.merged_ed} sha256 {digest[:16]} '
           f"({'expected' if digest == INPUT_SHA256 else 'DIFFERENT from expected ' + INPUT_SHA256[:16]})")
-    data, blob, n_rows, (n_tr, n_va, n_te) = build(a.merged_ed)
+    data, blob, n_rows, (n_tr, n_va, n_te) = build(a.merged_ed, a.seed)
     print(f"kept {data['n_kept']} / {n_rows} patients, {len(data['classes'])} classes; "
           f'train={n_tr} validation={n_va} test={n_te}')
 
@@ -153,12 +160,23 @@ def main(argv=None):
     same = blob == ref
     print(f"rebuilt split is {'BYTE-IDENTICAL to' if same else 'DIFFERENT from'} the frozen file "
           f'(rebuilt sha256 {hashlib.sha256(blob).hexdigest()[:16]})')
+    ok = same
+    if a.seed != SEED:
+        # a new seed changes the assignment only: same patients, classes and fold sizes
+        sizes = [sum(v == k for v in old['fold'].values()) for k in range(3)]
+        ok = (not same and old['classes'] == data['classes'] and set(old['fold']) == set(data['fold'])
+              and sizes == [n_tr, n_va, n_te] and old['n_kept'] == data['n_kept'])
+        print(f"seed {a.seed}: same patients, classes and fold sizes as the frozen split: {'yes' if ok else 'NO'}")
     if a.out is not None:
         out.parent.mkdir(parents=True, exist_ok=True)
         with open(out, 'xb') as f:
             f.write(blob)
         print(f'wrote {a.out}')
-    return 0 if same else 1
+        with open(side, 'x') as f:
+            json.dump({'seed': a.seed, 'input': a.merged_ed, 'input_sha256': digest,
+                       'split_sha256': hashlib.sha256(blob).hexdigest()}, f, indent=1)
+        print(f'wrote {side}')
+    return 0 if ok else 1
 
 
 if __name__ == '__main__':
