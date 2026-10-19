@@ -1,0 +1,1441 @@
+K,fold,method,seed,class_index,label,support,n_pred,precision,recall,f1
+10,validation,cei_mp2,1234,0,Back or spine pain,481,411,0.807786,0.690229,0.744395
+10,validation,cei_mp2,1234,1,Diabetes mellitus,158,145,0.793103,0.727848,0.759076
+10,validation,cei_mp2,1234,2,GI bleed,335,328,0.875,0.856716,0.865762
+10,validation,cei_mp2,1234,3,Head injury,245,289,0.692042,0.816327,0.749064
+10,validation,cei_mp2,1234,4,Heart failure,163,188,0.632979,0.730061,0.678063
+10,validation,cei_mp2,1234,5,Limb injury or pain,403,480,0.55,0.655087,0.597961
+10,validation,cei_mp2,1234,6,Lower respiratory disease,367,306,0.75817,0.632153,0.68945
+10,validation,cei_mp2,1234,7,Major depressive disorder,293,285,0.954386,0.928328,0.941176
+10,validation,cei_mp2,1234,8,Skin or soft-tissue infection,325,340,0.635294,0.664615,0.649624
+10,validation,cei_mp2,1234,9,UTI or pyelonephritis,395,393,0.770992,0.767089,0.769036
+10,validation,cei_mp2,2025,0,Back or spine pain,481,424,0.799528,0.704782,0.749171
+10,validation,cei_mp2,2025,1,Diabetes mellitus,158,147,0.802721,0.746835,0.77377
+10,validation,cei_mp2,2025,2,GI bleed,335,313,0.904153,0.844776,0.873457
+10,validation,cei_mp2,2025,3,Head injury,245,291,0.680412,0.808163,0.738806
+10,validation,cei_mp2,2025,4,Heart failure,163,185,0.648649,0.736196,0.689655
+10,validation,cei_mp2,2025,5,Limb injury or pain,403,417,0.594724,0.615385,0.604878
+10,validation,cei_mp2,2025,6,Lower respiratory disease,367,367,0.689373,0.689373,0.689373
+10,validation,cei_mp2,2025,7,Major depressive disorder,293,288,0.944444,0.928328,0.936317
+10,validation,cei_mp2,2025,8,Skin or soft-tissue infection,325,338,0.642012,0.667692,0.6546
+10,validation,cei_mp2,2025,9,UTI or pyelonephritis,395,395,0.777215,0.777215,0.777215
+10,validation,cei_mp2,7,0,Back or spine pain,481,430,0.793023,0.70894,0.748628
+10,validation,cei_mp2,7,1,Diabetes mellitus,158,157,0.757962,0.753165,0.755556
+10,validation,cei_mp2,7,2,GI bleed,335,329,0.869301,0.853731,0.861446
+10,validation,cei_mp2,7,3,Head injury,245,300,0.666667,0.816327,0.733945
+10,validation,cei_mp2,7,4,Heart failure,163,179,0.642458,0.705521,0.672515
+10,validation,cei_mp2,7,5,Limb injury or pain,403,438,0.586758,0.637717,0.611177
+10,validation,cei_mp2,7,6,Lower respiratory disease,367,352,0.693182,0.66485,0.67872
+10,validation,cei_mp2,7,7,Major depressive disorder,293,289,0.941176,0.928328,0.934708
+10,validation,cei_mp2,7,8,Skin or soft-tissue infection,325,308,0.672078,0.636923,0.654028
+10,validation,cei_mp2,7,9,UTI or pyelonephritis,395,383,0.78329,0.759494,0.771208
+10,validation,graphcare,1234,0,Back or spine pain,481,406,0.830049,0.700624,0.759865
+10,validation,graphcare,1234,1,Diabetes mellitus,158,168,0.732143,0.778481,0.754601
+10,validation,graphcare,1234,2,GI bleed,335,328,0.868902,0.850746,0.859729
+10,validation,graphcare,1234,3,Head injury,245,280,0.675,0.771429,0.72
+10,validation,graphcare,1234,4,Heart failure,163,159,0.647799,0.631902,0.639752
+10,validation,graphcare,1234,5,Limb injury or pain,403,429,0.599068,0.637717,0.617788
+10,validation,graphcare,1234,6,Lower respiratory disease,367,389,0.655527,0.694823,0.674603
+10,validation,graphcare,1234,7,Major depressive disorder,293,287,0.944251,0.924915,0.934483
+10,validation,graphcare,1234,8,Skin or soft-tissue infection,325,372,0.591398,0.676923,0.631277
+10,validation,graphcare,1234,9,UTI or pyelonephritis,395,347,0.798271,0.701266,0.746631
+10,validation,graphcare,2025,0,Back or spine pain,481,427,0.798595,0.70894,0.751101
+10,validation,graphcare,2025,1,Diabetes mellitus,158,164,0.737805,0.765823,0.751553
+10,validation,graphcare,2025,2,GI bleed,335,342,0.842105,0.859701,0.850812
+10,validation,graphcare,2025,3,Head injury,245,276,0.699275,0.787755,0.740883
+10,validation,graphcare,2025,4,Heart failure,163,155,0.645161,0.613497,0.628931
+10,validation,graphcare,2025,5,Limb injury or pain,403,378,0.611111,0.573201,0.591549
+10,validation,graphcare,2025,6,Lower respiratory disease,367,392,0.637755,0.681199,0.658762
+10,validation,graphcare,2025,7,Major depressive disorder,293,294,0.928571,0.931741,0.930153
+10,validation,graphcare,2025,8,Skin or soft-tissue infection,325,385,0.592208,0.701538,0.642254
+10,validation,graphcare,2025,9,UTI or pyelonephritis,395,352,0.795455,0.708861,0.749665
+10,validation,graphcare,7,0,Back or spine pain,481,418,0.808612,0.702703,0.751947
+10,validation,graphcare,7,1,Diabetes mellitus,158,177,0.711864,0.797468,0.752239
+10,validation,graphcare,7,2,GI bleed,335,344,0.843023,0.865672,0.854197
+10,validation,graphcare,7,3,Head injury,245,287,0.66899,0.783673,0.721805
+10,validation,graphcare,7,4,Heart failure,163,155,0.683871,0.650307,0.666667
+10,validation,graphcare,7,5,Limb injury or pain,403,430,0.590698,0.630273,0.609844
+10,validation,graphcare,7,6,Lower respiratory disease,367,362,0.701657,0.692098,0.696845
+10,validation,graphcare,7,7,Major depressive disorder,293,291,0.938144,0.931741,0.934932
+10,validation,graphcare,7,8,Skin or soft-tissue infection,325,317,0.643533,0.627692,0.635514
+10,validation,graphcare,7,9,UTI or pyelonephritis,395,384,0.747396,0.726582,0.736842
+10,validation,gsat,1234,0,Back or spine pain,481,447,0.762864,0.70894,0.734914
+10,validation,gsat,1234,1,Diabetes mellitus,158,161,0.708075,0.721519,0.714734
+10,validation,gsat,1234,2,GI bleed,335,327,0.853211,0.832836,0.8429
+10,validation,gsat,1234,3,Head injury,245,321,0.623053,0.816327,0.706714
+10,validation,gsat,1234,4,Heart failure,163,167,0.664671,0.680982,0.672727
+10,validation,gsat,1234,5,Limb injury or pain,403,395,0.617722,0.605459,0.611529
+10,validation,gsat,1234,6,Lower respiratory disease,367,379,0.667546,0.689373,0.678284
+10,validation,gsat,1234,7,Major depressive disorder,293,307,0.895765,0.938567,0.916667
+10,validation,gsat,1234,8,Skin or soft-tissue infection,325,327,0.629969,0.633846,0.631902
+10,validation,gsat,1234,9,UTI or pyelonephritis,395,334,0.814371,0.688608,0.746228
+10,validation,gsat,2025,0,Back or spine pain,481,457,0.761488,0.723493,0.742004
+10,validation,gsat,2025,1,Diabetes mellitus,158,144,0.763889,0.696203,0.728477
+10,validation,gsat,2025,2,GI bleed,335,308,0.905844,0.832836,0.867807
+10,validation,gsat,2025,3,Head injury,245,298,0.661074,0.804082,0.725599
+10,validation,gsat,2025,4,Heart failure,163,193,0.564767,0.668712,0.61236
+10,validation,gsat,2025,5,Limb injury or pain,403,378,0.608466,0.57072,0.588988
+10,validation,gsat,2025,6,Lower respiratory disease,367,382,0.646597,0.673025,0.659546
+10,validation,gsat,2025,7,Major depressive disorder,293,297,0.922559,0.935154,0.928814
+10,validation,gsat,2025,8,Skin or soft-tissue infection,325,341,0.630499,0.661538,0.645646
+10,validation,gsat,2025,9,UTI or pyelonephritis,395,367,0.779292,0.724051,0.750656
+10,validation,gsat,7,0,Back or spine pain,481,460,0.752174,0.719335,0.735388
+10,validation,gsat,7,1,Diabetes mellitus,158,168,0.708333,0.753165,0.730061
+10,validation,gsat,7,2,GI bleed,335,313,0.888179,0.829851,0.858025
+10,validation,gsat,7,3,Head injury,245,288,0.663194,0.779592,0.716698
+10,validation,gsat,7,4,Heart failure,163,175,0.611429,0.656442,0.633136
+10,validation,gsat,7,5,Limb injury or pain,403,400,0.595,0.590571,0.592777
+10,validation,gsat,7,6,Lower respiratory disease,367,387,0.656331,0.692098,0.67374
+10,validation,gsat,7,7,Major depressive disorder,293,288,0.944444,0.928328,0.936317
+10,validation,gsat,7,8,Skin or soft-tissue infection,325,317,0.656151,0.64,0.647975
+10,validation,gsat,7,9,UTI or pyelonephritis,395,369,0.780488,0.729114,0.753927
+10,validation,protgnn,1234,0,Back or spine pain,481,485,0.731959,0.738046,0.73499
+10,validation,protgnn,1234,1,Diabetes mellitus,158,160,0.7375,0.746835,0.742138
+10,validation,protgnn,1234,2,GI bleed,335,310,0.906452,0.838806,0.871318
+10,validation,protgnn,1234,3,Head injury,245,257,0.70428,0.738776,0.721116
+10,validation,protgnn,1234,4,Heart failure,163,200,0.58,0.711656,0.639118
+10,validation,protgnn,1234,5,Limb injury or pain,403,383,0.624021,0.593052,0.608142
+10,validation,protgnn,1234,6,Lower respiratory disease,367,340,0.720588,0.667575,0.693069
+10,validation,protgnn,1234,7,Major depressive disorder,293,309,0.899676,0.948805,0.923588
+10,validation,protgnn,1234,8,Skin or soft-tissue infection,325,301,0.66113,0.612308,0.635783
+10,validation,protgnn,1234,9,UTI or pyelonephritis,395,420,0.721429,0.767089,0.743558
+10,validation,protgnn,2025,0,Back or spine pain,481,388,0.829897,0.669439,0.741082
+10,validation,protgnn,2025,1,Diabetes mellitus,158,156,0.762821,0.753165,0.757962
+10,validation,protgnn,2025,2,GI bleed,335,343,0.857143,0.877612,0.867257
+10,validation,protgnn,2025,3,Head injury,245,301,0.654485,0.804082,0.721612
+10,validation,protgnn,2025,4,Heart failure,163,215,0.572093,0.754601,0.650794
+10,validation,protgnn,2025,5,Limb injury or pain,403,375,0.616,0.573201,0.59383
+10,validation,protgnn,2025,6,Lower respiratory disease,367,295,0.759322,0.610354,0.676737
+10,validation,protgnn,2025,7,Major depressive disorder,293,298,0.922819,0.938567,0.930626
+10,validation,protgnn,2025,8,Skin or soft-tissue infection,325,416,0.557692,0.713846,0.626181
+10,validation,protgnn,2025,9,UTI or pyelonephritis,395,378,0.775132,0.741772,0.758085
+10,validation,protgnn,7,0,Back or spine pain,481,401,0.835411,0.696466,0.759637
+10,validation,protgnn,7,1,Diabetes mellitus,158,160,0.7625,0.772152,0.767296
+10,validation,protgnn,7,2,GI bleed,335,334,0.850299,0.847761,0.849028
+10,validation,protgnn,7,3,Head injury,245,310,0.645161,0.816327,0.720721
+10,validation,protgnn,7,4,Heart failure,163,183,0.606557,0.680982,0.641618
+10,validation,protgnn,7,5,Limb injury or pain,403,398,0.625628,0.617866,0.621723
+10,validation,protgnn,7,6,Lower respiratory disease,367,373,0.683646,0.694823,0.689189
+10,validation,protgnn,7,7,Major depressive disorder,293,301,0.916944,0.94198,0.929293
+10,validation,protgnn,7,8,Skin or soft-tissue infection,325,335,0.623881,0.643077,0.633333
+10,validation,protgnn,7,9,UTI or pyelonephritis,395,370,0.791892,0.741772,0.766013
+10,test,cei_mp2,1234,0,Back or spine pain,456,391,0.818414,0.701754,0.755608
+10,test,cei_mp2,1234,1,Diabetes mellitus,155,134,0.798507,0.690323,0.740484
+10,test,cei_mp2,1234,2,GI bleed,342,339,0.867257,0.859649,0.863436
+10,test,cei_mp2,1234,3,Head injury,289,317,0.73817,0.809689,0.772277
+10,test,cei_mp2,1234,4,Heart failure,141,169,0.639053,0.765957,0.696774
+10,test,cei_mp2,1234,5,Limb injury or pain,420,491,0.564155,0.659524,0.608123
+10,test,cei_mp2,1234,6,Lower respiratory disease,379,323,0.780186,0.664908,0.717949
+10,test,cei_mp2,1234,7,Major depressive disorder,249,247,0.959514,0.951807,0.955645
+10,test,cei_mp2,1234,8,Skin or soft-tissue infection,359,394,0.637056,0.699164,0.666667
+10,test,cei_mp2,1234,9,UTI or pyelonephritis,385,370,0.767568,0.737662,0.752318
+10,test,cei_mp2,2025,0,Back or spine pain,456,400,0.8175,0.717105,0.764019
+10,test,cei_mp2,2025,1,Diabetes mellitus,155,145,0.772414,0.722581,0.746667
+10,test,cei_mp2,2025,2,GI bleed,342,323,0.904025,0.853801,0.878195
+10,test,cei_mp2,2025,3,Head injury,289,315,0.765079,0.83391,0.798013
+10,test,cei_mp2,2025,4,Heart failure,141,165,0.672727,0.787234,0.72549
+10,test,cei_mp2,2025,5,Limb injury or pain,420,440,0.627273,0.657143,0.64186
+10,test,cei_mp2,2025,6,Lower respiratory disease,379,403,0.717122,0.762533,0.73913
+10,test,cei_mp2,2025,7,Major depressive disorder,249,253,0.944664,0.959839,0.952191
+10,test,cei_mp2,2025,8,Skin or soft-tissue infection,359,377,0.679045,0.713092,0.695652
+10,test,cei_mp2,2025,9,UTI or pyelonephritis,385,354,0.799435,0.735065,0.7659
+10,test,cei_mp2,7,0,Back or spine pain,456,397,0.816121,0.710526,0.759672
+10,test,cei_mp2,7,1,Diabetes mellitus,155,147,0.768707,0.729032,0.748344
+10,test,cei_mp2,7,2,GI bleed,342,348,0.853448,0.868421,0.86087
+10,test,cei_mp2,7,3,Head injury,289,333,0.738739,0.851211,0.790997
+10,test,cei_mp2,7,4,Heart failure,141,158,0.658228,0.737589,0.695652
+10,test,cei_mp2,7,5,Limb injury or pain,420,474,0.601266,0.678571,0.637584
+10,test,cei_mp2,7,6,Lower respiratory disease,379,388,0.724227,0.741425,0.732725
+10,test,cei_mp2,7,7,Major depressive disorder,249,251,0.940239,0.947791,0.944
+10,test,cei_mp2,7,8,Skin or soft-tissue infection,359,349,0.673352,0.654596,0.663842
+10,test,cei_mp2,7,9,UTI or pyelonephritis,385,330,0.830303,0.711688,0.766434
+10,test,graphcare,1234,0,Back or spine pain,456,386,0.823834,0.697368,0.755344
+10,test,graphcare,1234,1,Diabetes mellitus,155,141,0.801418,0.729032,0.763514
+10,test,graphcare,1234,2,GI bleed,342,329,0.896657,0.862573,0.879285
+10,test,graphcare,1234,3,Head injury,289,308,0.762987,0.813149,0.78727
+10,test,graphcare,1234,4,Heart failure,141,159,0.691824,0.780142,0.733333
+10,test,graphcare,1234,5,Limb injury or pain,420,449,0.614699,0.657143,0.635213
+10,test,graphcare,1234,6,Lower respiratory disease,379,409,0.699267,0.754617,0.725888
+10,test,graphcare,1234,7,Major depressive disorder,249,251,0.940239,0.947791,0.944
+10,test,graphcare,1234,8,Skin or soft-tissue infection,359,409,0.650367,0.740947,0.692708
+10,test,graphcare,1234,9,UTI or pyelonephritis,385,334,0.805389,0.698701,0.748261
+10,test,graphcare,2025,0,Back or spine pain,456,394,0.809645,0.699561,0.750588
+10,test,graphcare,2025,1,Diabetes mellitus,155,149,0.771812,0.741935,0.756579
+10,test,graphcare,2025,2,GI bleed,342,338,0.887574,0.877193,0.882353
+10,test,graphcare,2025,3,Head injury,289,302,0.758278,0.792388,0.774958
+10,test,graphcare,2025,4,Heart failure,141,157,0.66242,0.737589,0.697987
+10,test,graphcare,2025,5,Limb injury or pain,420,392,0.658163,0.614286,0.635468
+10,test,graphcare,2025,6,Lower respiratory disease,379,418,0.686603,0.757256,0.720201
+10,test,graphcare,2025,7,Major depressive disorder,249,245,0.963265,0.947791,0.955466
+10,test,graphcare,2025,8,Skin or soft-tissue infection,359,442,0.613122,0.754875,0.676654
+10,test,graphcare,2025,9,UTI or pyelonephritis,385,338,0.807692,0.709091,0.755187
+10,test,graphcare,7,0,Back or spine pain,456,389,0.81491,0.695175,0.750296
+10,test,graphcare,7,1,Diabetes mellitus,155,155,0.754839,0.754839,0.754839
+10,test,graphcare,7,2,GI bleed,342,341,0.882698,0.880117,0.881406
+10,test,graphcare,7,3,Head injury,289,327,0.721713,0.816609,0.766234
+10,test,graphcare,7,4,Heart failure,141,157,0.700637,0.780142,0.738255
+10,test,graphcare,7,5,Limb injury or pain,420,435,0.616092,0.638095,0.626901
+10,test,graphcare,7,6,Lower respiratory disease,379,376,0.744681,0.738786,0.741722
+10,test,graphcare,7,7,Major depressive disorder,249,247,0.955466,0.947791,0.951613
+10,test,graphcare,7,8,Skin or soft-tissue infection,359,384,0.648438,0.693593,0.670256
+10,test,graphcare,7,9,UTI or pyelonephritis,385,364,0.755495,0.714286,0.734312
+10,test,gsat,1234,0,Back or spine pain,456,415,0.790361,0.719298,0.753157
+10,test,gsat,1234,1,Diabetes mellitus,155,153,0.732026,0.722581,0.727273
+10,test,gsat,1234,2,GI bleed,342,339,0.867257,0.859649,0.863436
+10,test,gsat,1234,3,Head injury,289,354,0.69209,0.847751,0.762053
+10,test,gsat,1234,4,Heart failure,141,151,0.635762,0.680851,0.657534
+10,test,gsat,1234,5,Limb injury or pain,420,407,0.648649,0.628571,0.638452
+10,test,gsat,1234,6,Lower respiratory disease,379,420,0.664286,0.736148,0.698373
+10,test,gsat,1234,7,Major depressive disorder,249,270,0.892593,0.967871,0.928709
+10,test,gsat,1234,8,Skin or soft-tissue infection,359,353,0.694051,0.682451,0.688202
+10,test,gsat,1234,9,UTI or pyelonephritis,385,313,0.830671,0.675325,0.744986
+10,test,gsat,2025,0,Back or spine pain,456,447,0.751678,0.736842,0.744186
+10,test,gsat,2025,1,Diabetes mellitus,155,127,0.818898,0.670968,0.737589
+10,test,gsat,2025,2,GI bleed,342,325,0.892308,0.847953,0.869565
+10,test,gsat,2025,3,Head injury,289,341,0.718475,0.847751,0.777778
+10,test,gsat,2025,4,Heart failure,141,179,0.614525,0.780142,0.6875
+10,test,gsat,2025,5,Limb injury or pain,420,393,0.648855,0.607143,0.627306
+10,test,gsat,2025,6,Lower respiratory disease,379,394,0.700508,0.728232,0.714101
+10,test,gsat,2025,7,Major depressive disorder,249,258,0.922481,0.955823,0.938856
+10,test,gsat,2025,8,Skin or soft-tissue infection,359,374,0.668449,0.696379,0.682128
+10,test,gsat,2025,9,UTI or pyelonephritis,385,337,0.79822,0.698701,0.745152
+10,test,gsat,7,0,Back or spine pain,456,445,0.74382,0.725877,0.734739
+10,test,gsat,7,1,Diabetes mellitus,155,143,0.769231,0.709677,0.738255
+10,test,gsat,7,2,GI bleed,342,318,0.908805,0.845029,0.875758
+10,test,gsat,7,3,Head injury,289,320,0.7375,0.816609,0.775041
+10,test,gsat,7,4,Heart failure,141,176,0.630682,0.787234,0.700315
+10,test,gsat,7,5,Limb injury or pain,420,428,0.626168,0.638095,0.632075
+10,test,gsat,7,6,Lower respiratory disease,379,395,0.701266,0.730871,0.715762
+10,test,gsat,7,7,Major depressive disorder,249,251,0.932271,0.939759,0.936
+10,test,gsat,7,8,Skin or soft-tissue infection,359,366,0.674863,0.688022,0.681379
+10,test,gsat,7,9,UTI or pyelonephritis,385,333,0.810811,0.701299,0.752089
+10,test,protgnn,1234,0,Back or spine pain,456,446,0.751121,0.734649,0.742794
+10,test,protgnn,1234,1,Diabetes mellitus,155,147,0.748299,0.709677,0.728477
+10,test,protgnn,1234,2,GI bleed,342,325,0.895385,0.850877,0.872564
+10,test,protgnn,1234,3,Head injury,289,285,0.792982,0.782007,0.787456
+10,test,protgnn,1234,4,Heart failure,141,191,0.591623,0.801418,0.680723
+10,test,protgnn,1234,5,Limb injury or pain,420,424,0.606132,0.611905,0.609005
+10,test,protgnn,1234,6,Lower respiratory disease,379,355,0.729577,0.683377,0.705722
+10,test,protgnn,1234,7,Major depressive disorder,249,271,0.892989,0.971888,0.930769
+10,test,protgnn,1234,8,Skin or soft-tissue infection,359,341,0.677419,0.643454,0.66
+10,test,protgnn,1234,9,UTI or pyelonephritis,385,390,0.733333,0.742857,0.738065
+10,test,protgnn,2025,0,Back or spine pain,456,358,0.843575,0.662281,0.742015
+10,test,protgnn,2025,1,Diabetes mellitus,155,153,0.745098,0.735484,0.74026
+10,test,protgnn,2025,2,GI bleed,342,348,0.867816,0.883041,0.875362
+10,test,protgnn,2025,3,Head injury,289,342,0.704678,0.83391,0.763867
+10,test,protgnn,2025,4,Heart failure,141,195,0.594872,0.822695,0.690476
+10,test,protgnn,2025,5,Limb injury or pain,420,418,0.607656,0.604762,0.606205
+10,test,protgnn,2025,6,Lower respiratory disease,379,305,0.790164,0.635884,0.704678
+10,test,protgnn,2025,7,Major depressive disorder,249,262,0.912214,0.959839,0.935421
+10,test,protgnn,2025,8,Skin or soft-tissue infection,359,436,0.612385,0.743733,0.671698
+10,test,protgnn,2025,9,UTI or pyelonephritis,385,358,0.796089,0.74026,0.76716
+10,test,protgnn,7,0,Back or spine pain,456,394,0.817259,0.70614,0.757647
+10,test,protgnn,7,1,Diabetes mellitus,155,147,0.782313,0.741935,0.761589
+10,test,protgnn,7,2,GI bleed,342,348,0.87069,0.885965,0.878261
+10,test,protgnn,7,3,Head injury,289,340,0.702941,0.82699,0.759936
+10,test,protgnn,7,4,Heart failure,141,174,0.637931,0.787234,0.704762
+10,test,protgnn,7,5,Limb injury or pain,420,412,0.645631,0.633333,0.639423
+10,test,protgnn,7,6,Lower respiratory disease,379,397,0.695214,0.728232,0.71134
+10,test,protgnn,7,7,Major depressive disorder,249,260,0.923077,0.963855,0.943026
+10,test,protgnn,7,8,Skin or soft-tissue infection,359,362,0.685083,0.690808,0.687933
+10,test,protgnn,7,9,UTI or pyelonephritis,385,341,0.780059,0.690909,0.732782
+20,validation,cei_mp2,1234,0,Acute kidney failure,111,121,0.504132,0.54955,0.525862
+20,validation,cei_mp2,1234,1,Acute pharyngitis,74,79,0.721519,0.77027,0.745098
+20,validation,cei_mp2,1234,2,Alcohol abuse with intoxication,102,99,0.767677,0.745098,0.756219
+20,validation,cei_mp2,1234,3,Anemia,89,102,0.627451,0.719101,0.670157
+20,validation,cei_mp2,1234,4,Back or spine pain,481,417,0.793765,0.68815,0.737194
+20,validation,cei_mp2,1234,5,Diabetes mellitus,158,164,0.664634,0.689873,0.677019
+20,validation,cei_mp2,1234,6,Epilepsy,105,100,0.84,0.8,0.819512
+20,validation,cei_mp2,1234,7,GI bleed,335,282,0.900709,0.758209,0.823339
+20,validation,cei_mp2,1234,8,Head injury,245,310,0.63871,0.808163,0.713514
+20,validation,cei_mp2,1234,9,Heart failure,163,214,0.542056,0.711656,0.615385
+20,validation,cei_mp2,1234,10,Hypokalemia,96,99,0.59596,0.614583,0.605128
+20,validation,cei_mp2,1234,11,Limb injury or pain,403,351,0.626781,0.545906,0.583554
+20,validation,cei_mp2,1234,12,Lower respiratory disease,367,292,0.69863,0.555858,0.61912
+20,validation,cei_mp2,1234,13,Major depressive disorder,293,281,0.932384,0.894198,0.912892
+20,validation,cei_mp2,1234,14,Non-ST elevation (NSTEMI) myocardial infarction,86,103,0.728155,0.872093,0.793651
+20,validation,cei_mp2,1234,15,Sepsis,69,85,0.329412,0.405797,0.363636
+20,validation,cei_mp2,1234,16,Skin or soft-tissue infection,325,373,0.581769,0.667692,0.621777
+20,validation,cei_mp2,1234,17,UTI or pyelonephritis,395,364,0.747253,0.688608,0.716733
+20,validation,cei_mp2,1234,18,Unsp intestnl obst,141,204,0.602941,0.87234,0.713043
+20,validation,cei_mp2,1234,19,Unspecified atrial fibrillation,145,143,0.678322,0.668966,0.673611
+20,validation,cei_mp2,2025,0,Acute kidney failure,111,131,0.465649,0.54955,0.504132
+20,validation,cei_mp2,2025,1,Acute pharyngitis,74,74,0.756757,0.756757,0.756757
+20,validation,cei_mp2,2025,2,Alcohol abuse with intoxication,102,104,0.769231,0.784314,0.776699
+20,validation,cei_mp2,2025,3,Anemia,89,109,0.568807,0.696629,0.626263
+20,validation,cei_mp2,2025,4,Back or spine pain,481,431,0.788863,0.706861,0.745614
+20,validation,cei_mp2,2025,5,Diabetes mellitus,158,168,0.684524,0.727848,0.705521
+20,validation,cei_mp2,2025,6,Epilepsy,105,93,0.870968,0.771429,0.818182
+20,validation,cei_mp2,2025,7,GI bleed,335,283,0.90106,0.761194,0.825243
+20,validation,cei_mp2,2025,8,Head injury,245,274,0.671533,0.75102,0.709056
+20,validation,cei_mp2,2025,9,Heart failure,163,189,0.571429,0.662577,0.613636
+20,validation,cei_mp2,2025,10,Hypokalemia,96,89,0.606742,0.5625,0.583784
+20,validation,cei_mp2,2025,11,Limb injury or pain,403,413,0.595642,0.610422,0.602941
+20,validation,cei_mp2,2025,12,Lower respiratory disease,367,321,0.679128,0.594005,0.633721
+20,validation,cei_mp2,2025,13,Major depressive disorder,293,288,0.913194,0.897611,0.905336
+20,validation,cei_mp2,2025,14,Non-ST elevation (NSTEMI) myocardial infarction,86,105,0.714286,0.872093,0.78534
+20,validation,cei_mp2,2025,15,Sepsis,69,79,0.329114,0.376812,0.351351
+20,validation,cei_mp2,2025,16,Skin or soft-tissue infection,325,331,0.622356,0.633846,0.628049
+20,validation,cei_mp2,2025,17,UTI or pyelonephritis,395,346,0.763006,0.668354,0.712551
+20,validation,cei_mp2,2025,18,Unsp intestnl obst,141,200,0.62,0.879433,0.727273
+20,validation,cei_mp2,2025,19,Unspecified atrial fibrillation,145,155,0.625806,0.668966,0.646667
+20,validation,cei_mp2,7,0,Acute kidney failure,111,118,0.516949,0.54955,0.532751
+20,validation,cei_mp2,7,1,Acute pharyngitis,74,75,0.76,0.77027,0.765101
+20,validation,cei_mp2,7,2,Alcohol abuse with intoxication,102,105,0.742857,0.764706,0.753623
+20,validation,cei_mp2,7,3,Anemia,89,123,0.552846,0.764045,0.641509
+20,validation,cei_mp2,7,4,Back or spine pain,481,419,0.787589,0.686071,0.733333
+20,validation,cei_mp2,7,5,Diabetes mellitus,158,167,0.694611,0.734177,0.713846
+20,validation,cei_mp2,7,6,Epilepsy,105,94,0.87234,0.780952,0.824121
+20,validation,cei_mp2,7,7,GI bleed,335,283,0.90106,0.761194,0.825243
+20,validation,cei_mp2,7,8,Head injury,245,285,0.659649,0.767347,0.709434
+20,validation,cei_mp2,7,9,Heart failure,163,178,0.573034,0.625767,0.59824
+20,validation,cei_mp2,7,10,Hypokalemia,96,105,0.609524,0.666667,0.636816
+20,validation,cei_mp2,7,11,Limb injury or pain,403,402,0.609453,0.60794,0.608696
+20,validation,cei_mp2,7,12,Lower respiratory disease,367,334,0.679641,0.618529,0.647646
+20,validation,cei_mp2,7,13,Major depressive disorder,293,288,0.916667,0.901024,0.908778
+20,validation,cei_mp2,7,14,Non-ST elevation (NSTEMI) myocardial infarction,86,105,0.72381,0.883721,0.795812
+20,validation,cei_mp2,7,15,Sepsis,69,87,0.321839,0.405797,0.358974
+20,validation,cei_mp2,7,16,Skin or soft-tissue infection,325,349,0.618911,0.664615,0.64095
+20,validation,cei_mp2,7,17,UTI or pyelonephritis,395,335,0.78209,0.663291,0.717808
+20,validation,cei_mp2,7,18,Unsp intestnl obst,141,199,0.61809,0.87234,0.723529
+20,validation,cei_mp2,7,19,Unspecified atrial fibrillation,145,132,0.704545,0.641379,0.67148
+20,validation,graphcare,1234,0,Acute kidney failure,111,105,0.504762,0.477477,0.490741
+20,validation,graphcare,1234,1,Acute pharyngitis,74,71,0.802817,0.77027,0.786207
+20,validation,graphcare,1234,2,Alcohol abuse with intoxication,102,92,0.782609,0.705882,0.742268
+20,validation,graphcare,1234,3,Anemia,89,112,0.571429,0.719101,0.636816
+20,validation,graphcare,1234,4,Back or spine pain,481,440,0.761364,0.696466,0.72747
+20,validation,graphcare,1234,5,Diabetes mellitus,158,163,0.699387,0.721519,0.71028
+20,validation,graphcare,1234,6,Epilepsy,105,103,0.84466,0.828571,0.836538
+20,validation,graphcare,1234,7,GI bleed,335,284,0.883803,0.749254,0.810985
+20,validation,graphcare,1234,8,Head injury,245,304,0.651316,0.808163,0.721311
+20,validation,graphcare,1234,9,Heart failure,163,164,0.573171,0.576687,0.574924
+20,validation,graphcare,1234,10,Hypokalemia,96,100,0.56,0.583333,0.571429
+20,validation,graphcare,1234,11,Limb injury or pain,403,384,0.622396,0.593052,0.60737
+20,validation,graphcare,1234,12,Lower respiratory disease,367,358,0.622905,0.607629,0.615172
+20,validation,graphcare,1234,13,Major depressive disorder,293,307,0.872964,0.914676,0.893333
+20,validation,graphcare,1234,14,Non-ST elevation (NSTEMI) myocardial infarction,86,96,0.71875,0.802326,0.758242
+20,validation,graphcare,1234,15,Sepsis,69,72,0.333333,0.347826,0.340426
+20,validation,graphcare,1234,16,Skin or soft-tissue infection,325,356,0.603933,0.661538,0.631424
+20,validation,graphcare,1234,17,UTI or pyelonephritis,395,337,0.744807,0.635443,0.685792
+20,validation,graphcare,1234,18,Unsp intestnl obst,141,194,0.603093,0.829787,0.698507
+20,validation,graphcare,1234,19,Unspecified atrial fibrillation,145,141,0.687943,0.668966,0.678322
+20,validation,graphcare,2025,0,Acute kidney failure,111,144,0.444444,0.576577,0.501961
+20,validation,graphcare,2025,1,Acute pharyngitis,74,73,0.767123,0.756757,0.761905
+20,validation,graphcare,2025,2,Alcohol abuse with intoxication,102,94,0.755319,0.696078,0.72449
+20,validation,graphcare,2025,3,Anemia,89,113,0.566372,0.719101,0.633663
+20,validation,graphcare,2025,4,Back or spine pain,481,423,0.787234,0.692308,0.736726
+20,validation,graphcare,2025,5,Diabetes mellitus,158,163,0.699387,0.721519,0.71028
+20,validation,graphcare,2025,6,Epilepsy,105,100,0.86,0.819048,0.839024
+20,validation,graphcare,2025,7,GI bleed,335,264,0.916667,0.722388,0.808013
+20,validation,graphcare,2025,8,Head injury,245,321,0.619938,0.812245,0.70318
+20,validation,graphcare,2025,9,Heart failure,163,174,0.58046,0.619632,0.599407
+20,validation,graphcare,2025,10,Hypokalemia,96,80,0.6625,0.552083,0.602273
+20,validation,graphcare,2025,11,Limb injury or pain,403,370,0.616216,0.565757,0.589909
+20,validation,graphcare,2025,12,Lower respiratory disease,367,326,0.644172,0.572207,0.606061
+20,validation,graphcare,2025,13,Major depressive disorder,293,305,0.885246,0.921502,0.90301
+20,validation,graphcare,2025,14,Non-ST elevation (NSTEMI) myocardial infarction,86,100,0.69,0.802326,0.741935
+20,validation,graphcare,2025,15,Sepsis,69,81,0.308642,0.362319,0.333333
+20,validation,graphcare,2025,16,Skin or soft-tissue infection,325,355,0.583099,0.636923,0.608824
+20,validation,graphcare,2025,17,UTI or pyelonephritis,395,348,0.732759,0.64557,0.686406
+20,validation,graphcare,2025,18,Unsp intestnl obst,141,208,0.572115,0.843972,0.681948
+20,validation,graphcare,2025,19,Unspecified atrial fibrillation,145,141,0.687943,0.668966,0.678322
+20,validation,graphcare,7,0,Acute kidney failure,111,114,0.491228,0.504505,0.497778
+20,validation,graphcare,7,1,Acute pharyngitis,74,78,0.74359,0.783784,0.763158
+20,validation,graphcare,7,2,Alcohol abuse with intoxication,102,93,0.774194,0.705882,0.738462
+20,validation,graphcare,7,3,Anemia,89,100,0.61,0.685393,0.645503
+20,validation,graphcare,7,4,Back or spine pain,481,430,0.781395,0.698545,0.737651
+20,validation,graphcare,7,5,Diabetes mellitus,158,148,0.736486,0.689873,0.712418
+20,validation,graphcare,7,6,Epilepsy,105,110,0.809091,0.847619,0.827907
+20,validation,graphcare,7,7,GI bleed,335,283,0.886926,0.749254,0.812298
+20,validation,graphcare,7,8,Head injury,245,324,0.617284,0.816327,0.702988
+20,validation,graphcare,7,9,Heart failure,163,156,0.596154,0.570552,0.583072
+20,validation,graphcare,7,10,Hypokalemia,96,104,0.567308,0.614583,0.59
+20,validation,graphcare,7,11,Limb injury or pain,403,407,0.570025,0.575682,0.57284
+20,validation,graphcare,7,12,Lower respiratory disease,367,345,0.634783,0.59673,0.615169
+20,validation,graphcare,7,13,Major depressive disorder,293,307,0.876221,0.918089,0.896667
+20,validation,graphcare,7,14,Non-ST elevation (NSTEMI) myocardial infarction,86,88,0.75,0.767442,0.758621
+20,validation,graphcare,7,15,Sepsis,69,100,0.31,0.449275,0.366864
+20,validation,graphcare,7,16,Skin or soft-tissue infection,325,317,0.630915,0.615385,0.623053
+20,validation,graphcare,7,17,UTI or pyelonephritis,395,317,0.794953,0.637975,0.707865
+20,validation,graphcare,7,18,Unsp intestnl obst,141,204,0.563725,0.815603,0.666667
+20,validation,graphcare,7,19,Unspecified atrial fibrillation,145,158,0.639241,0.696552,0.666667
+20,validation,gsat,1234,0,Acute kidney failure,111,143,0.433566,0.558559,0.488189
+20,validation,gsat,1234,1,Acute pharyngitis,74,87,0.701149,0.824324,0.757764
+20,validation,gsat,1234,2,Alcohol abuse with intoxication,102,93,0.795699,0.72549,0.758974
+20,validation,gsat,1234,3,Anemia,89,106,0.584906,0.696629,0.635897
+20,validation,gsat,1234,4,Back or spine pain,481,390,0.825641,0.669439,0.73938
+20,validation,gsat,1234,5,Diabetes mellitus,158,169,0.668639,0.71519,0.691131
+20,validation,gsat,1234,6,Epilepsy,105,110,0.8,0.838095,0.818605
+20,validation,gsat,1234,7,GI bleed,335,273,0.912088,0.743284,0.819079
+20,validation,gsat,1234,8,Head injury,245,293,0.631399,0.755102,0.687732
+20,validation,gsat,1234,9,Heart failure,163,177,0.553672,0.601227,0.576471
+20,validation,gsat,1234,10,Hypokalemia,96,109,0.559633,0.635417,0.595122
+20,validation,gsat,1234,11,Limb injury or pain,403,397,0.581864,0.573201,0.5775
+20,validation,gsat,1234,12,Lower respiratory disease,367,357,0.638655,0.621253,0.629834
+20,validation,gsat,1234,13,Major depressive disorder,293,292,0.89726,0.894198,0.895726
+20,validation,gsat,1234,14,Non-ST elevation (NSTEMI) myocardial infarction,86,91,0.736264,0.77907,0.757062
+20,validation,gsat,1234,15,Sepsis,69,91,0.318681,0.42029,0.3625
+20,validation,gsat,1234,16,Skin or soft-tissue infection,325,333,0.606607,0.621538,0.613982
+20,validation,gsat,1234,17,UTI or pyelonephritis,395,344,0.755814,0.658228,0.703654
+20,validation,gsat,1234,18,Unsp intestnl obst,141,179,0.636872,0.808511,0.7125
+20,validation,gsat,1234,19,Unspecified atrial fibrillation,145,149,0.657718,0.675862,0.666667
+20,validation,gsat,2025,0,Acute kidney failure,111,133,0.443609,0.531532,0.483607
+20,validation,gsat,2025,1,Acute pharyngitis,74,69,0.826087,0.77027,0.797203
+20,validation,gsat,2025,2,Alcohol abuse with intoxication,102,104,0.711538,0.72549,0.718447
+20,validation,gsat,2025,3,Anemia,89,106,0.556604,0.662921,0.605128
+20,validation,gsat,2025,4,Back or spine pain,481,404,0.814356,0.683992,0.743503
+20,validation,gsat,2025,5,Diabetes mellitus,158,149,0.718121,0.677215,0.697068
+20,validation,gsat,2025,6,Epilepsy,105,100,0.82,0.780952,0.8
+20,validation,gsat,2025,7,GI bleed,335,291,0.869416,0.755224,0.808307
+20,validation,gsat,2025,8,Head injury,245,298,0.637584,0.77551,0.699816
+20,validation,gsat,2025,9,Heart failure,163,196,0.561224,0.674847,0.612813
+20,validation,gsat,2025,10,Hypokalemia,96,73,0.671233,0.510417,0.579882
+20,validation,gsat,2025,11,Limb injury or pain,403,407,0.579853,0.585608,0.582716
+20,validation,gsat,2025,12,Lower respiratory disease,367,350,0.631429,0.60218,0.616457
+20,validation,gsat,2025,13,Major depressive disorder,293,289,0.903114,0.890785,0.896907
+20,validation,gsat,2025,14,Non-ST elevation (NSTEMI) myocardial infarction,86,90,0.755556,0.790698,0.772727
+20,validation,gsat,2025,15,Sepsis,69,91,0.318681,0.42029,0.3625
+20,validation,gsat,2025,16,Skin or soft-tissue infection,325,333,0.621622,0.636923,0.629179
+20,validation,gsat,2025,17,UTI or pyelonephritis,395,375,0.690667,0.655696,0.672727
+20,validation,gsat,2025,18,Unsp intestnl obst,141,196,0.591837,0.822695,0.688427
+20,validation,gsat,2025,19,Unspecified atrial fibrillation,145,129,0.72093,0.641379,0.678832
+20,validation,gsat,7,0,Acute kidney failure,111,125,0.44,0.495495,0.466102
+20,validation,gsat,7,1,Acute pharyngitis,74,91,0.659341,0.810811,0.727273
+20,validation,gsat,7,2,Alcohol abuse with intoxication,102,103,0.737864,0.745098,0.741463
+20,validation,gsat,7,3,Anemia,89,125,0.52,0.730337,0.607477
+20,validation,gsat,7,4,Back or spine pain,481,408,0.808824,0.686071,0.742407
+20,validation,gsat,7,5,Diabetes mellitus,158,175,0.64,0.708861,0.672673
+20,validation,gsat,7,6,Epilepsy,105,102,0.843137,0.819048,0.830918
+20,validation,gsat,7,7,GI bleed,335,280,0.896429,0.749254,0.81626
+20,validation,gsat,7,8,Head injury,245,286,0.646853,0.755102,0.696798
+20,validation,gsat,7,9,Heart failure,163,154,0.590909,0.558282,0.574132
+20,validation,gsat,7,10,Hypokalemia,96,123,0.495935,0.635417,0.557078
+20,validation,gsat,7,11,Limb injury or pain,403,394,0.573604,0.560794,0.567127
+20,validation,gsat,7,12,Lower respiratory disease,367,351,0.652422,0.623978,0.637883
+20,validation,gsat,7,13,Major depressive disorder,293,285,0.908772,0.883959,0.896194
+20,validation,gsat,7,14,Non-ST elevation (NSTEMI) myocardial infarction,86,91,0.725275,0.767442,0.745763
+20,validation,gsat,7,15,Sepsis,69,86,0.325581,0.405797,0.36129
+20,validation,gsat,7,16,Skin or soft-tissue infection,325,329,0.613982,0.621538,0.617737
+20,validation,gsat,7,17,UTI or pyelonephritis,395,334,0.775449,0.655696,0.710562
+20,validation,gsat,7,18,Unsp intestnl obst,141,214,0.579439,0.879433,0.698592
+20,validation,gsat,7,19,Unspecified atrial fibrillation,145,127,0.755906,0.662069,0.705882
+20,validation,protgnn,1234,0,Acute kidney failure,111,103,0.533981,0.495495,0.514019
+20,validation,protgnn,1234,1,Acute pharyngitis,74,65,0.861538,0.756757,0.805755
+20,validation,protgnn,1234,2,Alcohol abuse with intoxication,102,130,0.6,0.764706,0.672414
+20,validation,protgnn,1234,3,Anemia,89,86,0.651163,0.629213,0.64
+20,validation,protgnn,1234,4,Back or spine pain,481,432,0.761574,0.683992,0.720701
+20,validation,protgnn,1234,5,Diabetes mellitus,158,161,0.689441,0.702532,0.695925
+20,validation,protgnn,1234,6,Epilepsy,105,101,0.841584,0.809524,0.825243
+20,validation,protgnn,1234,7,GI bleed,335,287,0.888502,0.761194,0.819936
+20,validation,protgnn,1234,8,Head injury,245,313,0.616613,0.787755,0.691756
+20,validation,protgnn,1234,9,Heart failure,163,216,0.532407,0.705521,0.60686
+20,validation,protgnn,1234,10,Hypokalemia,96,77,0.701299,0.5625,0.624277
+20,validation,protgnn,1234,11,Limb injury or pain,403,466,0.555794,0.64268,0.596087
+20,validation,protgnn,1234,12,Lower respiratory disease,367,330,0.654545,0.588556,0.619799
+20,validation,protgnn,1234,13,Major depressive disorder,293,272,0.930147,0.863481,0.895575
+20,validation,protgnn,1234,14,Non-ST elevation (NSTEMI) myocardial infarction,86,95,0.757895,0.837209,0.79558
+20,validation,protgnn,1234,15,Sepsis,69,59,0.423729,0.362319,0.390625
+20,validation,protgnn,1234,16,Skin or soft-tissue infection,325,325,0.606154,0.606154,0.606154
+20,validation,protgnn,1234,17,UTI or pyelonephritis,395,288,0.784722,0.572152,0.661786
+20,validation,protgnn,1234,18,Unsp intestnl obst,141,238,0.52521,0.886525,0.659631
+20,validation,protgnn,1234,19,Unspecified atrial fibrillation,145,139,0.690647,0.662069,0.676056
+20,validation,protgnn,2025,0,Acute kidney failure,111,101,0.554455,0.504505,0.528302
+20,validation,protgnn,2025,1,Acute pharyngitis,74,79,0.734177,0.783784,0.75817
+20,validation,protgnn,2025,2,Alcohol abuse with intoxication,102,104,0.740385,0.754902,0.747573
+20,validation,protgnn,2025,3,Anemia,89,106,0.556604,0.662921,0.605128
+20,validation,protgnn,2025,4,Back or spine pain,481,448,0.752232,0.700624,0.725511
+20,validation,protgnn,2025,5,Diabetes mellitus,158,207,0.599034,0.78481,0.679452
+20,validation,protgnn,2025,6,Epilepsy,105,100,0.84,0.8,0.819512
+20,validation,protgnn,2025,7,GI bleed,335,319,0.821317,0.78209,0.801223
+20,validation,protgnn,2025,8,Head injury,245,316,0.613924,0.791837,0.691622
+20,validation,protgnn,2025,9,Heart failure,163,179,0.569832,0.625767,0.596491
+20,validation,protgnn,2025,10,Hypokalemia,96,119,0.487395,0.604167,0.539535
+20,validation,protgnn,2025,11,Limb injury or pain,403,354,0.629944,0.55335,0.589168
+20,validation,protgnn,2025,12,Lower respiratory disease,367,319,0.661442,0.574932,0.61516
+20,validation,protgnn,2025,13,Major depressive disorder,293,291,0.900344,0.894198,0.89726
+20,validation,protgnn,2025,14,Non-ST elevation (NSTEMI) myocardial infarction,86,105,0.685714,0.837209,0.753927
+20,validation,protgnn,2025,15,Sepsis,69,67,0.328358,0.318841,0.323529
+20,validation,protgnn,2025,16,Skin or soft-tissue infection,325,303,0.636964,0.593846,0.61465
+20,validation,protgnn,2025,17,UTI or pyelonephritis,395,368,0.714674,0.665823,0.689384
+20,validation,protgnn,2025,18,Unsp intestnl obst,141,146,0.732877,0.758865,0.745645
+20,validation,protgnn,2025,19,Unspecified atrial fibrillation,145,152,0.657895,0.689655,0.673401
+20,validation,protgnn,7,0,Acute kidney failure,111,112,0.526786,0.531532,0.529148
+20,validation,protgnn,7,1,Acute pharyngitis,74,71,0.816901,0.783784,0.8
+20,validation,protgnn,7,2,Alcohol abuse with intoxication,102,92,0.771739,0.696078,0.731959
+20,validation,protgnn,7,3,Anemia,89,103,0.563107,0.651685,0.604167
+20,validation,protgnn,7,4,Back or spine pain,481,394,0.827411,0.677755,0.745143
+20,validation,protgnn,7,5,Diabetes mellitus,158,155,0.716129,0.702532,0.709265
+20,validation,protgnn,7,6,Epilepsy,105,84,0.916667,0.733333,0.814815
+20,validation,protgnn,7,7,GI bleed,335,304,0.855263,0.776119,0.813772
+20,validation,protgnn,7,8,Head injury,245,288,0.645833,0.759184,0.697936
+20,validation,protgnn,7,9,Heart failure,163,198,0.525253,0.638037,0.576177
+20,validation,protgnn,7,10,Hypokalemia,96,123,0.504065,0.645833,0.56621
+20,validation,protgnn,7,11,Limb injury or pain,403,496,0.53629,0.66005,0.591769
+20,validation,protgnn,7,12,Lower respiratory disease,367,340,0.644118,0.59673,0.619519
+20,validation,protgnn,7,13,Major depressive disorder,293,305,0.868852,0.904437,0.886288
+20,validation,protgnn,7,14,Non-ST elevation (NSTEMI) myocardial infarction,86,94,0.712766,0.77907,0.744444
+20,validation,protgnn,7,15,Sepsis,69,103,0.320388,0.478261,0.383721
+20,validation,protgnn,7,16,Skin or soft-tissue infection,325,250,0.696,0.535385,0.605217
+20,validation,protgnn,7,17,UTI or pyelonephritis,395,350,0.754286,0.668354,0.708725
+20,validation,protgnn,7,18,Unsp intestnl obst,141,189,0.640212,0.858156,0.733333
+20,validation,protgnn,7,19,Unspecified atrial fibrillation,145,132,0.719697,0.655172,0.685921
+20,test,cei_mp2,1234,0,Acute kidney failure,115,147,0.401361,0.513043,0.450382
+20,test,cei_mp2,1234,1,Acute pharyngitis,72,67,0.80597,0.75,0.776978
+20,test,cei_mp2,1234,2,Alcohol abuse with intoxication,97,86,0.77907,0.690722,0.73224
+20,test,cei_mp2,1234,3,Anemia,117,119,0.672269,0.683761,0.677966
+20,test,cei_mp2,1234,4,Back or spine pain,456,410,0.785366,0.70614,0.743649
+20,test,cei_mp2,1234,5,Diabetes mellitus,155,162,0.703704,0.735484,0.719243
+20,test,cei_mp2,1234,6,Epilepsy,99,99,0.838384,0.838384,0.838384
+20,test,cei_mp2,1234,7,GI bleed,342,299,0.87291,0.763158,0.814353
+20,test,cei_mp2,1234,8,Head injury,289,345,0.707246,0.844291,0.769716
+20,test,cei_mp2,1234,9,Heart failure,141,193,0.544041,0.744681,0.628743
+20,test,cei_mp2,1234,10,Hypokalemia,102,100,0.6,0.588235,0.594059
+20,test,cei_mp2,1234,11,Limb injury or pain,420,372,0.655914,0.580952,0.616162
+20,test,cei_mp2,1234,12,Lower respiratory disease,379,330,0.718182,0.62533,0.668547
+20,test,cei_mp2,1234,13,Major depressive disorder,249,253,0.893281,0.907631,0.900398
+20,test,cei_mp2,1234,14,Non-ST elevation (NSTEMI) myocardial infarction,85,97,0.701031,0.8,0.747253
+20,test,cei_mp2,1234,15,Sepsis,71,79,0.367089,0.408451,0.386667
+20,test,cei_mp2,1234,16,Skin or soft-tissue infection,359,393,0.636132,0.696379,0.664894
+20,test,cei_mp2,1234,17,UTI or pyelonephritis,385,310,0.806452,0.649351,0.719424
+20,test,cei_mp2,1234,18,Unsp intestnl obst,126,182,0.56044,0.809524,0.662338
+20,test,cei_mp2,1234,19,Unspecified atrial fibrillation,115,131,0.625954,0.713043,0.666667
+20,test,cei_mp2,2025,0,Acute kidney failure,115,143,0.384615,0.478261,0.426357
+20,test,cei_mp2,2025,1,Acute pharyngitis,72,59,0.813559,0.666667,0.732824
+20,test,cei_mp2,2025,2,Alcohol abuse with intoxication,97,97,0.721649,0.721649,0.721649
+20,test,cei_mp2,2025,3,Anemia,117,136,0.625,0.726496,0.671937
+20,test,cei_mp2,2025,4,Back or spine pain,456,423,0.77305,0.717105,0.744027
+20,test,cei_mp2,2025,5,Diabetes mellitus,155,153,0.72549,0.716129,0.720779
+20,test,cei_mp2,2025,6,Epilepsy,99,94,0.87234,0.828283,0.849741
+20,test,cei_mp2,2025,7,GI bleed,342,295,0.874576,0.754386,0.810047
+20,test,cei_mp2,2025,8,Head injury,289,310,0.745161,0.799308,0.771285
+20,test,cei_mp2,2025,9,Heart failure,141,175,0.56,0.695035,0.620253
+20,test,cei_mp2,2025,10,Hypokalemia,102,89,0.651685,0.568627,0.60733
+20,test,cei_mp2,2025,11,Limb injury or pain,420,417,0.618705,0.614286,0.616487
+20,test,cei_mp2,2025,12,Lower respiratory disease,379,376,0.68883,0.683377,0.686093
+20,test,cei_mp2,2025,13,Major depressive disorder,249,247,0.910931,0.903614,0.907258
+20,test,cei_mp2,2025,14,Non-ST elevation (NSTEMI) myocardial infarction,85,102,0.676471,0.811765,0.737968
+20,test,cei_mp2,2025,15,Sepsis,71,66,0.439394,0.408451,0.423358
+20,test,cei_mp2,2025,16,Skin or soft-tissue infection,359,363,0.652893,0.660167,0.65651
+20,test,cei_mp2,2025,17,UTI or pyelonephritis,385,317,0.788644,0.649351,0.712251
+20,test,cei_mp2,2025,18,Unsp intestnl obst,126,170,0.6,0.809524,0.689189
+20,test,cei_mp2,2025,19,Unspecified atrial fibrillation,115,142,0.598592,0.73913,0.661479
+20,test,cei_mp2,7,0,Acute kidney failure,115,150,0.393333,0.513043,0.445283
+20,test,cei_mp2,7,1,Acute pharyngitis,72,71,0.746479,0.736111,0.741259
+20,test,cei_mp2,7,2,Alcohol abuse with intoxication,97,102,0.715686,0.752577,0.733668
+20,test,cei_mp2,7,3,Anemia,117,139,0.611511,0.726496,0.664062
+20,test,cei_mp2,7,4,Back or spine pain,456,407,0.788698,0.703947,0.743917
+20,test,cei_mp2,7,5,Diabetes mellitus,155,155,0.709677,0.709677,0.709677
+20,test,cei_mp2,7,6,Epilepsy,99,97,0.85567,0.838384,0.846939
+20,test,cei_mp2,7,7,GI bleed,342,286,0.888112,0.74269,0.808917
+20,test,cei_mp2,7,8,Head injury,289,320,0.7375,0.816609,0.775041
+20,test,cei_mp2,7,9,Heart failure,141,173,0.572254,0.702128,0.630573
+20,test,cei_mp2,7,10,Hypokalemia,102,106,0.575472,0.598039,0.586538
+20,test,cei_mp2,7,11,Limb injury or pain,420,413,0.619855,0.609524,0.614646
+20,test,cei_mp2,7,12,Lower respiratory disease,379,363,0.705234,0.675462,0.690027
+20,test,cei_mp2,7,13,Major depressive disorder,249,248,0.903226,0.899598,0.901408
+20,test,cei_mp2,7,14,Non-ST elevation (NSTEMI) myocardial infarction,85,93,0.72043,0.788235,0.752809
+20,test,cei_mp2,7,15,Sepsis,71,81,0.37037,0.422535,0.394737
+20,test,cei_mp2,7,16,Skin or soft-tissue infection,359,370,0.659459,0.679666,0.66941
+20,test,cei_mp2,7,17,UTI or pyelonephritis,385,304,0.819079,0.646753,0.722787
+20,test,cei_mp2,7,18,Unsp intestnl obst,126,183,0.562842,0.81746,0.666667
+20,test,cei_mp2,7,19,Unspecified atrial fibrillation,115,113,0.725664,0.713043,0.719298
+20,test,graphcare,1234,0,Acute kidney failure,115,124,0.395161,0.426087,0.410042
+20,test,graphcare,1234,1,Acute pharyngitis,72,59,0.813559,0.666667,0.732824
+20,test,graphcare,1234,2,Alcohol abuse with intoxication,97,92,0.728261,0.690722,0.708995
+20,test,graphcare,1234,3,Anemia,117,129,0.620155,0.683761,0.650407
+20,test,graphcare,1234,4,Back or spine pain,456,430,0.760465,0.717105,0.738149
+20,test,graphcare,1234,5,Diabetes mellitus,155,151,0.715232,0.696774,0.705882
+20,test,graphcare,1234,6,Epilepsy,99,96,0.864583,0.838384,0.851282
+20,test,graphcare,1234,7,GI bleed,342,293,0.87372,0.748538,0.806299
+20,test,graphcare,1234,8,Head injury,289,343,0.667638,0.792388,0.724684
+20,test,graphcare,1234,9,Heart failure,141,163,0.558282,0.64539,0.598684
+20,test,graphcare,1234,10,Hypokalemia,102,92,0.597826,0.539216,0.56701
+20,test,graphcare,1234,11,Limb injury or pain,420,395,0.635443,0.597619,0.615951
+20,test,graphcare,1234,12,Lower respiratory disease,379,389,0.645244,0.662269,0.653646
+20,test,graphcare,1234,13,Major depressive disorder,249,259,0.888031,0.923695,0.905512
+20,test,graphcare,1234,14,Non-ST elevation (NSTEMI) myocardial infarction,85,91,0.692308,0.741176,0.715909
+20,test,graphcare,1234,15,Sepsis,71,83,0.361446,0.422535,0.38961
+20,test,graphcare,1234,16,Skin or soft-tissue infection,359,366,0.653005,0.665738,0.65931
+20,test,graphcare,1234,17,UTI or pyelonephritis,385,311,0.778135,0.628571,0.695402
+20,test,graphcare,1234,18,Unsp intestnl obst,126,177,0.564972,0.793651,0.660066
+20,test,graphcare,1234,19,Unspecified atrial fibrillation,115,131,0.618321,0.704348,0.658537
+20,test,graphcare,2025,0,Acute kidney failure,115,166,0.385542,0.556522,0.455516
+20,test,graphcare,2025,1,Acute pharyngitis,72,64,0.765625,0.680556,0.720588
+20,test,graphcare,2025,2,Alcohol abuse with intoxication,97,86,0.767442,0.680412,0.721311
+20,test,graphcare,2025,3,Anemia,117,123,0.642276,0.675214,0.658333
+20,test,graphcare,2025,4,Back or spine pain,456,408,0.762255,0.682018,0.719907
+20,test,graphcare,2025,5,Diabetes mellitus,155,148,0.722973,0.690323,0.706271
+20,test,graphcare,2025,6,Epilepsy,99,101,0.841584,0.858586,0.85
+20,test,graphcare,2025,7,GI bleed,342,279,0.88172,0.719298,0.792271
+20,test,graphcare,2025,8,Head injury,289,369,0.650407,0.83045,0.729483
+20,test,graphcare,2025,9,Heart failure,141,176,0.539773,0.673759,0.599369
+20,test,graphcare,2025,10,Hypokalemia,102,88,0.613636,0.529412,0.568421
+20,test,graphcare,2025,11,Limb injury or pain,420,366,0.655738,0.571429,0.610687
+20,test,graphcare,2025,12,Lower respiratory disease,379,345,0.663768,0.604222,0.632597
+20,test,graphcare,2025,13,Major depressive disorder,249,264,0.867424,0.919679,0.892788
+20,test,graphcare,2025,14,Non-ST elevation (NSTEMI) myocardial infarction,85,92,0.663043,0.717647,0.689266
+20,test,graphcare,2025,15,Sepsis,71,80,0.325,0.366197,0.344371
+20,test,graphcare,2025,16,Skin or soft-tissue infection,359,383,0.626632,0.668524,0.6469
+20,test,graphcare,2025,17,UTI or pyelonephritis,385,328,0.75,0.638961,0.690042
+20,test,graphcare,2025,18,Unsp intestnl obst,126,185,0.551351,0.809524,0.655949
+20,test,graphcare,2025,19,Unspecified atrial fibrillation,115,123,0.626016,0.669565,0.647059
+20,test,graphcare,7,0,Acute kidney failure,115,144,0.409722,0.513043,0.455598
+20,test,graphcare,7,1,Acute pharyngitis,72,69,0.710145,0.680556,0.695035
+20,test,graphcare,7,2,Alcohol abuse with intoxication,97,84,0.75,0.649485,0.696133
+20,test,graphcare,7,3,Anemia,117,120,0.666667,0.683761,0.675105
+20,test,graphcare,7,4,Back or spine pain,456,401,0.790524,0.695175,0.73979
+20,test,graphcare,7,5,Diabetes mellitus,155,132,0.765152,0.651613,0.703833
+20,test,graphcare,7,6,Epilepsy,99,101,0.831683,0.848485,0.84
+20,test,graphcare,7,7,GI bleed,342,300,0.863333,0.75731,0.806854
+20,test,graphcare,7,8,Head injury,289,356,0.66573,0.820069,0.734884
+20,test,graphcare,7,9,Heart failure,141,165,0.557576,0.652482,0.601307
+20,test,graphcare,7,10,Hypokalemia,102,98,0.612245,0.588235,0.6
+20,test,graphcare,7,11,Limb injury or pain,420,409,0.613692,0.597619,0.605549
+20,test,graphcare,7,12,Lower respiratory disease,379,353,0.688385,0.641161,0.663934
+20,test,graphcare,7,13,Major depressive disorder,249,268,0.858209,0.923695,0.889749
+20,test,graphcare,7,14,Non-ST elevation (NSTEMI) myocardial infarction,85,91,0.703297,0.752941,0.727273
+20,test,graphcare,7,15,Sepsis,71,101,0.336634,0.478873,0.395349
+20,test,graphcare,7,16,Skin or soft-tissue infection,359,368,0.646739,0.662953,0.654746
+20,test,graphcare,7,17,UTI or pyelonephritis,385,295,0.813559,0.623377,0.705882
+20,test,graphcare,7,18,Unsp intestnl obst,126,179,0.575419,0.81746,0.67541
+20,test,graphcare,7,19,Unspecified atrial fibrillation,115,140,0.578571,0.704348,0.635294
+20,test,gsat,1234,0,Acute kidney failure,115,157,0.369427,0.504348,0.426471
+20,test,gsat,1234,1,Acute pharyngitis,72,83,0.662651,0.763889,0.709677
+20,test,gsat,1234,2,Alcohol abuse with intoxication,97,81,0.790123,0.659794,0.719101
+20,test,gsat,1234,3,Anemia,117,125,0.624,0.666667,0.644628
+20,test,gsat,1234,4,Back or spine pain,456,382,0.803665,0.673246,0.732697
+20,test,gsat,1234,5,Diabetes mellitus,155,158,0.708861,0.722581,0.715655
+20,test,gsat,1234,6,Epilepsy,99,110,0.745455,0.828283,0.784689
+20,test,gsat,1234,7,GI bleed,342,276,0.898551,0.725146,0.802589
+20,test,gsat,1234,8,Head injury,289,330,0.718182,0.820069,0.765751
+20,test,gsat,1234,9,Heart failure,141,172,0.540698,0.659574,0.594249
+20,test,gsat,1234,10,Hypokalemia,102,109,0.568807,0.607843,0.587678
+20,test,gsat,1234,11,Limb injury or pain,420,400,0.6375,0.607143,0.621951
+20,test,gsat,1234,12,Lower respiratory disease,379,382,0.641361,0.646438,0.64389
+20,test,gsat,1234,13,Major depressive disorder,249,256,0.886719,0.911647,0.89901
+20,test,gsat,1234,14,Non-ST elevation (NSTEMI) myocardial infarction,85,81,0.765432,0.729412,0.746988
+20,test,gsat,1234,15,Sepsis,71,104,0.317308,0.464789,0.377143
+20,test,gsat,1234,16,Skin or soft-tissue infection,359,357,0.669468,0.665738,0.667598
+20,test,gsat,1234,17,UTI or pyelonephritis,385,317,0.763407,0.628571,0.689459
+20,test,gsat,1234,18,Unsp intestnl obst,126,165,0.6,0.785714,0.680412
+20,test,gsat,1234,19,Unspecified atrial fibrillation,115,129,0.627907,0.704348,0.663934
+20,test,gsat,2025,0,Acute kidney failure,115,123,0.447154,0.478261,0.462185
+20,test,gsat,2025,1,Acute pharyngitis,72,65,0.738462,0.666667,0.70073
+20,test,gsat,2025,2,Alcohol abuse with intoxication,97,95,0.715789,0.701031,0.708333
+20,test,gsat,2025,3,Anemia,117,131,0.610687,0.683761,0.645161
+20,test,gsat,2025,4,Back or spine pain,456,386,0.80829,0.684211,0.741093
+20,test,gsat,2025,5,Diabetes mellitus,155,123,0.796748,0.632258,0.705036
+20,test,gsat,2025,6,Epilepsy,99,95,0.842105,0.808081,0.824742
+20,test,gsat,2025,7,GI bleed,342,294,0.867347,0.745614,0.801887
+20,test,gsat,2025,8,Head injury,289,335,0.683582,0.792388,0.733974
+20,test,gsat,2025,9,Heart failure,141,217,0.470046,0.723404,0.569832
+20,test,gsat,2025,10,Hypokalemia,102,95,0.610526,0.568627,0.588832
+20,test,gsat,2025,11,Limb injury or pain,420,450,0.582222,0.62381,0.602299
+20,test,gsat,2025,12,Lower respiratory disease,379,360,0.630556,0.598945,0.614344
+20,test,gsat,2025,13,Major depressive disorder,249,249,0.899598,0.899598,0.899598
+20,test,gsat,2025,14,Non-ST elevation (NSTEMI) myocardial infarction,85,80,0.7125,0.670588,0.690909
+20,test,gsat,2025,15,Sepsis,71,92,0.293478,0.380282,0.331288
+20,test,gsat,2025,16,Skin or soft-tissue infection,359,360,0.661111,0.662953,0.662031
+20,test,gsat,2025,17,UTI or pyelonephritis,385,341,0.715543,0.633766,0.672176
+20,test,gsat,2025,18,Unsp intestnl obst,126,178,0.578652,0.81746,0.677632
+20,test,gsat,2025,19,Unspecified atrial fibrillation,115,105,0.714286,0.652174,0.681818
+20,test,gsat,7,0,Acute kidney failure,115,151,0.397351,0.521739,0.451128
+20,test,gsat,7,1,Acute pharyngitis,72,80,0.65,0.722222,0.684211
+20,test,gsat,7,2,Alcohol abuse with intoxication,97,102,0.705882,0.742268,0.723618
+20,test,gsat,7,3,Anemia,117,140,0.628571,0.752137,0.684825
+20,test,gsat,7,4,Back or spine pain,456,406,0.773399,0.688596,0.728538
+20,test,gsat,7,5,Diabetes mellitus,155,157,0.707006,0.716129,0.711538
+20,test,gsat,7,6,Epilepsy,99,95,0.810526,0.777778,0.793814
+20,test,gsat,7,7,GI bleed,342,288,0.878472,0.739766,0.803175
+20,test,gsat,7,8,Head injury,289,308,0.730519,0.778547,0.753769
+20,test,gsat,7,9,Heart failure,141,153,0.54902,0.595745,0.571429
+20,test,gsat,7,10,Hypokalemia,102,117,0.521368,0.598039,0.557078
+20,test,gsat,7,11,Limb injury or pain,420,390,0.623077,0.578571,0.6
+20,test,gsat,7,12,Lower respiratory disease,379,378,0.62963,0.627968,0.628798
+20,test,gsat,7,13,Major depressive disorder,249,260,0.876923,0.915663,0.895874
+20,test,gsat,7,14,Non-ST elevation (NSTEMI) myocardial infarction,85,89,0.685393,0.717647,0.701149
+20,test,gsat,7,15,Sepsis,71,99,0.313131,0.43662,0.364706
+20,test,gsat,7,16,Skin or soft-tissue infection,359,368,0.649457,0.665738,0.657497
+20,test,gsat,7,17,UTI or pyelonephritis,385,303,0.782178,0.615584,0.688953
+20,test,gsat,7,18,Unsp intestnl obst,126,183,0.551913,0.801587,0.653722
+20,test,gsat,7,19,Unspecified atrial fibrillation,115,107,0.738318,0.686957,0.711712
+20,test,protgnn,1234,0,Acute kidney failure,115,115,0.408696,0.408696,0.408696
+20,test,protgnn,1234,1,Acute pharyngitis,72,62,0.806452,0.694444,0.746269
+20,test,protgnn,1234,2,Alcohol abuse with intoxication,97,124,0.604839,0.773196,0.678733
+20,test,protgnn,1234,3,Anemia,117,112,0.669643,0.641026,0.655022
+20,test,protgnn,1234,4,Back or spine pain,456,409,0.784841,0.703947,0.742197
+20,test,protgnn,1234,5,Diabetes mellitus,155,137,0.744526,0.658065,0.69863
+20,test,protgnn,1234,6,Epilepsy,99,98,0.836735,0.828283,0.832487
+20,test,protgnn,1234,7,GI bleed,342,306,0.852941,0.763158,0.805556
+20,test,protgnn,1234,8,Head injury,289,337,0.679525,0.792388,0.731629
+20,test,protgnn,1234,9,Heart failure,141,223,0.475336,0.751773,0.582418
+20,test,protgnn,1234,10,Hypokalemia,102,92,0.630435,0.568627,0.597938
+20,test,protgnn,1234,11,Limb injury or pain,420,467,0.591006,0.657143,0.622322
+20,test,protgnn,1234,12,Lower respiratory disease,379,335,0.680597,0.601583,0.638655
+20,test,protgnn,1234,13,Major depressive disorder,249,246,0.922764,0.911647,0.917172
+20,test,protgnn,1234,14,Non-ST elevation (NSTEMI) myocardial infarction,85,82,0.695122,0.670588,0.682635
+20,test,protgnn,1234,15,Sepsis,71,57,0.368421,0.295775,0.328125
+20,test,protgnn,1234,16,Skin or soft-tissue infection,359,366,0.636612,0.649025,0.642759
+20,test,protgnn,1234,17,UTI or pyelonephritis,385,270,0.833333,0.584416,0.687023
+20,test,protgnn,1234,18,Unsp intestnl obst,126,207,0.52657,0.865079,0.654655
+20,test,protgnn,1234,19,Unspecified atrial fibrillation,115,129,0.604651,0.678261,0.639344
+20,test,protgnn,2025,0,Acute kidney failure,115,113,0.389381,0.382609,0.385965
+20,test,protgnn,2025,1,Acute pharyngitis,72,69,0.73913,0.708333,0.723404
+20,test,protgnn,2025,2,Alcohol abuse with intoxication,97,93,0.731183,0.701031,0.715789
+20,test,protgnn,2025,3,Anemia,117,130,0.638462,0.709402,0.672065
+20,test,protgnn,2025,4,Back or spine pain,456,425,0.741176,0.690789,0.715096
+20,test,protgnn,2025,5,Diabetes mellitus,155,198,0.585859,0.748387,0.657224
+20,test,protgnn,2025,6,Epilepsy,99,99,0.828283,0.828283,0.828283
+20,test,protgnn,2025,7,GI bleed,342,331,0.827795,0.80117,0.814264
+20,test,protgnn,2025,8,Head injury,289,348,0.66954,0.806228,0.731554
+20,test,protgnn,2025,9,Heart failure,141,190,0.536842,0.723404,0.616314
+20,test,protgnn,2025,10,Hypokalemia,102,119,0.504202,0.588235,0.542986
+20,test,protgnn,2025,11,Limb injury or pain,420,380,0.65,0.588095,0.6175
+20,test,protgnn,2025,12,Lower respiratory disease,379,350,0.702857,0.649077,0.674897
+20,test,protgnn,2025,13,Major depressive disorder,249,259,0.899614,0.935743,0.917323
+20,test,protgnn,2025,14,Non-ST elevation (NSTEMI) myocardial infarction,85,87,0.655172,0.670588,0.662791
+20,test,protgnn,2025,15,Sepsis,71,82,0.378049,0.43662,0.405229
+20,test,protgnn,2025,16,Skin or soft-tissue infection,359,322,0.680124,0.610028,0.643172
+20,test,protgnn,2025,17,UTI or pyelonephritis,385,317,0.763407,0.628571,0.689459
+20,test,protgnn,2025,18,Unsp intestnl obst,126,136,0.676471,0.730159,0.70229
+20,test,protgnn,2025,19,Unspecified atrial fibrillation,115,126,0.619048,0.678261,0.647303
+20,test,protgnn,7,0,Acute kidney failure,115,121,0.404959,0.426087,0.415254
+20,test,protgnn,7,1,Acute pharyngitis,72,65,0.769231,0.694444,0.729927
+20,test,protgnn,7,2,Alcohol abuse with intoxication,97,94,0.659574,0.639175,0.649215
+20,test,protgnn,7,3,Anemia,117,133,0.62406,0.709402,0.664
+20,test,protgnn,7,4,Back or spine pain,456,365,0.835616,0.66886,0.742996
+20,test,protgnn,7,5,Diabetes mellitus,155,146,0.726027,0.683871,0.704319
+20,test,protgnn,7,6,Epilepsy,99,90,0.855556,0.777778,0.814815
+20,test,protgnn,7,7,GI bleed,342,326,0.822086,0.783626,0.802395
+20,test,protgnn,7,8,Head injury,289,308,0.730519,0.778547,0.753769
+20,test,protgnn,7,9,Heart failure,141,187,0.497326,0.659574,0.567073
+20,test,protgnn,7,10,Hypokalemia,102,120,0.5,0.588235,0.540541
+20,test,protgnn,7,11,Limb injury or pain,420,508,0.537402,0.65,0.588362
+20,test,protgnn,7,12,Lower respiratory disease,379,381,0.656168,0.659631,0.657895
+20,test,protgnn,7,13,Major depressive disorder,249,271,0.848708,0.923695,0.884615
+20,test,protgnn,7,14,Non-ST elevation (NSTEMI) myocardial infarction,85,83,0.698795,0.682353,0.690476
+20,test,protgnn,7,15,Sepsis,71,98,0.316327,0.43662,0.366864
+20,test,protgnn,7,16,Skin or soft-tissue infection,359,281,0.72242,0.56546,0.634375
+20,test,protgnn,7,17,UTI or pyelonephritis,385,330,0.754545,0.646753,0.696503
+20,test,protgnn,7,18,Unsp intestnl obst,126,164,0.603659,0.785714,0.682759
+20,test,protgnn,7,19,Unspecified atrial fibrillation,115,103,0.728155,0.652174,0.688073
+30,validation,cei_mp2,1234,0,Acute kidney failure,111,100,0.49,0.441441,0.464455
+30,validation,cei_mp2,1234,1,Acute pharyngitis,74,67,0.820896,0.743243,0.780142
+30,validation,cei_mp2,1234,2,Acute upper respiratory infection,36,39,0.358974,0.388889,0.373333
+30,validation,cei_mp2,1234,3,Alcohol abuse with intoxication,102,106,0.726415,0.754902,0.740385
+30,validation,cei_mp2,1234,4,Anemia,89,114,0.605263,0.775281,0.679803
+30,validation,cei_mp2,1234,5,Anxiety disorder,47,56,0.553571,0.659574,0.601942
+30,validation,cei_mp2,1234,6,Back or spine pain,481,418,0.77512,0.673597,0.720801
+30,validation,cei_mp2,1234,7,Cardiovascular risk factor,51,66,0.636364,0.823529,0.717949
+30,validation,cei_mp2,1234,8,Dehydration,45,71,0.253521,0.4,0.310345
+30,validation,cei_mp2,1234,9,Diabetes mellitus,158,144,0.736111,0.670886,0.701987
+30,validation,cei_mp2,1234,10,End stage renal disease,2,14,0.142857,1.0,0.25
+30,validation,cei_mp2,1234,11,Epilepsy,105,107,0.813084,0.828571,0.820755
+30,validation,cei_mp2,1234,12,GI bleed,335,280,0.903571,0.755224,0.822764
+30,validation,cei_mp2,1234,13,Head injury,245,284,0.644366,0.746939,0.691871
+30,validation,cei_mp2,1234,14,Heart failure,163,185,0.551351,0.625767,0.586207
+30,validation,cei_mp2,1234,15,Hypokalemia,96,79,0.658228,0.541667,0.594286
+30,validation,cei_mp2,1234,16,Hypotension,36,51,0.313725,0.444444,0.367816
+30,validation,cei_mp2,1234,17,Hypothyroidism,1,0,0.0,0.0,0.0
+30,validation,cei_mp2,1234,18,Laceration w/o fb of l idx fngr w/o damage to nail,18,35,0.2,0.388889,0.264151
+30,validation,cei_mp2,1234,19,Limb injury or pain,403,379,0.60686,0.57072,0.588235
+30,validation,cei_mp2,1234,20,Lower respiratory disease,367,319,0.61442,0.53406,0.571429
+30,validation,cei_mp2,1234,21,Major depressive disorder,293,282,0.893617,0.860068,0.876522
+30,validation,cei_mp2,1234,22,Multiple fractures of ribs,60,71,0.408451,0.483333,0.442748
+30,validation,cei_mp2,1234,23,Non-ST elevation (NSTEMI) myocardial infarction,86,115,0.643478,0.860465,0.736318
+30,validation,cei_mp2,1234,24,Sepsis,69,88,0.295455,0.376812,0.33121
+30,validation,cei_mp2,1234,25,Skin or soft-tissue infection,325,339,0.610619,0.636923,0.623494
+30,validation,cei_mp2,1234,26,UTI or pyelonephritis,395,313,0.779553,0.617722,0.689266
+30,validation,cei_mp2,1234,27,Unsp intestnl obst,141,195,0.615385,0.851064,0.714286
+30,validation,cei_mp2,1234,28,Unspecified asthma with (acute) exacerbation,55,60,0.533333,0.581818,0.556522
+30,validation,cei_mp2,1234,29,Unspecified atrial fibrillation,145,157,0.605096,0.655172,0.629139
+30,validation,cei_mp2,2025,0,Acute kidney failure,111,83,0.566265,0.423423,0.484536
+30,validation,cei_mp2,2025,1,Acute pharyngitis,74,71,0.774648,0.743243,0.758621
+30,validation,cei_mp2,2025,2,Acute upper respiratory infection,36,26,0.461538,0.333333,0.387097
+30,validation,cei_mp2,2025,3,Alcohol abuse with intoxication,102,88,0.784091,0.676471,0.726316
+30,validation,cei_mp2,2025,4,Anemia,89,109,0.59633,0.730337,0.656566
+30,validation,cei_mp2,2025,5,Anxiety disorder,47,58,0.5,0.617021,0.552381
+30,validation,cei_mp2,2025,6,Back or spine pain,481,394,0.804569,0.659044,0.724571
+30,validation,cei_mp2,2025,7,Cardiovascular risk factor,51,64,0.65625,0.823529,0.730435
+30,validation,cei_mp2,2025,8,Dehydration,45,74,0.216216,0.355556,0.268908
+30,validation,cei_mp2,2025,9,Diabetes mellitus,158,159,0.679245,0.683544,0.681388
+30,validation,cei_mp2,2025,10,End stage renal disease,2,21,0.095238,1.0,0.173913
+30,validation,cei_mp2,2025,11,Epilepsy,105,98,0.816327,0.761905,0.788177
+30,validation,cei_mp2,2025,12,GI bleed,335,276,0.902174,0.743284,0.815057
+30,validation,cei_mp2,2025,13,Head injury,245,252,0.670635,0.689796,0.68008
+30,validation,cei_mp2,2025,14,Heart failure,163,211,0.535545,0.693252,0.604278
+30,validation,cei_mp2,2025,15,Hypokalemia,96,81,0.617284,0.520833,0.564972
+30,validation,cei_mp2,2025,16,Hypotension,36,39,0.410256,0.444444,0.426667
+30,validation,cei_mp2,2025,17,Hypothyroidism,1,1,0.0,0.0,0.0
+30,validation,cei_mp2,2025,18,Laceration w/o fb of l idx fngr w/o damage to nail,18,52,0.134615,0.388889,0.2
+30,validation,cei_mp2,2025,19,Limb injury or pain,403,395,0.589873,0.578164,0.58396
+30,validation,cei_mp2,2025,20,Lower respiratory disease,367,300,0.643333,0.525886,0.578711
+30,validation,cei_mp2,2025,21,Major depressive disorder,293,293,0.880546,0.880546,0.880546
+30,validation,cei_mp2,2025,22,Multiple fractures of ribs,60,121,0.297521,0.6,0.39779
+30,validation,cei_mp2,2025,23,Non-ST elevation (NSTEMI) myocardial infarction,86,108,0.666667,0.837209,0.742268
+30,validation,cei_mp2,2025,24,Sepsis,69,75,0.32,0.347826,0.333333
+30,validation,cei_mp2,2025,25,Skin or soft-tissue infection,325,341,0.607038,0.636923,0.621622
+30,validation,cei_mp2,2025,26,UTI or pyelonephritis,395,346,0.777457,0.681013,0.726046
+30,validation,cei_mp2,2025,27,Unsp intestnl obst,141,204,0.598039,0.865248,0.707246
+30,validation,cei_mp2,2025,28,Unspecified asthma with (acute) exacerbation,55,63,0.539683,0.618182,0.576271
+30,validation,cei_mp2,2025,29,Unspecified atrial fibrillation,145,131,0.694656,0.627586,0.65942
+30,validation,cei_mp2,7,0,Acute kidney failure,111,109,0.46789,0.459459,0.463636
+30,validation,cei_mp2,7,1,Acute pharyngitis,74,76,0.776316,0.797297,0.786667
+30,validation,cei_mp2,7,2,Acute upper respiratory infection,36,46,0.304348,0.388889,0.341463
+30,validation,cei_mp2,7,3,Alcohol abuse with intoxication,102,110,0.690909,0.745098,0.716981
+30,validation,cei_mp2,7,4,Anemia,89,124,0.556452,0.775281,0.647887
+30,validation,cei_mp2,7,5,Anxiety disorder,47,53,0.584906,0.659574,0.62
+30,validation,cei_mp2,7,6,Back or spine pain,481,427,0.758782,0.673597,0.713656
+30,validation,cei_mp2,7,7,Cardiovascular risk factor,51,62,0.66129,0.803922,0.725664
+30,validation,cei_mp2,7,8,Dehydration,45,74,0.243243,0.4,0.302521
+30,validation,cei_mp2,7,9,Diabetes mellitus,158,149,0.684564,0.64557,0.664495
+30,validation,cei_mp2,7,10,End stage renal disease,2,19,0.105263,1.0,0.190476
+30,validation,cei_mp2,7,11,Epilepsy,105,94,0.840426,0.752381,0.79397
+30,validation,cei_mp2,7,12,GI bleed,335,275,0.905455,0.743284,0.816393
+30,validation,cei_mp2,7,13,Head injury,245,299,0.608696,0.742857,0.669118
+30,validation,cei_mp2,7,14,Heart failure,163,183,0.57377,0.644172,0.606936
+30,validation,cei_mp2,7,15,Hypokalemia,96,69,0.695652,0.5,0.581818
+30,validation,cei_mp2,7,16,Hypotension,36,38,0.394737,0.416667,0.405405
+30,validation,cei_mp2,7,17,Hypothyroidism,1,2,0.0,0.0,0.0
+30,validation,cei_mp2,7,18,Laceration w/o fb of l idx fngr w/o damage to nail,18,40,0.175,0.388889,0.241379
+30,validation,cei_mp2,7,19,Limb injury or pain,403,413,0.566586,0.580645,0.573529
+30,validation,cei_mp2,7,20,Lower respiratory disease,367,268,0.66791,0.487738,0.56378
+30,validation,cei_mp2,7,21,Major depressive disorder,293,289,0.878893,0.866894,0.872852
+30,validation,cei_mp2,7,22,Multiple fractures of ribs,60,58,0.465517,0.45,0.457627
+30,validation,cei_mp2,7,23,Non-ST elevation (NSTEMI) myocardial infarction,86,106,0.669811,0.825581,0.739583
+30,validation,cei_mp2,7,24,Sepsis,69,94,0.297872,0.405797,0.343558
+30,validation,cei_mp2,7,25,Skin or soft-tissue infection,325,320,0.61875,0.609231,0.613953
+30,validation,cei_mp2,7,26,UTI or pyelonephritis,395,342,0.75731,0.655696,0.702849
+30,validation,cei_mp2,7,27,Unsp intestnl obst,141,203,0.591133,0.851064,0.697674
+30,validation,cei_mp2,7,28,Unspecified asthma with (acute) exacerbation,55,63,0.52381,0.6,0.559322
+30,validation,cei_mp2,7,29,Unspecified atrial fibrillation,145,129,0.72093,0.641379,0.678832
+30,validation,graphcare,1234,0,Acute kidney failure,111,131,0.450382,0.531532,0.487603
+30,validation,graphcare,1234,1,Acute pharyngitis,74,72,0.75,0.72973,0.739726
+30,validation,graphcare,1234,2,Acute upper respiratory infection,36,39,0.333333,0.361111,0.346667
+30,validation,graphcare,1234,3,Alcohol abuse with intoxication,102,90,0.788889,0.696078,0.739583
+30,validation,graphcare,1234,4,Anemia,89,86,0.616279,0.595506,0.605714
+30,validation,graphcare,1234,5,Anxiety disorder,47,61,0.540984,0.702128,0.611111
+30,validation,graphcare,1234,6,Back or spine pain,481,408,0.796569,0.675676,0.731159
+30,validation,graphcare,1234,7,Cardiovascular risk factor,51,64,0.65625,0.823529,0.730435
+30,validation,graphcare,1234,8,Dehydration,45,42,0.285714,0.266667,0.275862
+30,validation,graphcare,1234,9,Diabetes mellitus,158,150,0.713333,0.677215,0.694805
+30,validation,graphcare,1234,10,End stage renal disease,2,7,0.0,0.0,0.0
+30,validation,graphcare,1234,11,Epilepsy,105,109,0.770642,0.8,0.785047
+30,validation,graphcare,1234,12,GI bleed,335,270,0.907407,0.731343,0.809917
+30,validation,graphcare,1234,13,Head injury,245,316,0.579114,0.746939,0.652406
+30,validation,graphcare,1234,14,Heart failure,163,192,0.541667,0.638037,0.585915
+30,validation,graphcare,1234,15,Hypokalemia,96,71,0.647887,0.479167,0.550898
+30,validation,graphcare,1234,16,Hypotension,36,43,0.372093,0.444444,0.405063
+30,validation,graphcare,1234,17,Hypothyroidism,1,4,0.0,0.0,0.0
+30,validation,graphcare,1234,18,Laceration w/o fb of l idx fngr w/o damage to nail,18,49,0.163265,0.444444,0.238806
+30,validation,graphcare,1234,19,Limb injury or pain,403,379,0.60686,0.57072,0.588235
+30,validation,graphcare,1234,20,Lower respiratory disease,367,317,0.608833,0.525886,0.564327
+30,validation,graphcare,1234,21,Major depressive disorder,293,291,0.865979,0.860068,0.863014
+30,validation,graphcare,1234,22,Multiple fractures of ribs,60,73,0.383562,0.466667,0.421053
+30,validation,graphcare,1234,23,Non-ST elevation (NSTEMI) myocardial infarction,86,99,0.676768,0.77907,0.724324
+30,validation,graphcare,1234,24,Sepsis,69,79,0.278481,0.318841,0.297297
+30,validation,graphcare,1234,25,Skin or soft-tissue infection,325,382,0.544503,0.64,0.588402
+30,validation,graphcare,1234,26,UTI or pyelonephritis,395,299,0.785953,0.594937,0.677233
+30,validation,graphcare,1234,27,Unsp intestnl obst,141,209,0.54067,0.801418,0.645714
+30,validation,graphcare,1234,28,Unspecified asthma with (acute) exacerbation,55,59,0.508475,0.545455,0.526316
+30,validation,graphcare,1234,29,Unspecified atrial fibrillation,145,143,0.636364,0.627586,0.631944
+30,validation,graphcare,2025,0,Acute kidney failure,111,165,0.363636,0.540541,0.434783
+30,validation,graphcare,2025,1,Acute pharyngitis,74,68,0.794118,0.72973,0.760563
+30,validation,graphcare,2025,2,Acute upper respiratory infection,36,44,0.272727,0.333333,0.3
+30,validation,graphcare,2025,3,Alcohol abuse with intoxication,102,93,0.774194,0.705882,0.738462
+30,validation,graphcare,2025,4,Anemia,89,109,0.59633,0.730337,0.656566
+30,validation,graphcare,2025,5,Anxiety disorder,47,57,0.561404,0.680851,0.615385
+30,validation,graphcare,2025,6,Back or spine pain,481,449,0.743875,0.694387,0.71828
+30,validation,graphcare,2025,7,Cardiovascular risk factor,51,63,0.634921,0.784314,0.701754
+30,validation,graphcare,2025,8,Dehydration,45,43,0.27907,0.266667,0.272727
+30,validation,graphcare,2025,9,Diabetes mellitus,158,147,0.721088,0.670886,0.695082
+30,validation,graphcare,2025,10,End stage renal disease,2,7,0.0,0.0,0.0
+30,validation,graphcare,2025,11,Epilepsy,105,101,0.831683,0.8,0.815534
+30,validation,graphcare,2025,12,GI bleed,335,277,0.902527,0.746269,0.816993
+30,validation,graphcare,2025,13,Head injury,245,292,0.60274,0.718367,0.655493
+30,validation,graphcare,2025,14,Heart failure,163,174,0.568966,0.607362,0.587537
+30,validation,graphcare,2025,15,Hypokalemia,96,99,0.565657,0.583333,0.574359
+30,validation,graphcare,2025,16,Hypotension,36,40,0.4,0.444444,0.421053
+30,validation,graphcare,2025,17,Hypothyroidism,1,1,0.0,0.0,0.0
+30,validation,graphcare,2025,18,Laceration w/o fb of l idx fngr w/o damage to nail,18,38,0.184211,0.388889,0.25
+30,validation,graphcare,2025,19,Limb injury or pain,403,404,0.576733,0.578164,0.577447
+30,validation,graphcare,2025,20,Lower respiratory disease,367,337,0.578635,0.531335,0.553977
+30,validation,graphcare,2025,21,Major depressive disorder,293,288,0.878472,0.863481,0.870912
+30,validation,graphcare,2025,22,Multiple fractures of ribs,60,56,0.375,0.35,0.362069
+30,validation,graphcare,2025,23,Non-ST elevation (NSTEMI) myocardial infarction,86,81,0.740741,0.697674,0.718563
+30,validation,graphcare,2025,24,Sepsis,69,61,0.344262,0.304348,0.323077
+30,validation,graphcare,2025,25,Skin or soft-tissue infection,325,374,0.566845,0.652308,0.606581
+30,validation,graphcare,2025,26,UTI or pyelonephritis,395,274,0.835766,0.579747,0.684604
+30,validation,graphcare,2025,27,Unsp intestnl obst,141,215,0.516279,0.787234,0.623596
+30,validation,graphcare,2025,28,Unspecified asthma with (acute) exacerbation,55,49,0.530612,0.472727,0.5
+30,validation,graphcare,2025,29,Unspecified atrial fibrillation,145,128,0.703125,0.62069,0.659341
+30,validation,graphcare,7,0,Acute kidney failure,111,127,0.433071,0.495495,0.462185
+30,validation,graphcare,7,1,Acute pharyngitis,74,67,0.791045,0.716216,0.751773
+30,validation,graphcare,7,2,Acute upper respiratory infection,36,22,0.363636,0.222222,0.275862
+30,validation,graphcare,7,3,Alcohol abuse with intoxication,102,95,0.778947,0.72549,0.751269
+30,validation,graphcare,7,4,Anemia,89,112,0.544643,0.685393,0.606965
+30,validation,graphcare,7,5,Anxiety disorder,47,52,0.615385,0.680851,0.646465
+30,validation,graphcare,7,6,Back or spine pain,481,410,0.787805,0.671518,0.725028
+30,validation,graphcare,7,7,Cardiovascular risk factor,51,50,0.76,0.745098,0.752475
+30,validation,graphcare,7,8,Dehydration,45,44,0.340909,0.333333,0.337079
+30,validation,graphcare,7,9,Diabetes mellitus,158,145,0.717241,0.658228,0.686469
+30,validation,graphcare,7,10,End stage renal disease,2,3,0.0,0.0,0.0
+30,validation,graphcare,7,11,Epilepsy,105,96,0.875,0.8,0.835821
+30,validation,graphcare,7,12,GI bleed,335,282,0.875887,0.737313,0.800648
+30,validation,graphcare,7,13,Head injury,245,318,0.597484,0.77551,0.674956
+30,validation,graphcare,7,14,Heart failure,163,168,0.559524,0.576687,0.567976
+30,validation,graphcare,7,15,Hypokalemia,96,84,0.619048,0.541667,0.577778
+30,validation,graphcare,7,16,Hypotension,36,58,0.293103,0.472222,0.361702
+30,validation,graphcare,7,17,Hypothyroidism,1,1,0.0,0.0,0.0
+30,validation,graphcare,7,18,Laceration w/o fb of l idx fngr w/o damage to nail,18,46,0.086957,0.222222,0.125
+30,validation,graphcare,7,19,Limb injury or pain,403,447,0.55481,0.615385,0.583529
+30,validation,graphcare,7,20,Lower respiratory disease,367,335,0.576119,0.525886,0.549858
+30,validation,graphcare,7,21,Major depressive disorder,293,308,0.857143,0.901024,0.878536
+30,validation,graphcare,7,22,Multiple fractures of ribs,60,35,0.485714,0.283333,0.357895
+30,validation,graphcare,7,23,Non-ST elevation (NSTEMI) myocardial infarction,86,97,0.680412,0.767442,0.721311
+30,validation,graphcare,7,24,Sepsis,69,82,0.292683,0.347826,0.317881
+30,validation,graphcare,7,25,Skin or soft-tissue infection,325,355,0.566197,0.618462,0.591176
+30,validation,graphcare,7,26,UTI or pyelonephritis,395,273,0.81685,0.564557,0.667665
+30,validation,graphcare,7,27,Unsp intestnl obst,141,233,0.515021,0.851064,0.641711
+30,validation,graphcare,7,28,Unspecified asthma with (acute) exacerbation,55,61,0.47541,0.527273,0.5
+30,validation,graphcare,7,29,Unspecified atrial fibrillation,145,128,0.703125,0.62069,0.659341
+30,validation,gsat,1234,0,Acute kidney failure,111,130,0.430769,0.504505,0.46473
+30,validation,gsat,1234,1,Acute pharyngitis,74,79,0.734177,0.783784,0.75817
+30,validation,gsat,1234,2,Acute upper respiratory infection,36,45,0.244444,0.305556,0.271605
+30,validation,gsat,1234,3,Alcohol abuse with intoxication,102,96,0.770833,0.72549,0.747475
+30,validation,gsat,1234,4,Anemia,89,100,0.58,0.651685,0.613757
+30,validation,gsat,1234,5,Anxiety disorder,47,60,0.533333,0.680851,0.598131
+30,validation,gsat,1234,6,Back or spine pain,481,419,0.768496,0.669439,0.715556
+30,validation,gsat,1234,7,Cardiovascular risk factor,51,55,0.763636,0.823529,0.792453
+30,validation,gsat,1234,8,Dehydration,45,56,0.25,0.311111,0.277228
+30,validation,gsat,1234,9,Diabetes mellitus,158,153,0.686275,0.664557,0.675241
+30,validation,gsat,1234,10,End stage renal disease,2,12,0.083333,0.5,0.142857
+30,validation,gsat,1234,11,Epilepsy,105,101,0.772277,0.742857,0.757282
+30,validation,gsat,1234,12,GI bleed,335,285,0.877193,0.746269,0.806452
+30,validation,gsat,1234,13,Head injury,245,302,0.589404,0.726531,0.650823
+30,validation,gsat,1234,14,Heart failure,163,163,0.546012,0.546012,0.546012
+30,validation,gsat,1234,15,Hypokalemia,96,67,0.716418,0.5,0.588957
+30,validation,gsat,1234,16,Hypotension,36,42,0.357143,0.416667,0.384615
+30,validation,gsat,1234,17,Hypothyroidism,1,0,0.0,0.0,0.0
+30,validation,gsat,1234,18,Laceration w/o fb of l idx fngr w/o damage to nail,18,29,0.206897,0.333333,0.255319
+30,validation,gsat,1234,19,Limb injury or pain,403,338,0.615385,0.516129,0.561404
+30,validation,gsat,1234,20,Lower respiratory disease,367,346,0.563584,0.531335,0.546985
+30,validation,gsat,1234,21,Major depressive disorder,293,282,0.879433,0.846416,0.862609
+30,validation,gsat,1234,22,Multiple fractures of ribs,60,64,0.375,0.4,0.387097
+30,validation,gsat,1234,23,Non-ST elevation (NSTEMI) myocardial infarction,86,90,0.722222,0.755814,0.738636
+30,validation,gsat,1234,24,Sepsis,69,109,0.266055,0.42029,0.325843
+30,validation,gsat,1234,25,Skin or soft-tissue infection,325,380,0.571053,0.667692,0.615603
+30,validation,gsat,1234,26,UTI or pyelonephritis,395,317,0.766562,0.61519,0.682584
+30,validation,gsat,1234,27,Unsp intestnl obst,141,214,0.565421,0.858156,0.68169
+30,validation,gsat,1234,28,Unspecified asthma with (acute) exacerbation,55,60,0.55,0.6,0.573913
+30,validation,gsat,1234,29,Unspecified atrial fibrillation,145,140,0.692857,0.668966,0.680702
+30,validation,gsat,2025,0,Acute kidney failure,111,95,0.536842,0.459459,0.495146
+30,validation,gsat,2025,1,Acute pharyngitis,74,77,0.753247,0.783784,0.768212
+30,validation,gsat,2025,2,Acute upper respiratory infection,36,39,0.307692,0.333333,0.32
+30,validation,gsat,2025,3,Alcohol abuse with intoxication,102,96,0.739583,0.696078,0.717172
+30,validation,gsat,2025,4,Anemia,89,92,0.576087,0.595506,0.585635
+30,validation,gsat,2025,5,Anxiety disorder,47,63,0.507937,0.680851,0.581818
+30,validation,gsat,2025,6,Back or spine pain,481,402,0.788557,0.659044,0.718007
+30,validation,gsat,2025,7,Cardiovascular risk factor,51,60,0.683333,0.803922,0.738739
+30,validation,gsat,2025,8,Dehydration,45,66,0.257576,0.377778,0.306306
+30,validation,gsat,2025,9,Diabetes mellitus,158,174,0.637931,0.702532,0.668675
+30,validation,gsat,2025,10,End stage renal disease,2,6,0.0,0.0,0.0
+30,validation,gsat,2025,11,Epilepsy,105,102,0.833333,0.809524,0.821256
+30,validation,gsat,2025,12,GI bleed,335,284,0.883803,0.749254,0.810985
+30,validation,gsat,2025,13,Head injury,245,298,0.604027,0.734694,0.662983
+30,validation,gsat,2025,14,Heart failure,163,149,0.590604,0.539877,0.564103
+30,validation,gsat,2025,15,Hypokalemia,96,92,0.565217,0.541667,0.553191
+30,validation,gsat,2025,16,Hypotension,36,43,0.348837,0.416667,0.379747
+30,validation,gsat,2025,17,Hypothyroidism,1,0,0.0,0.0,0.0
+30,validation,gsat,2025,18,Laceration w/o fb of l idx fngr w/o damage to nail,18,68,0.117647,0.444444,0.186047
+30,validation,gsat,2025,19,Limb injury or pain,403,339,0.610619,0.513648,0.557951
+30,validation,gsat,2025,20,Lower respiratory disease,367,355,0.569014,0.550409,0.559557
+30,validation,gsat,2025,21,Major depressive disorder,293,293,0.863481,0.863481,0.863481
+30,validation,gsat,2025,22,Multiple fractures of ribs,60,65,0.384615,0.416667,0.4
+30,validation,gsat,2025,23,Non-ST elevation (NSTEMI) myocardial infarction,86,98,0.683673,0.77907,0.728261
+30,validation,gsat,2025,24,Sepsis,69,92,0.293478,0.391304,0.335404
+30,validation,gsat,2025,25,Skin or soft-tissue infection,325,375,0.573333,0.661538,0.614286
+30,validation,gsat,2025,26,UTI or pyelonephritis,395,352,0.724432,0.64557,0.682731
+30,validation,gsat,2025,27,Unsp intestnl obst,141,170,0.676471,0.815603,0.73955
+30,validation,gsat,2025,28,Unspecified asthma with (acute) exacerbation,55,53,0.584906,0.563636,0.574074
+30,validation,gsat,2025,29,Unspecified atrial fibrillation,145,136,0.654412,0.613793,0.633452
+30,validation,gsat,7,0,Acute kidney failure,111,107,0.429907,0.414414,0.422018
+30,validation,gsat,7,1,Acute pharyngitis,74,81,0.703704,0.77027,0.735484
+30,validation,gsat,7,2,Acute upper respiratory infection,36,32,0.34375,0.305556,0.323529
+30,validation,gsat,7,3,Alcohol abuse with intoxication,102,103,0.747573,0.754902,0.75122
+30,validation,gsat,7,4,Anemia,89,107,0.560748,0.674157,0.612245
+30,validation,gsat,7,5,Anxiety disorder,47,59,0.525424,0.659574,0.584906
+30,validation,gsat,7,6,Back or spine pain,481,421,0.771971,0.675676,0.720621
+30,validation,gsat,7,7,Cardiovascular risk factor,51,52,0.75,0.764706,0.757282
+30,validation,gsat,7,8,Dehydration,45,70,0.214286,0.333333,0.26087
+30,validation,gsat,7,9,Diabetes mellitus,158,156,0.698718,0.689873,0.694268
+30,validation,gsat,7,10,End stage renal disease,2,10,0.1,0.5,0.166667
+30,validation,gsat,7,11,Epilepsy,105,109,0.733945,0.761905,0.747664
+30,validation,gsat,7,12,GI bleed,335,275,0.894545,0.734328,0.806557
+30,validation,gsat,7,13,Head injury,245,294,0.619048,0.742857,0.675325
+30,validation,gsat,7,14,Heart failure,163,169,0.585799,0.607362,0.596386
+30,validation,gsat,7,15,Hypokalemia,96,93,0.623656,0.604167,0.613757
+30,validation,gsat,7,16,Hypotension,36,45,0.355556,0.444444,0.395062
+30,validation,gsat,7,17,Hypothyroidism,1,0,0.0,0.0,0.0
+30,validation,gsat,7,18,Laceration w/o fb of l idx fngr w/o damage to nail,18,52,0.115385,0.333333,0.171429
+30,validation,gsat,7,19,Limb injury or pain,403,372,0.583333,0.538462,0.56
+30,validation,gsat,7,20,Lower respiratory disease,367,297,0.602694,0.487738,0.539157
+30,validation,gsat,7,21,Major depressive disorder,293,290,0.872414,0.863481,0.867925
+30,validation,gsat,7,22,Multiple fractures of ribs,60,72,0.388889,0.466667,0.424242
+30,validation,gsat,7,23,Non-ST elevation (NSTEMI) myocardial infarction,86,97,0.701031,0.790698,0.743169
+30,validation,gsat,7,24,Sepsis,69,105,0.27619,0.42029,0.333333
+30,validation,gsat,7,25,Skin or soft-tissue infection,325,309,0.631068,0.6,0.615142
+30,validation,gsat,7,26,UTI or pyelonephritis,395,359,0.715877,0.650633,0.681698
+30,validation,gsat,7,27,Unsp intestnl obst,141,180,0.622222,0.794326,0.697819
+30,validation,gsat,7,28,Unspecified asthma with (acute) exacerbation,55,67,0.477612,0.581818,0.52459
+30,validation,gsat,7,29,Unspecified atrial fibrillation,145,151,0.622517,0.648276,0.635135
+30,validation,protgnn,1234,0,Acute kidney failure,111,126,0.444444,0.504505,0.472574
+30,validation,protgnn,1234,1,Acute pharyngitis,74,58,0.896552,0.702703,0.787879
+30,validation,protgnn,1234,2,Acute upper respiratory infection,36,40,0.275,0.305556,0.289474
+30,validation,protgnn,1234,3,Alcohol abuse with intoxication,102,99,0.727273,0.705882,0.716418
+30,validation,protgnn,1234,4,Anemia,89,85,0.635294,0.606742,0.62069
+30,validation,protgnn,1234,5,Anxiety disorder,47,42,0.666667,0.595745,0.629213
+30,validation,protgnn,1234,6,Back or spine pain,481,366,0.830601,0.632017,0.717828
+30,validation,protgnn,1234,7,Cardiovascular risk factor,51,51,0.764706,0.764706,0.764706
+30,validation,protgnn,1234,8,Dehydration,45,72,0.222222,0.355556,0.273504
+30,validation,protgnn,1234,9,Diabetes mellitus,158,155,0.690323,0.677215,0.683706
+30,validation,protgnn,1234,10,End stage renal disease,2,2,0.5,0.5,0.5
+30,validation,protgnn,1234,11,Epilepsy,105,111,0.765766,0.809524,0.787037
+30,validation,protgnn,1234,12,GI bleed,335,331,0.812689,0.802985,0.807808
+30,validation,protgnn,1234,13,Head injury,245,260,0.65,0.689796,0.669307
+30,validation,protgnn,1234,14,Heart failure,163,192,0.567708,0.668712,0.614085
+30,validation,protgnn,1234,15,Hypokalemia,96,129,0.465116,0.625,0.533333
+30,validation,protgnn,1234,16,Hypotension,36,38,0.394737,0.416667,0.405405
+30,validation,protgnn,1234,17,Hypothyroidism,1,1,0.0,0.0,0.0
+30,validation,protgnn,1234,18,Laceration w/o fb of l idx fngr w/o damage to nail,18,38,0.184211,0.388889,0.25
+30,validation,protgnn,1234,19,Limb injury or pain,403,333,0.606607,0.501241,0.548913
+30,validation,protgnn,1234,20,Lower respiratory disease,367,371,0.555256,0.561308,0.558266
+30,validation,protgnn,1234,21,Major depressive disorder,293,318,0.808176,0.877133,0.841244
+30,validation,protgnn,1234,22,Multiple fractures of ribs,60,93,0.322581,0.5,0.392157
+30,validation,protgnn,1234,23,Non-ST elevation (NSTEMI) myocardial infarction,86,103,0.660194,0.790698,0.719577
+30,validation,protgnn,1234,24,Sepsis,69,71,0.338028,0.347826,0.342857
+30,validation,protgnn,1234,25,Skin or soft-tissue infection,325,397,0.564232,0.689231,0.620499
+30,validation,protgnn,1234,26,UTI or pyelonephritis,395,329,0.756839,0.63038,0.687845
+30,validation,protgnn,1234,27,Unsp intestnl obst,141,135,0.748148,0.716312,0.731884
+30,validation,protgnn,1234,28,Unspecified asthma with (acute) exacerbation,55,76,0.447368,0.618182,0.519084
+30,validation,protgnn,1234,29,Unspecified atrial fibrillation,145,112,0.8125,0.627586,0.708171
+30,validation,protgnn,2025,0,Acute kidney failure,111,74,0.594595,0.396396,0.475676
+30,validation,protgnn,2025,1,Acute pharyngitis,74,94,0.659574,0.837838,0.738095
+30,validation,protgnn,2025,2,Acute upper respiratory infection,36,34,0.294118,0.277778,0.285714
+30,validation,protgnn,2025,3,Alcohol abuse with intoxication,102,90,0.8,0.705882,0.75
+30,validation,protgnn,2025,4,Anemia,89,93,0.55914,0.58427,0.571429
+30,validation,protgnn,2025,5,Anxiety disorder,47,57,0.508772,0.617021,0.557692
+30,validation,protgnn,2025,6,Back or spine pain,481,450,0.74,0.692308,0.71536
+30,validation,protgnn,2025,7,Cardiovascular risk factor,51,57,0.736842,0.823529,0.777778
+30,validation,protgnn,2025,8,Dehydration,45,92,0.163043,0.333333,0.218978
+30,validation,protgnn,2025,9,Diabetes mellitus,158,171,0.643275,0.696203,0.668693
+30,validation,protgnn,2025,10,End stage renal disease,2,19,0.105263,1.0,0.190476
+30,validation,protgnn,2025,11,Epilepsy,105,116,0.724138,0.8,0.760181
+30,validation,protgnn,2025,12,GI bleed,335,327,0.804281,0.785075,0.794562
+30,validation,protgnn,2025,13,Head injury,245,288,0.621528,0.730612,0.67167
+30,validation,protgnn,2025,14,Heart failure,163,167,0.610778,0.625767,0.618182
+30,validation,protgnn,2025,15,Hypokalemia,96,102,0.568627,0.604167,0.585859
+30,validation,protgnn,2025,16,Hypotension,36,36,0.416667,0.416667,0.416667
+30,validation,protgnn,2025,17,Hypothyroidism,1,1,0.0,0.0,0.0
+30,validation,protgnn,2025,18,Laceration w/o fb of l idx fngr w/o damage to nail,18,27,0.259259,0.388889,0.311111
+30,validation,protgnn,2025,19,Limb injury or pain,403,388,0.582474,0.560794,0.571429
+30,validation,protgnn,2025,20,Lower respiratory disease,367,311,0.617363,0.523161,0.566372
+30,validation,protgnn,2025,21,Major depressive disorder,293,304,0.832237,0.863481,0.847571
+30,validation,protgnn,2025,22,Multiple fractures of ribs,60,77,0.376623,0.483333,0.423358
+30,validation,protgnn,2025,23,Non-ST elevation (NSTEMI) myocardial infarction,86,95,0.726316,0.802326,0.762431
+30,validation,protgnn,2025,24,Sepsis,69,68,0.338235,0.333333,0.335766
+30,validation,protgnn,2025,25,Skin or soft-tissue infection,325,291,0.67354,0.603077,0.636364
+30,validation,protgnn,2025,26,UTI or pyelonephritis,395,293,0.791809,0.587342,0.674419
+30,validation,protgnn,2025,27,Unsp intestnl obst,141,203,0.571429,0.822695,0.674419
+30,validation,protgnn,2025,28,Unspecified asthma with (acute) exacerbation,55,64,0.5,0.581818,0.537815
+30,validation,protgnn,2025,29,Unspecified atrial fibrillation,145,145,0.675862,0.675862,0.675862
+30,validation,protgnn,7,0,Acute kidney failure,111,134,0.432836,0.522523,0.473469
+30,validation,protgnn,7,1,Acute pharyngitis,74,84,0.72619,0.824324,0.772152
+30,validation,protgnn,7,2,Acute upper respiratory infection,36,43,0.255814,0.305556,0.278481
+30,validation,protgnn,7,3,Alcohol abuse with intoxication,102,70,0.885714,0.607843,0.72093
+30,validation,protgnn,7,4,Anemia,89,84,0.666667,0.629213,0.647399
+30,validation,protgnn,7,5,Anxiety disorder,47,52,0.557692,0.617021,0.585859
+30,validation,protgnn,7,6,Back or spine pain,481,486,0.705761,0.713098,0.709411
+30,validation,protgnn,7,7,Cardiovascular risk factor,51,64,0.65625,0.823529,0.730435
+30,validation,protgnn,7,8,Dehydration,45,133,0.165414,0.488889,0.247191
+30,validation,protgnn,7,9,Diabetes mellitus,158,187,0.625668,0.740506,0.678261
+30,validation,protgnn,7,10,End stage renal disease,2,25,0.04,0.5,0.074074
+30,validation,protgnn,7,11,Epilepsy,105,96,0.875,0.8,0.835821
+30,validation,protgnn,7,12,GI bleed,335,286,0.888112,0.758209,0.818035
+30,validation,protgnn,7,13,Head injury,245,192,0.755208,0.591837,0.663616
+30,validation,protgnn,7,14,Heart failure,163,265,0.471698,0.766871,0.584112
+30,validation,protgnn,7,15,Hypokalemia,96,96,0.53125,0.53125,0.53125
+30,validation,protgnn,7,16,Hypotension,36,54,0.333333,0.5,0.4
+30,validation,protgnn,7,17,Hypothyroidism,1,0,0.0,0.0,0.0
+30,validation,protgnn,7,18,Laceration w/o fb of l idx fngr w/o damage to nail,18,28,0.214286,0.333333,0.26087
+30,validation,protgnn,7,19,Limb injury or pain,403,451,0.560976,0.627792,0.592506
+30,validation,protgnn,7,20,Lower respiratory disease,367,227,0.665198,0.411444,0.508418
+30,validation,protgnn,7,21,Major depressive disorder,293,315,0.831746,0.894198,0.861842
+30,validation,protgnn,7,22,Multiple fractures of ribs,60,82,0.378049,0.516667,0.43662
+30,validation,protgnn,7,23,Non-ST elevation (NSTEMI) myocardial infarction,86,90,0.733333,0.767442,0.75
+30,validation,protgnn,7,24,Sepsis,69,56,0.339286,0.275362,0.304
+30,validation,protgnn,7,25,Skin or soft-tissue infection,325,249,0.706827,0.541538,0.61324
+30,validation,protgnn,7,26,UTI or pyelonephritis,395,350,0.708571,0.627848,0.665772
+30,validation,protgnn,7,27,Unsp intestnl obst,141,139,0.741007,0.730496,0.735714
+30,validation,protgnn,7,28,Unspecified asthma with (acute) exacerbation,55,81,0.444444,0.654545,0.529412
+30,validation,protgnn,7,29,Unspecified atrial fibrillation,145,115,0.756522,0.6,0.669231
+30,test,cei_mp2,1234,0,Acute kidney failure,115,97,0.494845,0.417391,0.45283
+30,test,cei_mp2,1234,1,Acute pharyngitis,72,59,0.79661,0.652778,0.717557
+30,test,cei_mp2,1234,2,Acute upper respiratory infection,35,42,0.261905,0.314286,0.285714
+30,test,cei_mp2,1234,3,Alcohol abuse with intoxication,97,101,0.683168,0.71134,0.69697
+30,test,cei_mp2,1234,4,Anemia,117,148,0.608108,0.769231,0.679245
+30,test,cei_mp2,1234,5,Anxiety disorder,59,43,0.813953,0.59322,0.686275
+30,test,cei_mp2,1234,6,Back or spine pain,456,408,0.769608,0.688596,0.726852
+30,test,cei_mp2,1234,7,Cardiovascular risk factor,58,64,0.78125,0.862069,0.819672
+30,test,cei_mp2,1234,8,Dehydration,62,76,0.276316,0.33871,0.304348
+30,test,cei_mp2,1234,9,Diabetes mellitus,155,135,0.748148,0.651613,0.696552
+30,test,cei_mp2,1234,10,End stage renal disease,5,17,0.117647,0.4,0.181818
+30,test,cei_mp2,1234,11,Epilepsy,99,94,0.861702,0.818182,0.839378
+30,test,cei_mp2,1234,12,GI bleed,342,291,0.859107,0.730994,0.789889
+30,test,cei_mp2,1234,13,Head injury,289,319,0.677116,0.747405,0.710526
+30,test,cei_mp2,1234,14,Heart failure,141,171,0.578947,0.702128,0.634615
+30,test,cei_mp2,1234,15,Hypokalemia,102,87,0.643678,0.54902,0.592593
+30,test,cei_mp2,1234,16,Hypotension,30,54,0.259259,0.466667,0.333333
+30,test,cei_mp2,1234,17,Hypothyroidism,0,0,0.0,0.0,0.0
+30,test,cei_mp2,1234,18,Laceration w/o fb of l idx fngr w/o damage to nail,12,33,0.151515,0.416667,0.222222
+30,test,cei_mp2,1234,19,Limb injury or pain,420,390,0.633333,0.588095,0.609877
+30,test,cei_mp2,1234,20,Lower respiratory disease,379,347,0.631124,0.577836,0.603306
+30,test,cei_mp2,1234,21,Major depressive disorder,249,256,0.871094,0.895582,0.883168
+30,test,cei_mp2,1234,22,Multiple fractures of ribs,58,69,0.362319,0.431034,0.393701
+30,test,cei_mp2,1234,23,Non-ST elevation (NSTEMI) myocardial infarction,85,108,0.638889,0.811765,0.715026
+30,test,cei_mp2,1234,24,Sepsis,71,74,0.351351,0.366197,0.358621
+30,test,cei_mp2,1234,25,Skin or soft-tissue infection,359,378,0.642857,0.67688,0.65943
+30,test,cei_mp2,1234,26,UTI or pyelonephritis,385,305,0.793443,0.628571,0.701449
+30,test,cei_mp2,1234,27,Unsp intestnl obst,126,173,0.601156,0.825397,0.695652
+30,test,cei_mp2,1234,28,Unspecified asthma with (acute) exacerbation,73,90,0.555556,0.684932,0.613497
+30,test,cei_mp2,1234,29,Unspecified atrial fibrillation,115,137,0.605839,0.721739,0.65873
+30,test,cei_mp2,2025,0,Acute kidney failure,115,91,0.472527,0.373913,0.417476
+30,test,cei_mp2,2025,1,Acute pharyngitis,72,64,0.78125,0.694444,0.735294
+30,test,cei_mp2,2025,2,Acute upper respiratory infection,35,27,0.333333,0.257143,0.290323
+30,test,cei_mp2,2025,3,Alcohol abuse with intoxication,97,79,0.772152,0.628866,0.693182
+30,test,cei_mp2,2025,4,Anemia,117,130,0.646154,0.717949,0.680162
+30,test,cei_mp2,2025,5,Anxiety disorder,59,41,0.804878,0.559322,0.66
+30,test,cei_mp2,2025,6,Back or spine pain,456,393,0.793893,0.684211,0.734982
+30,test,cei_mp2,2025,7,Cardiovascular risk factor,58,73,0.712329,0.896552,0.793893
+30,test,cei_mp2,2025,8,Dehydration,62,78,0.307692,0.387097,0.342857
+30,test,cei_mp2,2025,9,Diabetes mellitus,155,147,0.734694,0.696774,0.715232
+30,test,cei_mp2,2025,10,End stage renal disease,5,22,0.136364,0.6,0.222222
+30,test,cei_mp2,2025,11,Epilepsy,99,97,0.845361,0.828283,0.836735
+30,test,cei_mp2,2025,12,GI bleed,342,293,0.870307,0.745614,0.80315
+30,test,cei_mp2,2025,13,Head injury,289,299,0.695652,0.719723,0.707483
+30,test,cei_mp2,2025,14,Heart failure,141,184,0.559783,0.730496,0.633846
+30,test,cei_mp2,2025,15,Hypokalemia,102,88,0.647727,0.558824,0.6
+30,test,cei_mp2,2025,16,Hypotension,30,45,0.288889,0.433333,0.346667
+30,test,cei_mp2,2025,17,Hypothyroidism,0,0,0.0,0.0,0.0
+30,test,cei_mp2,2025,18,Laceration w/o fb of l idx fngr w/o damage to nail,12,46,0.152174,0.583333,0.241379
+30,test,cei_mp2,2025,19,Limb injury or pain,420,411,0.603406,0.590476,0.596871
+30,test,cei_mp2,2025,20,Lower respiratory disease,379,345,0.634783,0.577836,0.604972
+30,test,cei_mp2,2025,21,Major depressive disorder,249,263,0.855513,0.903614,0.878906
+30,test,cei_mp2,2025,22,Multiple fractures of ribs,58,106,0.320755,0.586207,0.414634
+30,test,cei_mp2,2025,23,Non-ST elevation (NSTEMI) myocardial infarction,85,99,0.686869,0.8,0.73913
+30,test,cei_mp2,2025,24,Sepsis,71,67,0.328358,0.309859,0.318841
+30,test,cei_mp2,2025,25,Skin or soft-tissue infection,359,384,0.640625,0.685237,0.66218
+30,test,cei_mp2,2025,26,UTI or pyelonephritis,385,312,0.785256,0.636364,0.703013
+30,test,cei_mp2,2025,27,Unsp intestnl obst,126,181,0.569061,0.81746,0.67101
+30,test,cei_mp2,2025,28,Unspecified asthma with (acute) exacerbation,73,82,0.585366,0.657534,0.619355
+30,test,cei_mp2,2025,29,Unspecified atrial fibrillation,115,119,0.630252,0.652174,0.641026
+30,test,cei_mp2,7,0,Acute kidney failure,115,129,0.449612,0.504348,0.47541
+30,test,cei_mp2,7,1,Acute pharyngitis,72,63,0.809524,0.708333,0.755556
+30,test,cei_mp2,7,2,Acute upper respiratory infection,35,53,0.301887,0.457143,0.363636
+30,test,cei_mp2,7,3,Alcohol abuse with intoxication,97,98,0.683673,0.690722,0.687179
+30,test,cei_mp2,7,4,Anemia,117,145,0.586207,0.726496,0.648855
+30,test,cei_mp2,7,5,Anxiety disorder,59,43,0.813953,0.59322,0.686275
+30,test,cei_mp2,7,6,Back or spine pain,456,402,0.776119,0.684211,0.727273
+30,test,cei_mp2,7,7,Cardiovascular risk factor,58,63,0.793651,0.862069,0.826446
+30,test,cei_mp2,7,8,Dehydration,62,69,0.304348,0.33871,0.320611
+30,test,cei_mp2,7,9,Diabetes mellitus,155,143,0.72028,0.664516,0.691275
+30,test,cei_mp2,7,10,End stage renal disease,5,20,0.05,0.2,0.08
+30,test,cei_mp2,7,11,Epilepsy,99,90,0.877778,0.79798,0.835979
+30,test,cei_mp2,7,12,GI bleed,342,299,0.852843,0.745614,0.795632
+30,test,cei_mp2,7,13,Head injury,289,340,0.661765,0.778547,0.715421
+30,test,cei_mp2,7,14,Heart failure,141,176,0.568182,0.70922,0.630915
+30,test,cei_mp2,7,15,Hypokalemia,102,76,0.710526,0.529412,0.606742
+30,test,cei_mp2,7,16,Hypotension,30,41,0.292683,0.4,0.338028
+30,test,cei_mp2,7,17,Hypothyroidism,0,1,0.0,0.0,0.0
+30,test,cei_mp2,7,18,Laceration w/o fb of l idx fngr w/o damage to nail,12,30,0.233333,0.583333,0.333333
+30,test,cei_mp2,7,19,Limb injury or pain,420,426,0.593897,0.602381,0.598109
+30,test,cei_mp2,7,20,Lower respiratory disease,379,287,0.69338,0.525066,0.597598
+30,test,cei_mp2,7,21,Major depressive disorder,249,254,0.874016,0.891566,0.882704
+30,test,cei_mp2,7,22,Multiple fractures of ribs,58,53,0.415094,0.37931,0.396396
+30,test,cei_mp2,7,23,Non-ST elevation (NSTEMI) myocardial infarction,85,95,0.715789,0.8,0.755556
+30,test,cei_mp2,7,24,Sepsis,71,85,0.376471,0.450704,0.410256
+30,test,cei_mp2,7,25,Skin or soft-tissue infection,359,362,0.657459,0.662953,0.660194
+30,test,cei_mp2,7,26,UTI or pyelonephritis,385,329,0.765957,0.654545,0.705882
+30,test,cei_mp2,7,27,Unsp intestnl obst,126,189,0.555556,0.833333,0.666667
+30,test,cei_mp2,7,28,Unspecified asthma with (acute) exacerbation,73,92,0.543478,0.684932,0.606061
+30,test,cei_mp2,7,29,Unspecified atrial fibrillation,115,113,0.672566,0.66087,0.666667
+30,test,graphcare,1234,0,Acute kidney failure,115,163,0.349693,0.495652,0.410072
+30,test,graphcare,1234,1,Acute pharyngitis,72,64,0.71875,0.638889,0.676471
+30,test,graphcare,1234,2,Acute upper respiratory infection,35,40,0.2,0.228571,0.213333
+30,test,graphcare,1234,3,Alcohol abuse with intoxication,97,92,0.728261,0.690722,0.708995
+30,test,graphcare,1234,4,Anemia,117,116,0.663793,0.65812,0.660944
+30,test,graphcare,1234,5,Anxiety disorder,59,46,0.76087,0.59322,0.666667
+30,test,graphcare,1234,6,Back or spine pain,456,395,0.767089,0.664474,0.712103
+30,test,graphcare,1234,7,Cardiovascular risk factor,58,69,0.710145,0.844828,0.771654
+30,test,graphcare,1234,8,Dehydration,62,49,0.306122,0.241935,0.27027
+30,test,graphcare,1234,9,Diabetes mellitus,155,134,0.746269,0.645161,0.692042
+30,test,graphcare,1234,10,End stage renal disease,5,6,0.166667,0.2,0.181818
+30,test,graphcare,1234,11,Epilepsy,99,97,0.845361,0.828283,0.836735
+30,test,graphcare,1234,12,GI bleed,342,292,0.859589,0.733918,0.791798
+30,test,graphcare,1234,13,Head injury,289,355,0.628169,0.771626,0.692547
+30,test,graphcare,1234,14,Heart failure,141,192,0.520833,0.70922,0.600601
+30,test,graphcare,1234,15,Hypokalemia,102,82,0.646341,0.519608,0.576087
+30,test,graphcare,1234,16,Hypotension,30,43,0.27907,0.4,0.328767
+30,test,graphcare,1234,17,Hypothyroidism,0,1,0.0,0.0,0.0
+30,test,graphcare,1234,18,Laceration w/o fb of l idx fngr w/o damage to nail,12,44,0.113636,0.416667,0.178571
+30,test,graphcare,1234,19,Limb injury or pain,420,385,0.612987,0.561905,0.586335
+30,test,graphcare,1234,20,Lower respiratory disease,379,356,0.539326,0.506596,0.522449
+30,test,graphcare,1234,21,Major depressive disorder,249,259,0.84556,0.879518,0.862205
+30,test,graphcare,1234,22,Multiple fractures of ribs,58,60,0.3,0.310345,0.305085
+30,test,graphcare,1234,23,Non-ST elevation (NSTEMI) myocardial infarction,85,81,0.716049,0.682353,0.698795
+30,test,graphcare,1234,24,Sepsis,71,67,0.343284,0.323944,0.333333
+30,test,graphcare,1234,25,Skin or soft-tissue infection,359,406,0.596059,0.674095,0.63268
+30,test,graphcare,1234,26,UTI or pyelonephritis,385,292,0.784247,0.594805,0.676514
+30,test,graphcare,1234,27,Unsp intestnl obst,126,175,0.582857,0.809524,0.677741
+30,test,graphcare,1234,28,Unspecified asthma with (acute) exacerbation,73,73,0.575342,0.575342,0.575342
+30,test,graphcare,1234,29,Unspecified atrial fibrillation,115,132,0.590909,0.678261,0.631579
+30,test,graphcare,2025,0,Acute kidney failure,115,160,0.375,0.521739,0.436364
+30,test,graphcare,2025,1,Acute pharyngitis,72,55,0.781818,0.597222,0.677165
+30,test,graphcare,2025,2,Acute upper respiratory infection,35,55,0.236364,0.371429,0.288889
+30,test,graphcare,2025,3,Alcohol abuse with intoxication,97,82,0.780488,0.659794,0.715084
+30,test,graphcare,2025,4,Anemia,117,136,0.647059,0.752137,0.695652
+30,test,graphcare,2025,5,Anxiety disorder,59,43,0.744186,0.542373,0.627451
+30,test,graphcare,2025,6,Back or spine pain,456,428,0.740654,0.695175,0.717195
+30,test,graphcare,2025,7,Cardiovascular risk factor,58,71,0.704225,0.862069,0.775194
+30,test,graphcare,2025,8,Dehydration,62,43,0.302326,0.209677,0.247619
+30,test,graphcare,2025,9,Diabetes mellitus,155,133,0.744361,0.63871,0.6875
+30,test,graphcare,2025,10,End stage renal disease,5,6,0.0,0.0,0.0
+30,test,graphcare,2025,11,Epilepsy,99,98,0.826531,0.818182,0.822335
+30,test,graphcare,2025,12,GI bleed,342,285,0.873684,0.72807,0.794258
+30,test,graphcare,2025,13,Head injury,289,340,0.638235,0.750865,0.689984
+30,test,graphcare,2025,14,Heart failure,141,161,0.552795,0.631206,0.589404
+30,test,graphcare,2025,15,Hypokalemia,102,101,0.594059,0.588235,0.591133
+30,test,graphcare,2025,16,Hypotension,30,43,0.232558,0.333333,0.273973
+30,test,graphcare,2025,17,Hypothyroidism,0,0,0.0,0.0,0.0
+30,test,graphcare,2025,18,Laceration w/o fb of l idx fngr w/o damage to nail,12,30,0.133333,0.333333,0.190476
+30,test,graphcare,2025,19,Limb injury or pain,420,408,0.615196,0.597619,0.60628
+30,test,graphcare,2025,20,Lower respiratory disease,379,362,0.558011,0.532982,0.545209
+30,test,graphcare,2025,21,Major depressive disorder,249,269,0.828996,0.895582,0.861004
+30,test,graphcare,2025,22,Multiple fractures of ribs,58,48,0.375,0.310345,0.339623
+30,test,graphcare,2025,23,Non-ST elevation (NSTEMI) myocardial infarction,85,76,0.710526,0.635294,0.670807
+30,test,graphcare,2025,24,Sepsis,71,67,0.343284,0.323944,0.333333
+30,test,graphcare,2025,25,Skin or soft-tissue infection,359,412,0.599515,0.688022,0.640726
+30,test,graphcare,2025,26,UTI or pyelonephritis,385,279,0.799283,0.579221,0.671687
+30,test,graphcare,2025,27,Unsp intestnl obst,126,185,0.545946,0.801587,0.649518
+30,test,graphcare,2025,28,Unspecified asthma with (acute) exacerbation,73,65,0.615385,0.547945,0.57971
+30,test,graphcare,2025,29,Unspecified atrial fibrillation,115,125,0.616,0.669565,0.641667
+30,test,graphcare,7,0,Acute kidney failure,115,134,0.365672,0.426087,0.393574
+30,test,graphcare,7,1,Acute pharyngitis,72,61,0.786885,0.666667,0.721805
+30,test,graphcare,7,2,Acute upper respiratory infection,35,30,0.266667,0.228571,0.246154
+30,test,graphcare,7,3,Alcohol abuse with intoxication,97,95,0.715789,0.701031,0.708333
+30,test,graphcare,7,4,Anemia,117,136,0.625,0.726496,0.671937
+30,test,graphcare,7,5,Anxiety disorder,59,39,0.820513,0.542373,0.653061
+30,test,graphcare,7,6,Back or spine pain,456,390,0.792308,0.677632,0.730496
+30,test,graphcare,7,7,Cardiovascular risk factor,58,65,0.753846,0.844828,0.796748
+30,test,graphcare,7,8,Dehydration,62,54,0.277778,0.241935,0.258621
+30,test,graphcare,7,9,Diabetes mellitus,155,141,0.737589,0.670968,0.702703
+30,test,graphcare,7,10,End stage renal disease,5,2,0.0,0.0,0.0
+30,test,graphcare,7,11,Epilepsy,99,93,0.860215,0.808081,0.833333
+30,test,graphcare,7,12,GI bleed,342,296,0.861486,0.745614,0.799373
+30,test,graphcare,7,13,Head injury,289,360,0.619444,0.771626,0.687211
+30,test,graphcare,7,14,Heart failure,141,174,0.563218,0.695035,0.622222
+30,test,graphcare,7,15,Hypokalemia,102,81,0.679012,0.539216,0.601093
+30,test,graphcare,7,16,Hypotension,30,50,0.24,0.4,0.3
+30,test,graphcare,7,17,Hypothyroidism,0,0,0.0,0.0,0.0
+30,test,graphcare,7,18,Laceration w/o fb of l idx fngr w/o damage to nail,12,44,0.045455,0.166667,0.071429
+30,test,graphcare,7,19,Limb injury or pain,420,425,0.581176,0.588095,0.584615
+30,test,graphcare,7,20,Lower respiratory disease,379,378,0.566138,0.564644,0.56539
+30,test,graphcare,7,21,Major depressive disorder,249,274,0.813869,0.895582,0.852772
+30,test,graphcare,7,22,Multiple fractures of ribs,58,39,0.358974,0.241379,0.28866
+30,test,graphcare,7,23,Non-ST elevation (NSTEMI) myocardial infarction,85,80,0.7375,0.694118,0.715152
+30,test,graphcare,7,24,Sepsis,71,81,0.37037,0.422535,0.394737
+30,test,graphcare,7,25,Skin or soft-tissue infection,359,390,0.617949,0.671309,0.643525
+30,test,graphcare,7,26,UTI or pyelonephritis,385,277,0.808664,0.581818,0.676737
+30,test,graphcare,7,27,Unsp intestnl obst,126,190,0.531579,0.801587,0.639241
+30,test,graphcare,7,28,Unspecified asthma with (acute) exacerbation,73,75,0.573333,0.589041,0.581081
+30,test,graphcare,7,29,Unspecified atrial fibrillation,115,112,0.642857,0.626087,0.634361
+30,test,gsat,1234,0,Acute kidney failure,115,136,0.441176,0.521739,0.478088
+30,test,gsat,1234,1,Acute pharyngitis,72,72,0.680556,0.680556,0.680556
+30,test,gsat,1234,2,Acute upper respiratory infection,35,61,0.180328,0.314286,0.229167
+30,test,gsat,1234,3,Alcohol abuse with intoxication,97,83,0.746988,0.639175,0.688889
+30,test,gsat,1234,4,Anemia,117,123,0.642276,0.675214,0.658333
+30,test,gsat,1234,5,Anxiety disorder,59,44,0.75,0.559322,0.640777
+30,test,gsat,1234,6,Back or spine pain,456,411,0.744526,0.671053,0.705882
+30,test,gsat,1234,7,Cardiovascular risk factor,58,67,0.776119,0.896552,0.832
+30,test,gsat,1234,8,Dehydration,62,54,0.296296,0.258065,0.275862
+30,test,gsat,1234,9,Diabetes mellitus,155,162,0.660494,0.690323,0.675079
+30,test,gsat,1234,10,End stage renal disease,5,12,0.166667,0.4,0.235294
+30,test,gsat,1234,11,Epilepsy,99,95,0.821053,0.787879,0.804124
+30,test,gsat,1234,12,GI bleed,342,289,0.882353,0.745614,0.808241
+30,test,gsat,1234,13,Head injury,289,340,0.658824,0.775087,0.712242
+30,test,gsat,1234,14,Heart failure,141,174,0.534483,0.659574,0.590476
+30,test,gsat,1234,15,Hypokalemia,102,81,0.604938,0.480392,0.535519
+30,test,gsat,1234,16,Hypotension,30,33,0.363636,0.4,0.380952
+30,test,gsat,1234,17,Hypothyroidism,0,1,0.0,0.0,0.0
+30,test,gsat,1234,18,Laceration w/o fb of l idx fngr w/o damage to nail,12,24,0.166667,0.333333,0.222222
+30,test,gsat,1234,19,Limb injury or pain,420,356,0.629213,0.533333,0.57732
+30,test,gsat,1234,20,Lower respiratory disease,379,353,0.572238,0.532982,0.551913
+30,test,gsat,1234,21,Major depressive disorder,249,264,0.844697,0.895582,0.869396
+30,test,gsat,1234,22,Multiple fractures of ribs,58,53,0.471698,0.431034,0.45045
+30,test,gsat,1234,23,Non-ST elevation (NSTEMI) myocardial infarction,85,80,0.725,0.682353,0.70303
+30,test,gsat,1234,24,Sepsis,71,121,0.256198,0.43662,0.322917
+30,test,gsat,1234,25,Skin or soft-tissue infection,359,393,0.633588,0.693593,0.662234
+30,test,gsat,1234,26,UTI or pyelonephritis,385,306,0.754902,0.6,0.668596
+30,test,gsat,1234,27,Unsp intestnl obst,126,181,0.546961,0.785714,0.644951
+30,test,gsat,1234,28,Unspecified asthma with (acute) exacerbation,73,85,0.6,0.69863,0.64557
+30,test,gsat,1234,29,Unspecified atrial fibrillation,115,112,0.669643,0.652174,0.660793
+30,test,gsat,2025,0,Acute kidney failure,115,103,0.427184,0.382609,0.40367
+30,test,gsat,2025,1,Acute pharyngitis,72,70,0.685714,0.666667,0.676056
+30,test,gsat,2025,2,Acute upper respiratory infection,35,35,0.228571,0.228571,0.228571
+30,test,gsat,2025,3,Alcohol abuse with intoxication,97,91,0.703297,0.659794,0.680851
+30,test,gsat,2025,4,Anemia,117,112,0.660714,0.632479,0.646288
+30,test,gsat,2025,5,Anxiety disorder,59,48,0.645833,0.525424,0.579439
+30,test,gsat,2025,6,Back or spine pain,456,388,0.798969,0.679825,0.734597
+30,test,gsat,2025,7,Cardiovascular risk factor,58,66,0.742424,0.844828,0.790323
+30,test,gsat,2025,8,Dehydration,62,69,0.231884,0.258065,0.244275
+30,test,gsat,2025,9,Diabetes mellitus,155,159,0.698113,0.716129,0.707006
+30,test,gsat,2025,10,End stage renal disease,5,5,0.2,0.2,0.2
+30,test,gsat,2025,11,Epilepsy,99,99,0.767677,0.767677,0.767677
+30,test,gsat,2025,12,GI bleed,342,295,0.850847,0.733918,0.788069
+30,test,gsat,2025,13,Head injury,289,338,0.662722,0.775087,0.714514
+30,test,gsat,2025,14,Heart failure,141,159,0.572327,0.64539,0.606667
+30,test,gsat,2025,15,Hypokalemia,102,103,0.572816,0.578431,0.57561
+30,test,gsat,2025,16,Hypotension,30,40,0.275,0.366667,0.314286
+30,test,gsat,2025,17,Hypothyroidism,0,0,0.0,0.0,0.0
+30,test,gsat,2025,18,Laceration w/o fb of l idx fngr w/o damage to nail,12,47,0.106383,0.416667,0.169492
+30,test,gsat,2025,19,Limb injury or pain,420,364,0.659341,0.571429,0.612245
+30,test,gsat,2025,20,Lower respiratory disease,379,372,0.580645,0.569921,0.575233
+30,test,gsat,2025,21,Major depressive disorder,249,269,0.828996,0.895582,0.861004
+30,test,gsat,2025,22,Multiple fractures of ribs,58,59,0.474576,0.482759,0.478632
+30,test,gsat,2025,23,Non-ST elevation (NSTEMI) myocardial infarction,85,88,0.727273,0.752941,0.739884
+30,test,gsat,2025,24,Sepsis,71,95,0.294737,0.394366,0.337349
+30,test,gsat,2025,25,Skin or soft-tissue infection,359,410,0.621951,0.710306,0.663199
+30,test,gsat,2025,26,UTI or pyelonephritis,385,340,0.726471,0.641558,0.681379
+30,test,gsat,2025,27,Unsp intestnl obst,126,157,0.617834,0.769841,0.685512
+30,test,gsat,2025,28,Unspecified asthma with (acute) exacerbation,73,71,0.633803,0.616438,0.625
+30,test,gsat,2025,29,Unspecified atrial fibrillation,115,114,0.666667,0.66087,0.663755
+30,test,gsat,7,0,Acute kidney failure,115,123,0.406504,0.434783,0.420168
+30,test,gsat,7,1,Acute pharyngitis,72,77,0.649351,0.694444,0.671141
+30,test,gsat,7,2,Acute upper respiratory infection,35,31,0.225806,0.2,0.212121
+30,test,gsat,7,3,Alcohol abuse with intoxication,97,98,0.663265,0.670103,0.666667
+30,test,gsat,7,4,Anemia,117,129,0.620155,0.683761,0.650407
+30,test,gsat,7,5,Anxiety disorder,59,51,0.666667,0.576271,0.618182
+30,test,gsat,7,6,Back or spine pain,456,410,0.763415,0.686404,0.722864
+30,test,gsat,7,7,Cardiovascular risk factor,58,72,0.694444,0.862069,0.769231
+30,test,gsat,7,8,Dehydration,62,68,0.235294,0.258065,0.246154
+30,test,gsat,7,9,Diabetes mellitus,155,135,0.733333,0.63871,0.682759
+30,test,gsat,7,10,End stage renal disease,5,11,0.181818,0.4,0.25
+30,test,gsat,7,11,Epilepsy,99,107,0.719626,0.777778,0.747573
+30,test,gsat,7,12,GI bleed,342,288,0.861111,0.725146,0.787302
+30,test,gsat,7,13,Head injury,289,325,0.655385,0.737024,0.693811
+30,test,gsat,7,14,Heart failure,141,166,0.578313,0.680851,0.625407
+30,test,gsat,7,15,Hypokalemia,102,103,0.572816,0.578431,0.57561
+30,test,gsat,7,16,Hypotension,30,54,0.222222,0.4,0.285714
+30,test,gsat,7,17,Hypothyroidism,0,0,0.0,0.0,0.0
+30,test,gsat,7,18,Laceration w/o fb of l idx fngr w/o damage to nail,12,39,0.128205,0.416667,0.196078
+30,test,gsat,7,19,Limb injury or pain,420,366,0.617486,0.538095,0.575064
+30,test,gsat,7,20,Lower respiratory disease,379,321,0.610592,0.51715,0.56
+30,test,gsat,7,21,Major depressive disorder,249,263,0.8327,0.879518,0.855469
+30,test,gsat,7,22,Multiple fractures of ribs,58,71,0.352113,0.431034,0.387597
+30,test,gsat,7,23,Non-ST elevation (NSTEMI) myocardial infarction,85,88,0.681818,0.705882,0.693642
+30,test,gsat,7,24,Sepsis,71,114,0.280702,0.450704,0.345946
+30,test,gsat,7,25,Skin or soft-tissue infection,359,342,0.657895,0.626741,0.64194
+30,test,gsat,7,26,UTI or pyelonephritis,385,333,0.747748,0.646753,0.693593
+30,test,gsat,7,27,Unsp intestnl obst,126,156,0.596154,0.738095,0.659574
+30,test,gsat,7,28,Unspecified asthma with (acute) exacerbation,73,91,0.56044,0.69863,0.621951
+30,test,gsat,7,29,Unspecified atrial fibrillation,115,134,0.567164,0.66087,0.610442
+30,test,protgnn,1234,0,Acute kidney failure,115,136,0.338235,0.4,0.366534
+30,test,protgnn,1234,1,Acute pharyngitis,72,48,0.854167,0.569444,0.683333
+30,test,protgnn,1234,2,Acute upper respiratory infection,35,50,0.26,0.371429,0.305882
+30,test,protgnn,1234,3,Alcohol abuse with intoxication,97,95,0.694737,0.680412,0.6875
+30,test,protgnn,1234,4,Anemia,117,108,0.666667,0.615385,0.64
+30,test,protgnn,1234,5,Anxiety disorder,59,39,0.846154,0.559322,0.673469
+30,test,protgnn,1234,6,Back or spine pain,456,350,0.834286,0.640351,0.724566
+30,test,protgnn,1234,7,Cardiovascular risk factor,58,58,0.810345,0.810345,0.810345
+30,test,protgnn,1234,8,Dehydration,62,73,0.232877,0.274194,0.251852
+30,test,protgnn,1234,9,Diabetes mellitus,155,148,0.709459,0.677419,0.693069
+30,test,protgnn,1234,10,End stage renal disease,5,7,0.142857,0.2,0.166667
+30,test,protgnn,1234,11,Epilepsy,99,103,0.796117,0.828283,0.811881
+30,test,protgnn,1234,12,GI bleed,342,349,0.7851,0.80117,0.793054
+30,test,protgnn,1234,13,Head injury,289,300,0.693333,0.719723,0.706282
+30,test,protgnn,1234,14,Heart failure,141,196,0.520408,0.723404,0.605341
+30,test,protgnn,1234,15,Hypokalemia,102,154,0.415584,0.627451,0.5
+30,test,protgnn,1234,16,Hypotension,30,35,0.285714,0.333333,0.307692
+30,test,protgnn,1234,17,Hypothyroidism,0,0,0.0,0.0,0.0
+30,test,protgnn,1234,18,Laceration w/o fb of l idx fngr w/o damage to nail,12,23,0.173913,0.333333,0.228571
+30,test,protgnn,1234,19,Limb injury or pain,420,364,0.651099,0.564286,0.604592
+30,test,protgnn,1234,20,Lower respiratory disease,379,365,0.594521,0.572559,0.583333
+30,test,protgnn,1234,21,Major depressive disorder,249,288,0.798611,0.923695,0.856611
+30,test,protgnn,1234,22,Multiple fractures of ribs,58,79,0.329114,0.448276,0.379562
+30,test,protgnn,1234,23,Non-ST elevation (NSTEMI) myocardial infarction,85,95,0.673684,0.752941,0.711111
+30,test,protgnn,1234,24,Sepsis,71,78,0.346154,0.380282,0.362416
+30,test,protgnn,1234,25,Skin or soft-tissue infection,359,408,0.612745,0.696379,0.65189
+30,test,protgnn,1234,26,UTI or pyelonephritis,385,316,0.759494,0.623377,0.684736
+30,test,protgnn,1234,27,Unsp intestnl obst,126,115,0.721739,0.65873,0.688797
+30,test,protgnn,1234,28,Unspecified asthma with (acute) exacerbation,73,92,0.543478,0.684932,0.606061
+30,test,protgnn,1234,29,Unspecified atrial fibrillation,115,94,0.765957,0.626087,0.688995
+30,test,protgnn,2025,0,Acute kidney failure,115,86,0.372093,0.278261,0.318408
+30,test,protgnn,2025,1,Acute pharyngitis,72,78,0.666667,0.722222,0.693333
+30,test,protgnn,2025,2,Acute upper respiratory infection,35,37,0.297297,0.314286,0.305556
+30,test,protgnn,2025,3,Alcohol abuse with intoxication,97,88,0.772727,0.701031,0.735135
+30,test,protgnn,2025,4,Anemia,117,129,0.589147,0.649573,0.617886
+30,test,protgnn,2025,5,Anxiety disorder,59,46,0.695652,0.542373,0.609524
+30,test,protgnn,2025,6,Back or spine pain,456,435,0.74023,0.70614,0.722783
+30,test,protgnn,2025,7,Cardiovascular risk factor,58,68,0.764706,0.896552,0.825397
+30,test,protgnn,2025,8,Dehydration,62,96,0.208333,0.322581,0.253165
+30,test,protgnn,2025,9,Diabetes mellitus,155,168,0.678571,0.735484,0.705882
+30,test,protgnn,2025,10,End stage renal disease,5,18,0.055556,0.2,0.086957
+30,test,protgnn,2025,11,Epilepsy,99,112,0.758929,0.858586,0.805687
+30,test,protgnn,2025,12,GI bleed,342,337,0.792285,0.780702,0.786451
+30,test,protgnn,2025,13,Head injury,289,331,0.652568,0.747405,0.696774
+30,test,protgnn,2025,14,Heart failure,141,164,0.54878,0.638298,0.590164
+30,test,protgnn,2025,15,Hypokalemia,102,117,0.547009,0.627451,0.584475
+30,test,protgnn,2025,16,Hypotension,30,36,0.305556,0.366667,0.333333
+30,test,protgnn,2025,17,Hypothyroidism,0,2,0.0,0.0,0.0
+30,test,protgnn,2025,18,Laceration w/o fb of l idx fngr w/o damage to nail,12,26,0.192308,0.416667,0.263158
+30,test,protgnn,2025,19,Limb injury or pain,420,375,0.648,0.578571,0.611321
+30,test,protgnn,2025,20,Lower respiratory disease,379,339,0.60472,0.540897,0.571031
+30,test,protgnn,2025,21,Major depressive disorder,249,266,0.827068,0.883534,0.854369
+30,test,protgnn,2025,22,Multiple fractures of ribs,58,72,0.361111,0.448276,0.4
+30,test,protgnn,2025,23,Non-ST elevation (NSTEMI) myocardial infarction,85,75,0.733333,0.647059,0.6875
+30,test,protgnn,2025,24,Sepsis,71,65,0.338462,0.309859,0.323529
+30,test,protgnn,2025,25,Skin or soft-tissue infection,359,321,0.70405,0.629526,0.664706
+30,test,protgnn,2025,26,UTI or pyelonephritis,385,284,0.788732,0.581818,0.669656
+30,test,protgnn,2025,27,Unsp intestnl obst,126,178,0.55618,0.785714,0.651316
+30,test,protgnn,2025,28,Unspecified asthma with (acute) exacerbation,73,90,0.588889,0.726027,0.650307
+30,test,protgnn,2025,29,Unspecified atrial fibrillation,115,127,0.637795,0.704348,0.669421
+30,test,protgnn,7,0,Acute kidney failure,115,142,0.338028,0.417391,0.373541
+30,test,protgnn,7,1,Acute pharyngitis,72,67,0.761194,0.708333,0.733813
+30,test,protgnn,7,2,Acute upper respiratory infection,35,48,0.333333,0.457143,0.385542
+30,test,protgnn,7,3,Alcohol abuse with intoxication,97,69,0.84058,0.597938,0.698795
+30,test,protgnn,7,4,Anemia,117,103,0.679612,0.598291,0.636364
+30,test,protgnn,7,5,Anxiety disorder,59,50,0.68,0.576271,0.623853
+30,test,protgnn,7,6,Back or spine pain,456,464,0.711207,0.723684,0.717391
+30,test,protgnn,7,7,Cardiovascular risk factor,58,75,0.666667,0.862069,0.75188
+30,test,protgnn,7,8,Dehydration,62,136,0.220588,0.483871,0.30303
+30,test,protgnn,7,9,Diabetes mellitus,155,183,0.612022,0.722581,0.662722
+30,test,protgnn,7,10,End stage renal disease,5,20,0.1,0.4,0.16
+30,test,protgnn,7,11,Epilepsy,99,92,0.869565,0.808081,0.837696
+30,test,protgnn,7,12,GI bleed,342,308,0.853896,0.769006,0.809231
+30,test,protgnn,7,13,Head injury,289,214,0.817757,0.605536,0.695825
+30,test,protgnn,7,14,Heart failure,141,260,0.438462,0.808511,0.568579
+30,test,protgnn,7,15,Hypokalemia,102,132,0.44697,0.578431,0.504274
+30,test,protgnn,7,16,Hypotension,30,46,0.23913,0.366667,0.289474
+30,test,protgnn,7,17,Hypothyroidism,0,0,0.0,0.0,0.0
+30,test,protgnn,7,18,Laceration w/o fb of l idx fngr w/o damage to nail,12,14,0.357143,0.416667,0.384615
+30,test,protgnn,7,19,Limb injury or pain,420,466,0.581545,0.645238,0.611738
+30,test,protgnn,7,20,Lower respiratory disease,379,249,0.674699,0.443272,0.535032
+30,test,protgnn,7,21,Major depressive disorder,249,282,0.808511,0.915663,0.858757
+30,test,protgnn,7,22,Multiple fractures of ribs,58,74,0.337838,0.431034,0.378788
+30,test,protgnn,7,23,Non-ST elevation (NSTEMI) myocardial infarction,85,73,0.712329,0.611765,0.658228
+30,test,protgnn,7,24,Sepsis,71,59,0.288136,0.239437,0.261538
+30,test,protgnn,7,25,Skin or soft-tissue infection,359,288,0.743056,0.5961,0.661515
+30,test,protgnn,7,26,UTI or pyelonephritis,385,316,0.737342,0.605195,0.664765
+30,test,protgnn,7,27,Unsp intestnl obst,126,113,0.716814,0.642857,0.677824
+30,test,protgnn,7,28,Unspecified asthma with (acute) exacerbation,73,119,0.453782,0.739726,0.5625
+30,test,protgnn,7,29,Unspecified atrial fibrillation,115,104,0.663462,0.6,0.630137

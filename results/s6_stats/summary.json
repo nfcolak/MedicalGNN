@@ -1,0 +1,197 @@
+{
+ "protocol": "fair_v10t",
+ "test_note": "test fold: reported only, not used for decisions",
+ "runs_dir": "comparison/standardized/clinical_runs_fair_v10t_20261011",
+ "methods": [
+  "cei_mp2",
+  "graphcare",
+  "gsat",
+  "protgnn"
+ ],
+ "cei": "cei_mp2",
+ "baselines": [
+  "graphcare",
+  "gsat",
+  "protgnn"
+ ],
+ "seeds": [
+  1234,
+  2025,
+  7
+ ],
+ "ks": [
+  10,
+  20,
+  30
+ ],
+ "task_identity": {
+  "K10": {
+   "n_classes": 10,
+   "class_labels": [
+    "Back or spine pain",
+    "Diabetes mellitus",
+    "GI bleed",
+    "Head injury",
+    "Heart failure",
+    "Limb injury or pain",
+    "Lower respiratory disease",
+    "Major depressive disorder",
+    "Skin or soft-tissue infection",
+    "UTI or pyelonephritis"
+   ],
+   "validation": {
+    "rows": 3165,
+    "patients": 2473
+   },
+   "test": {
+    "rows": 3175,
+    "patients": 2497
+   }
+  },
+  "K20": {
+   "n_classes": 20,
+   "class_labels": [
+    "Acute kidney failure",
+    "Acute pharyngitis",
+    "Alcohol abuse with intoxication",
+    "Anemia",
+    "Back or spine pain",
+    "Diabetes mellitus",
+    "Epilepsy",
+    "GI bleed",
+    "Head injury",
+    "Heart failure",
+    "Hypokalemia",
+    "Limb injury or pain",
+    "Lower respiratory disease",
+    "Major depressive disorder",
+    "Non-ST elevation (NSTEMI) myocardial infarction",
+    "Sepsis",
+    "Skin or soft-tissue infection",
+    "UTI or pyelonephritis",
+    "Unsp intestnl obst",
+    "Unspecified atrial fibrillation"
+   ],
+   "validation": {
+    "rows": 4183,
+    "patients": 3142
+   },
+   "test": {
+    "rows": 4174,
+    "patients": 3151
+   }
+  },
+  "K30": {
+   "n_classes": 30,
+   "class_labels": [
+    "Acute kidney failure",
+    "Acute pharyngitis",
+    "Acute upper respiratory infection",
+    "Alcohol abuse with intoxication",
+    "Anemia",
+    "Anxiety disorder",
+    "Back or spine pain",
+    "Cardiovascular risk factor",
+    "Dehydration",
+    "Diabetes mellitus",
+    "End stage renal disease",
+    "Epilepsy",
+    "GI bleed",
+    "Head injury",
+    "Heart failure",
+    "Hypokalemia",
+    "Hypotension",
+    "Hypothyroidism",
+    "Laceration w/o fb of l idx fngr w/o damage to nail",
+    "Limb injury or pain",
+    "Lower respiratory disease",
+    "Major depressive disorder",
+    "Multiple fractures of ribs",
+    "Non-ST elevation (NSTEMI) myocardial infarction",
+    "Sepsis",
+    "Skin or soft-tissue infection",
+    "UTI or pyelonephritis",
+    "Unsp intestnl obst",
+    "Unspecified asthma with (acute) exacerbation",
+    "Unspecified atrial fibrillation"
+   ],
+   "validation": {
+    "rows": 4534,
+    "patients": 3388
+   },
+   "test": {
+    "rows": 4566,
+    "patients": 3404
+   }
+  }
+ },
+ "best_baseline_by_validation": {
+  "K10": "protgnn",
+  "K20": "protgnn",
+  "K30": "protgnn"
+ },
+ "validation_macro_f1_mean": {
+  "K10": {
+   "cei_mp2": 0.7450926849617997,
+   "graphcare": 0.7331740592998869,
+   "gsat": 0.7261512570110148,
+   "protgnn": 0.7338279249413399
+  },
+  "K20": {
+   "cei_mp2": 0.6858708044547909,
+   "graphcare": 0.6742312268763953,
+   "gsat": 0.6717937916198137,
+   "protgnn": 0.6743391897386468
+  },
+  "K30": {
+   "cei_mp2": 0.5707929305601528,
+   "graphcare": 0.5491296562483683,
+   "gsat": 0.5547554533352094,
+   "protgnn": 0.5631723120328487
+  }
+ },
+ "bootstrap": {
+  "patient_only": {
+   "B": 1000,
+   "rng": "numpy default_rng(2026)",
+   "source": "comparison/top3/compare.py",
+   "unit": "unique subjects with replacement, row weight = multiplicity, one draw shared by all runs of a K",
+   "statistic": "mean over seeds of the per-seed macro-F1 on the resampled confusion matrix"
+  },
+  "two_level": {
+   "B": 2000,
+   "patient_rng": "numpy default_rng(2026)",
+   "seed_pick_rng": "numpy default_rng(7777 + K)",
+   "seed_pick_shape": "[B, methods (cei_mp2 first, then alphabetical), seeds]",
+   "definition": "level 1 resamples the seeds with replacement independently per method, level 2 uses the shared patient draw; statistic = mean over the resampled seeds of the per-run bootstrap macro-F1"
+  },
+  "interval": "95% percentile; Bonferroni column at level 1 - 0.05/9"
+ },
+ "macro_f1": "f1_score(y, argmax, labels=arange(K), average=macro, zero_division=0); variants present (support >= 1) and ge30 (support >= 30)",
+ "min_support_evaluable": 30,
+ "parity": {
+  "tolerance": 1e-06,
+  "all_ok": true,
+  "max_abs_diff": 4.994811032554836e-07,
+  "n_checks": 72,
+  "compare_json": {}
+ },
+ "outputs": [
+  "class_spread.json",
+  "class_spread.md",
+  "macro_f1_variants.csv",
+  "macro_f1_variants.md",
+  "macro_f1_variants_per_run.csv",
+  "parity.json",
+  "per_class.csv",
+  "per_class_k30_test.md",
+  "per_class_per_run.csv",
+  "per_seed.csv",
+  "per_seed.md",
+  "summary.csv",
+  "summary.json",
+  "summary.md",
+  "uncertainty.csv",
+  "uncertainty.md"
+ ]
+}
