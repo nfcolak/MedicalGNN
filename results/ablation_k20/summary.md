@@ -17,7 +17,7 @@ Bootstrap B=2000: seeds (matched, with replacement), then patients (by subjects,
 | a5b_nomp_matched | cei_mp2 | 7,42,1234,2025,3407 | 0.6760 ± 0.0057 | -0.0101 [-0.0177, -0.0027] | 0.004 | [-0.0153, -0.0051] | 0.6841 ± 0.0025 | -0.0049 [-0.0120, +0.0017] |
 | a6_pool | cei_mp2 | 7,42,1234,2025,3407 | 0.6807 ± 0.0018 | -0.0055 [-0.0139, +0.0032] | 0.101 | [-0.0118, +0.0012] | 0.6832 ± 0.0028 | -0.0059 [-0.0136, +0.0017] |
 
-Intervals are conditional on the fixed evaluation fold; the seed level rests on the matched seeds only (3 for final-style arms), so a CI that excludes 0 is not seed-robust proof: check per-seed deltas.
+Intervals are conditional on the fixed evaluation fold; the seed level rests on the matched seeds only (5 per arm here), so a CI that excludes 0 is not seed-robust proof: check per-seed deltas.
 
 ## a1_full (reference) / cei_mp2
 

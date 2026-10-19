@@ -326,8 +326,10 @@ def render(doc):
                  f"{v['macro_f1_delta']['mean']:+.4f} {ci_txt(v['bootstrap']['seeds_and_patients'])} | "
                  f"{v['bootstrap']['seeds_and_patients']['p_delta_gt_0']:.3f} | {ci_txt(v['bootstrap']['patients_only'])} | "
                  f"{tm} | {tcol} |")
+    n_matched = sorted({g['vs_reference']['n_matched_seeds'] for g in doc['groups'] if g.get('vs_reference')})
+    n_txt = '/'.join(map(str, n_matched)) or '0'
     L += ['', 'Intervals are conditional on the fixed evaluation fold; the seed level rests on the matched seeds '
-              'only (3 for final-style arms), so a CI that excludes 0 is not seed-robust proof: check per-seed deltas.', '']
+              f'only ({n_txt} per arm here), so a CI that excludes 0 is not seed-robust proof: check per-seed deltas.', '']
     for g in doc['groups']:
         L += [f"## {g['arm']}{' (reference)' if g['is_reference'] else ''} / {g['method']}", '',
               '| seed | val macro-F1 | val accuracy | selected epoch | test macro-F1 (reported only) | test accuracy (reported only) |',
