@@ -67,6 +67,49 @@ Check the rebuild against these sha256 values (`sha256sum` or `shasum -a 256`; t
 
 The graph hash is that of the `graphs.jsonl` file as produced by this repository. A full rebuild from the raw files reproduced all eight values.
 
+### Regenerate the comparison tables
+
+`comparison/final/compare_all.py` rebuilds the three result tables (K = 10, 20, 30) from the 45 stored final runs (5 methods x seeds 1234, 2025, 7) into a new folder. With `--check`, every produced file is compared with the stored tables.
+
+```bash
+env -u PYTHONPATH PYTHONDONTWRITEBYTECODE=1 /usr/bin/python3 -m comparison.final.compare_all \
+  --runs comparison/standardized/clinical_runs_fair_v10t_20261011 \
+  --out <new dir> \
+  --check comparison/standardized/final_compare_fv10t_20261012
+```
+
+Result: all 6 files (`compare_top{10,20,30}.txt` and `compare_top{10,20,30}.json/comparison.json`) match the stored tables: the JSON files byte for byte, the `.txt` files byte for byte from the first "Ranking by" line on (the stored `.txt` files begin with two interpreter-warning lines from the original capture, which the check skips). The default method list reproduces the published tables; `--methods` selects a subset.
+
+### Hyper-parameter search
+
+`comparison/final/hpo_all.py` lists the recorded search for the four tuned methods (CEI-GNN mp2, GSAT, GraphCare-style (adapted), ProtGNN): the `comparison.final.hpo` command (K = 17, 10k TRAIN sample, 20 epochs, 12 trials, TPE seed 2026, study name `fv10_k17_20261011`), the best trial from the stored `best.json`, and the matching `args()` line of `comparison/final/run.py`.
+
+```bash
+env -u PYTHONPATH PYTHONDONTWRITEBYTECODE=1 /usr/bin/python3 -m comparison.final.hpo_all
+```
+
+Result: 0 mismatches between the best trial values and the `run.py` flags. The default only prints. `--execute` reruns the search (training models, so it needs compute and approval).
+
+### Split
+
+`comparison/canonical_split.json` is frozen and is never regenerated in place. It was made in June 2026 from `merged_ed.csv`, the one-row-per-patient table written by the frozen raw preprocessing `data/s1_clean/merge_ed.py` (77,697 patients, sha256 `95b055d5…`). Rule: keep the 74,511 patients with a `disease_1` label and at least one code (medication class with prevalence of at least 1%, symptom or chief complaint); per `disease_1` class, shuffle with numpy `default_rng(1234)` and take round(0.8 n) for train, round(0.1 n) for validation and the rest for test. Each patient is in exactly one fold, so all visits of a patient share it.
+
+`comparison/final/build_split.py` ports this rule and rebuilds the split from `merged_ed.csv` in memory (input path `comparison/standardized/event_inputs/split_input_merged_ed/merged_ed.csv`, git-ignored). It checks the input hash and compares the result with the frozen file. It writes only with `--out` to a new path and refuses the frozen file.
+
+```bash
+env -u PYTHONPATH PYTHONDONTWRITEBYTECODE=1 /usr/bin/python3 -m comparison.final.build_split
+```
+
+Result: the rebuilt split is byte-identical to the frozen file (sha256 `33f6cd71…`; 74,511 patients, 0 fold differences; train 59,607, validation 7,448, test 7,456; about 6 s).
+
+`comparison/final/split_check.py` needs no input table. It checks the frozen file's structure, fold shares and agreement with the final targets, and never writes.
+
+```bash
+env -u PYTHONPATH PYTHONDONTWRITEBYTECODE=1 /usr/bin/python3 -m comparison.final.split_check
+```
+
+Result (origin not re-derivable, consistency checked): 74,511 subjects; folds train / validation / test 59,607 / 7,448 / 7,456 (0.800 / 0.100 / 0.100); no subject in two folds; all 51,961 subjects of the final targets have the same fold as in the targets file; per-class train share 0.778-0.844, within 0.017 of 0.8 for the 24 classes with at least 500 subjects. SHA-256 of the frozen file: `33f6cd71399ab2605948d66f80902030cc0b36ae1017bdde551f4504e4bf82b0`.
+
 ## Final commands
 
 Protocol `fair_v10t`: K = 10 / 20 / 30 most frequent diagnoses; train = the whole TRAIN fold; checkpoint selected on validation; the test fold is scored once per run; 40 epochs; seeds 1234, 2025, 7.
@@ -184,7 +227,11 @@ comparison/
 │   │                         events -> stays -> labels -> graph -> k4 (needs MIMIC_RAW_DIR)
 │   ├── common_stays.py       stay list incl. test rows (legacy max6, v5 max6, v5 +60 cohorts), used to restrict the labels
 │   ├── fit_k4.py             fits the CEI v3 state for one K
-│   └── hpo.py                the light hyper-parameter search (K=17, 10k sample, 20 epochs, dev only)
+│   ├── compare_all.py        regenerates the three comparison tables (K = 10/20/30) from the 45 runs; --check = compare with the stored tables
+│   ├── hpo.py                the light hyper-parameter search (K=17, 10k sample, 20 epochs, dev only)
+│   ├── hpo_all.py            recorded HPO of the four tuned methods: commands, best trials vs run.py flags (plan only by default)
+│   ├── build_split.py        rebuilds canonical_split.json from merged_ed.csv and compares (never overwrites it)
+│   └── split_check.py        read-only consistency check of the frozen canonical_split.json (never regenerates it)
 ├── top3/
 │   └── compare.py            compares runs of one K: ranking (validation), test mean +- SD, paired bootstrap
 └── standardized/             DATA AND RESULTS (git-ignored; disk-free APFS clones of the originals)
@@ -233,6 +280,10 @@ Prefix every command with `env -u PYTHONPATH PYTHONDONTWRITEBYTECODE=1 /usr/bin/
 | Check that all 15 final plans are valid | `-m comparison.final.run --plan` | no |
 | Show the input-building steps | `MIMIC_RAW_DIR=<raw folder> bash comparison/final/pipeline.sh all` (no prefix) | no |
 | Compare the runs of one K | `-m comparison.top3.compare --run <run dir> ... --out <new path>` | no |
+| Regenerate and check the three comparison tables | `-m comparison.final.compare_all --check comparison/standardized/final_compare_fv10t_20261012 --out <new dir>` | no |
+| Plan the recorded HPO (prints only) | `-m comparison.final.hpo_all` | no |
+| Rebuild the split and compare with the frozen file | `-m comparison.final.build_split` | no |
+| Check the frozen split (read only) | `-m comparison.final.split_check` | no |
 | Show one training plan | `-m core.train <method args> --top-k-labels <K> --artifact ... --targets ... --output ... --seed 1234` | no |
 | Re-run the final trainings | `-m comparison.final.run [--ks 10,20,30]` | yes, needs approval |
 

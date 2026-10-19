@@ -1,0 +1,652 @@
+{
+ "censored_measurements": {
+  "by_scope": {
+   "index": 25542,
+   "prior": 11858
+  },
+  "by_scope_and_fold": {
+   "index:test": 2567,
+   "index:train": 20460,
+   "index:validation": 2515,
+   "prior:test": 1178,
+   "prior:train": 9443,
+   "prior:validation": 1237
+  },
+  "by_sign": {
+   "<": 32025,
+   "<:test": 3169,
+   "<:train": 25633,
+   "<:validation": 3223,
+   ">": 5375,
+   ">:test": 576,
+   ">:train": 4270,
+   ">:validation": 529
+  },
+  "censored_nodes": 37400,
+  "censored_nodes_by_fold": {
+   "test": 3745,
+   "train": 29903,
+   "validation": 3752
+  },
+  "graphs_with_censored": 23241,
+  "graphs_with_censored_by_fold": {
+   "test": 2351,
+   "train": 18572,
+   "validation": 2318
+  },
+  "graphs_with_censored_share": 0.2316,
+  "measurement_and_vital_nodes": 5433197,
+  "measurement_nodes_by_fold": {
+   "test": 544085,
+   "train": 4337372,
+   "validation": 551740
+  },
+  "top_tokens": [
+   {
+    "censored": 16571,
+    "censored_share": 0.7526,
+    "sign": "<",
+    "token": "lab:51003",
+    "token_nodes": 22019
+   },
+   {
+    "censored": 5851,
+    "censored_share": 0.2028,
+    "sign": "<",
+    "token": "lab:51476",
+    "token_nodes": 28851
+   },
+   {
+    "censored": 3240,
+    "censored_share": 0.1123,
+    "sign": "<",
+    "token": "lab:51493",
+    "token_nodes": 28863
+   },
+   {
+    "censored": 2816,
+    "censored_share": 0.0977,
+    "sign": "<",
+    "token": "lab:51516",
+    "token_nodes": 28827
+   },
+   {
+    "censored": 2447,
+    "censored_share": 0.0849,
+    "sign": ">",
+    "token": "lab:51516",
+    "token_nodes": 28827
+   },
+   {
+    "censored": 2061,
+    "censored_share": 0.7739,
+    "sign": "<",
+    "token": "lab:51501",
+    "token_nodes": 2663
+   },
+   {
+    "censored": 1758,
+    "censored_share": 0.0609,
+    "sign": ">",
+    "token": "lab:51493",
+    "token_nodes": 28863
+   },
+   {
+    "censored": 621,
+    "censored_share": 0.0139,
+    "sign": ">",
+    "token": "lab:51498",
+    "token_nodes": 44751
+   },
+   {
+    "censored": 332,
+    "censored_share": 0.0122,
+    "sign": "<",
+    "token": "lab:50885",
+    "token_nodes": 27312
+   },
+   {
+    "censored": 300,
+    "censored_share": 0.6865,
+    "sign": "<",
+    "token": "lab:50946",
+    "token_nodes": 437
+   },
+   {
+    "censored": 262,
+    "censored_share": 0.0247,
+    "sign": ">",
+    "token": "lab:51492",
+    "token_nodes": 10608
+   },
+   {
+    "censored": 204,
+    "censored_share": 0.1245,
+    "sign": "<",
+    "token": "lab:50915",
+    "token_nodes": 1638
+   },
+   {
+    "censored": 171,
+    "censored_share": 0.0063,
+    "sign": "<",
+    "token": "lab:50861",
+    "token_nodes": 27138
+   },
+   {
+    "censored": 132,
+    "censored_share": 0.88,
+    "sign": "<",
+    "token": "lab:51497",
+    "token_nodes": 150
+   },
+   {
+    "censored": 102,
+    "censored_share": 0.0367,
+    "sign": ">",
+    "token": "lab:50809",
+    "token_nodes": 2779
+   }
+  ],
+  "troponin_lab_51003": {
+   "all_folds": {
+    "censored": 16571,
+    "censored_share": 0.7526,
+    "token_nodes": 22019
+   },
+   "test": {
+    "censored": 1642,
+    "censored_share": 0.7443,
+    "token_nodes": 2206
+   },
+   "train": {
+    "censored": 13257,
+    "censored_share": 0.7524,
+    "token_nodes": 17619
+   },
+   "validation": {
+    "censored": 1672,
+    "censored_share": 0.7621,
+    "token_nodes": 2194
+   }
+  }
+ },
+ "delta_is_bound_edges": {
+  "by_fold": {
+   "test": 1658,
+   "train": 13344,
+   "validation": 1762
+  },
+  "total": 16764
+ },
+ "duplicate_edges": {
+  "any_duplicate_edge": {
+   "extra_copies": 20850,
+   "extra_copies_by_fold": {
+    "test": 1841,
+    "train": 16669,
+    "validation": 2340
+   },
+   "graphs": 5860,
+   "graphs_by_fold": {
+    "test": 551,
+    "train": 4692,
+    "validation": 617
+   }
+  },
+  "by_relation": {
+   "comorbid_with": {
+    "extra_copies": 12706,
+    "extra_copies_by_fold": {
+     "test": 1024,
+     "train": 10196,
+     "validation": 1486
+    },
+    "graphs": 3525,
+    "graphs_by_fold": {
+     "test": 318,
+     "train": 2825,
+     "validation": 382
+    }
+   },
+   "medical:indicates": {
+    "extra_copies": 8144,
+    "extra_copies_by_fold": {
+     "test": 817,
+     "train": 6473,
+     "validation": 854
+    },
+    "graphs": 2413,
+    "graphs_by_fold": {
+     "test": 239,
+     "train": 1926,
+     "validation": 248
+    }
+   }
+  },
+  "comorbid_with": {
+   "extra_copies": 12706,
+   "graphs": 3525,
+   "graphs_with_any_comorbid_edge": 41414
+  },
+  "medical_indicates": {
+   "duplicate_pairs_distinct_rule_id": 7420,
+   "duplicate_pairs_same_rule_id": 0,
+   "extra_copies": 8144,
+   "graphs": 2413
+  },
+  "multiplicity_histogram": {
+   "comorbid_with|x2": 10694,
+   "comorbid_with|x3": 878,
+   "comorbid_with|x4": 80,
+   "comorbid_with|x5": 4,
+   "medical:indicates|x2": 6696,
+   "medical:indicates|x3": 724
+  },
+  "multiplicity_histogram_by_fold": {
+   "test": {
+    "comorbid_with|x2": 920,
+    "comorbid_with|x3": 52,
+    "medical:indicates|x2": 657,
+    "medical:indicates|x3": 80
+   },
+   "train": {
+    "comorbid_with|x2": 8610,
+    "comorbid_with|x3": 698,
+    "comorbid_with|x4": 58,
+    "comorbid_with|x5": 4,
+    "medical:indicates|x2": 5361,
+    "medical:indicates|x3": 556
+   },
+   "validation": {
+    "comorbid_with|x2": 1164,
+    "comorbid_with|x3": 128,
+    "comorbid_with|x4": 22,
+    "medical:indicates|x2": 678,
+    "medical:indicates|x3": 88
+   }
+  }
+ },
+ "flat": {
+  "censored_top_tokens": [
+   [
+    "lab:51003",
+    "<",
+    16571,
+    22019
+   ],
+   [
+    "lab:51476",
+    "<",
+    5851,
+    28851
+   ],
+   [
+    "lab:51493",
+    "<",
+    3240,
+    28863
+   ],
+   [
+    "lab:51516",
+    "<",
+    2816,
+    28827
+   ],
+   [
+    "lab:51516",
+    ">",
+    2447,
+    28827
+   ],
+   [
+    "lab:51501",
+    "<",
+    2061,
+    2663
+   ],
+   [
+    "lab:51493",
+    ">",
+    1758,
+    28863
+   ],
+   [
+    "lab:51498",
+    ">",
+    621,
+    44751
+   ],
+   [
+    "lab:50885",
+    "<",
+    332,
+    27312
+   ],
+   [
+    "lab:50946",
+    "<",
+    300,
+    437
+   ],
+   [
+    "lab:51492",
+    ">",
+    262,
+    10608
+   ],
+   [
+    "lab:50915",
+    "<",
+    204,
+    1638
+   ],
+   [
+    "lab:50861",
+    "<",
+    171,
+    27138
+   ],
+   [
+    "lab:51497",
+    "<",
+    132,
+    150
+   ],
+   [
+    "lab:50809",
+    ">",
+    102,
+    2779
+   ]
+  ],
+  "counts": {
+   "censored:<": 32025,
+   "censored:<:test": 3169,
+   "censored:<:train": 25633,
+   "censored:<:validation": 3223,
+   "censored:>": 5375,
+   "censored:>:test": 576,
+   "censored:>:train": 4270,
+   "censored:>:validation": 529,
+   "censored_level:None": 19814,
+   "censored_level:high": 155,
+   "censored_level:low": 101,
+   "censored_level:normal": 17330,
+   "censored_nodes:measurement": 37400,
+   "censored_nodes:measurement:index": 25542,
+   "censored_nodes:measurement:index:test": 2567,
+   "censored_nodes:measurement:index:train": 20460,
+   "censored_nodes:measurement:index:validation": 2515,
+   "censored_nodes:measurement:prior": 11858,
+   "censored_nodes:measurement:prior:test": 1178,
+   "censored_nodes:measurement:prior:train": 9443,
+   "censored_nodes:measurement:prior:validation": 1237,
+   "censored_nodes:split:test": 3745,
+   "censored_nodes:split:train": 29903,
+   "censored_nodes:split:validation": 3752,
+   "censored_nodes_total": 37400,
+   "edges": 18949586,
+   "edges:test": 1899344,
+   "edges:train": 15134196,
+   "edges:validation": 1916046,
+   "edges_delta_is_bound": 16764,
+   "edges_delta_is_bound:test": 1658,
+   "edges_delta_is_bound:train": 13344,
+   "edges_delta_is_bound:validation": 1762,
+   "extra_copies_rel:comorbid_with": 12706,
+   "extra_copies_rel:comorbid_with:test": 1024,
+   "extra_copies_rel:comorbid_with:train": 10196,
+   "extra_copies_rel:comorbid_with:validation": 1486,
+   "extra_copies_rel:medical:indicates": 8144,
+   "extra_copies_rel:medical:indicates:test": 817,
+   "extra_copies_rel:medical:indicates:train": 6473,
+   "extra_copies_rel:medical:indicates:validation": 854,
+   "extra_edge_copies": 20850,
+   "extra_edge_copies:test": 1841,
+   "extra_edge_copies:train": 16669,
+   "extra_edge_copies:validation": 2340,
+   "graphs": 100355,
+   "graphs:test": 10071,
+   "graphs:train": 80246,
+   "graphs:validation": 10038,
+   "graphs_with_censored": 23241,
+   "graphs_with_censored:test": 2351,
+   "graphs_with_censored:train": 18572,
+   "graphs_with_censored:validation": 2318,
+   "graphs_with_comorbid": 41414,
+   "graphs_with_comorbid:test": 4121,
+   "graphs_with_comorbid:train": 33096,
+   "graphs_with_comorbid:validation": 4197,
+   "graphs_with_dup_edge": 5860,
+   "graphs_with_dup_edge:test": 551,
+   "graphs_with_dup_edge:train": 4692,
+   "graphs_with_dup_edge:validation": 617,
+   "graphs_with_dup_rel:comorbid_with": 3525,
+   "graphs_with_dup_rel:comorbid_with:test": 318,
+   "graphs_with_dup_rel:comorbid_with:train": 2825,
+   "graphs_with_dup_rel:comorbid_with:validation": 382,
+   "graphs_with_dup_rel:medical:indicates": 2413,
+   "graphs_with_dup_rel:medical:indicates:test": 239,
+   "graphs_with_dup_rel:medical:indicates:train": 1926,
+   "graphs_with_dup_rel:medical:indicates:validation": 248,
+   "indicates_dup_pairs_distinct_rule": 7420,
+   "indicates_dup_pairs_distinct_rule:test": 737,
+   "indicates_dup_pairs_distinct_rule:train": 5917,
+   "indicates_dup_pairs_distinct_rule:validation": 766,
+   "meas_nodes_split:test": 544085,
+   "meas_nodes_split:train": 4337372,
+   "meas_nodes_split:validation": 551740,
+   "nodes:measurement": 4845006,
+   "nodes:measurement:index": 2761319,
+   "nodes:measurement:prior": 2083687,
+   "nodes:vital": 588191,
+   "nodes:vital:None": 588191
+  },
+  "deg_ge10_nodes_by_kind": {
+   "analyte": 1297,
+   "complaint": 215,
+   "diagnosis": 68180,
+   "knowledge": 160622,
+   "visit": 100203
+  },
+  "dup_multiplicity_hist": {
+   "comorbid_with|x2": 10694,
+   "comorbid_with|x3": 878,
+   "comorbid_with|x4": 80,
+   "comorbid_with|x5": 4,
+   "medical:indicates|x2": 6696,
+   "medical:indicates|x3": 724
+  },
+  "relation_total_edges": {
+   "baseline_of": 1169657,
+   "co_complaint": 89488,
+   "comorbid_with": 429270,
+   "has_prior_diagnosis": 204367,
+   "has_visit": 100355,
+   "index_visit_of": 100355,
+   "instance_of": 4845006,
+   "measured_in": 2761319,
+   "medical:assesses": 1451722,
+   "medical:indicates": 187562,
+   "medical:is_a": 714193,
+   "medical:may_affect": 71387,
+   "medical:measures": 2383378,
+   "medical:member_of": 2609065,
+   "observed_vital": 588191,
+   "recurrence_of": 204367,
+   "reports_complaint": 125874,
+   "trajectory_of": 914030
+  }
+ },
+ "hub_coverage": {
+  "by_fold": {
+   "test": {
+    "in_hub_kinds": 10087,
+    "nodes_by_kind": {
+     "analyte": 226,
+     "complaint": 34,
+     "diagnosis": 6986,
+     "knowledge": 16153,
+     "visit": 10053
+    },
+    "nodes_deg_ge10": 33452,
+    "share": 0.3015
+   },
+   "train": {
+    "in_hub_kinds": 80284,
+    "nodes_by_kind": {
+     "analyte": 896,
+     "complaint": 154,
+     "diagnosis": 54227,
+     "knowledge": 128572,
+     "visit": 80130
+    },
+    "nodes_deg_ge10": 263979,
+    "share": 0.3041
+   },
+   "validation": {
+    "in_hub_kinds": 10047,
+    "nodes_by_kind": {
+     "analyte": 175,
+     "complaint": 27,
+     "diagnosis": 6967,
+     "knowledge": 15897,
+     "visit": 10020
+    },
+    "nodes_deg_ge10": 33086,
+    "share": 0.3037
+   }
+  },
+  "degree": "source + target edge endpoints per graph",
+  "degree_min": 10,
+  "hub_kinds": [
+   "visit",
+   "complaint",
+   "patient"
+  ],
+  "in_hub_kinds": 100418,
+  "nodes_by_kind": {
+   "analyte": 1297,
+   "complaint": 215,
+   "diagnosis": 68180,
+   "knowledge": 160622,
+   "visit": 100203
+  },
+  "nodes_deg_ge10": 330517,
+  "share": 0.3038
+ },
+ "input_bytes": 6435138687,
+ "relations": {
+  "by_fold": {
+   "test": {
+    "baseline_of": 116530,
+    "co_complaint": 9134,
+    "comorbid_with": 43258,
+    "has_prior_diagnosis": 20497,
+    "has_visit": 10071,
+    "index_visit_of": 10071,
+    "instance_of": 484980,
+    "measured_in": 276667,
+    "medical:assesses": 145743,
+    "medical:indicates": 19107,
+    "medical:interacts_with": 0,
+    "medical:is_a": 71644,
+    "medical:may_affect": 7295,
+    "medical:measures": 238952,
+    "medical:member_of": 261346,
+    "observed_vital": 59105,
+    "recurrence_of": 20497,
+    "reports_complaint": 12664,
+    "trajectory_of": 91783
+   },
+   "train": {
+    "baseline_of": 934483,
+    "co_complaint": 71500,
+    "comorbid_with": 341752,
+    "has_prior_diagnosis": 163106,
+    "has_visit": 80246,
+    "index_visit_of": 80246,
+    "instance_of": 3867162,
+    "measured_in": 2207800,
+    "medical:assesses": 1160407,
+    "medical:indicates": 149542,
+    "medical:interacts_with": 0,
+    "medical:is_a": 570285,
+    "medical:may_affect": 56887,
+    "medical:measures": 1905646,
+    "medical:member_of": 2086194,
+    "observed_vital": 470210,
+    "recurrence_of": 163106,
+    "reports_complaint": 100745,
+    "trajectory_of": 724879
+   },
+   "validation": {
+    "baseline_of": 118644,
+    "co_complaint": 8854,
+    "comorbid_with": 44260,
+    "has_prior_diagnosis": 20764,
+    "has_visit": 10038,
+    "index_visit_of": 10038,
+    "instance_of": 492864,
+    "measured_in": 276852,
+    "medical:assesses": 145572,
+    "medical:indicates": 18913,
+    "medical:interacts_with": 0,
+    "medical:is_a": 72264,
+    "medical:may_affect": 7205,
+    "medical:measures": 238780,
+    "medical:member_of": 261525,
+    "observed_vital": 58876,
+    "recurrence_of": 20764,
+    "reports_complaint": 12465,
+    "trajectory_of": 97368
+   }
+  },
+  "interacts_with_edges": 0,
+  "total_edges": {
+   "baseline_of": 1169657,
+   "co_complaint": 89488,
+   "comorbid_with": 429270,
+   "has_prior_diagnosis": 204367,
+   "has_visit": 100355,
+   "index_visit_of": 100355,
+   "instance_of": 4845006,
+   "measured_in": 2761319,
+   "medical:assesses": 1451722,
+   "medical:indicates": 187562,
+   "medical:interacts_with": 0,
+   "medical:is_a": 714193,
+   "medical:may_affect": 71387,
+   "medical:measures": 2383378,
+   "medical:member_of": 2609065,
+   "observed_vital": 588191,
+   "recurrence_of": 204367,
+   "reports_complaint": 125874,
+   "trajectory_of": 914030
+  },
+  "zero_edge_relations": [
+   "medical:interacts_with"
+  ]
+ },
+ "scan_seconds": 132,
+ "task_identity": {
+  "artifact": "comparison/standardized/event_inputs/clinical_graph_L4_plus60_v5c_20261009",
+  "canonical_split": "comparison/canonical_split.json",
+  "canonical_split_subjects_by_fold_index": {
+   "0": 59607,
+   "1": 7448,
+   "2": 7456
+  },
+  "edges": 18949586,
+  "fold_source": "split field of each graph",
+  "graphs": 100355,
+  "graphs_by_fold": {
+   "test": 10071,
+   "train": 80246,
+   "validation": 10038
+  },
+  "limit": null,
+  "reported_only_not_used_for_decisions": "all counts describe the stored graphs; no model selection uses them"
+ }
+}
