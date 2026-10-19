@@ -1,6 +1,6 @@
-# Per-class results, K=30, test fold (reported only, not used for decisions)
+# Per-class results, K=30, test fold (reported result)
 
-K=30, test fold (test fold: reported only, not used for decisions): 4566 rows, 3404 patients, seeds 1234, 2025, 7. F1 mean (SD over seeds); P/R = precision/recall mean. Compared baseline = ProtGNN (highest mean validation macro-F1). Classes with support < 30 are not evaluable.
+K=30, test fold (reported result): 4566 rows, 3404 patients, seeds 1234, 2025, 7. F1 mean (SD over seeds); P/R = precision/recall mean. Compared baseline = ProtGNN (best baseline, chosen on validation). Classes with support < 30 are not evaluable.
 
 | class | support | CEI P/R | CEI F1 | ProtGNN P/R | ProtGNN F1 | GraphCare-style (adapted) F1 | GSAT F1 | CEI - best |
 |---|---|---|---|---|---|---|---|---|

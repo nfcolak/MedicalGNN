@@ -3,8 +3,9 @@
 Reads only stored predictions (validation.npz, test.npz), binding.json and result.json of the final runs.
 No checkpoints and no graphs are loaded.
 
-Decisions use VALIDATION only: the best baseline of a K is the baseline with the highest mean
-validation macro-F1 over seeds. Test is reported only, never used to choose.
+Decisions (checkpoint, HPO, baseline choice) use VALIDATION; every reported result is on TEST (scored once per run
+at the validation-selected checkpoint). The best baseline of a K is the baseline with the highest mean validation
+macro-F1 over seeds (chosen on validation). Tables and figure panels list the test fold first, validation second.
 
 Definitions
   per-class F1      2*TP / (support + predicted), 0 when the denominator is 0 (as in comparison/top3/compare.py).
@@ -34,10 +35,10 @@ DEFAULT_METHODS = ['cei_mp2', 'gsat', 'graphcare', 'protgnn']
 FOCUS = 'cei_mp2'
 SEEDS = [1234, 2025, 7]
 KS = [10, 20, 30]
-FOLDS = ['validation', 'test']
+FOLDS = ['validation', 'test']          # computation order (one bootstrap stream is shared across folds); do not reorder
+REPORT_FOLDS = ['test', 'validation']   # presentation order: reported fold first, decision fold second
 BOOT_SEED = 20261017
 MIN_ROWS = 30
-FOLD_LABEL = {'validation': 'validation', 'test': 'test (reported only, not used for decisions)'}
 
 
 class Refusal(SystemExit):
@@ -124,6 +125,11 @@ def spearman(x, y):
 def pct(a):
     a = np.asarray(a, dtype=float)
     return float(np.nanpercentile(a, 2.5)), float(np.nanpercentile(a, 97.5))
+
+
+def report_order(rows):
+    """Stable sort of rows by presentation order of the fold (test first)."""
+    return sorted(rows, key=lambda r: REPORT_FOLDS.index(r['fold']))
 
 
 def write_csv(path, rows, fields):
@@ -248,7 +254,9 @@ def analyse(D, methods, baselines, best, B, log):
             summary_fold[(fold, K)] = {
                 'n_rows': int(len(y)), 'n_patients': int(len(us)), 'n_classes_with_support': int(keep.sum()),
                 'n_classes_ge%d_rows' % MIN_ROWS: int(ge.sum()),
-                'macro_f1_by_method': {m: rnd(Fm[m][keep].mean(), 4) for m in methods}}
+                'macro_f1_by_method': {m: rnd(Fm[m][keep].mean(), 4) for m in methods},
+                'macro_f1_fixed_k_by_method': {m: rnd(Fm[m].mean(), 4) for m in methods},
+                'strongest_baseline_in_fold': max(baselines, key=lambda m: float(Fm[m][keep].mean()))}
     return rows, sp_rows, terc_rows, summary_fold
 
 
@@ -330,14 +338,14 @@ def figures(rows, sp_rows, out, methods):
     rho = {(r['fold'], r['K']): r for r in sp_rows if r['delta'] == 'delta_mean' and r['classes'] == 'all'}
     for K in KS:
         fig, axes = plt.subplots(1, 2, figsize=(11, 4.2), sharey=True)
-        for ax, fold in zip(axes, FOLDS):
+        for ax, fold in zip(axes, REPORT_FOLDS):
             rr = [r for r in rows if r['fold'] == fold and r['K'] == K and r['eval_support'] > 0]
             x = np.log10([r['train_support'] for r in rr])
             ax.errorbar(x, [r['delta_mean'] for r in rr], yerr=[r['delta_mean_sd'] for r in rr], fmt='o', ms=4,
                         elinewidth=0.8, capsize=2, color='#1f4e79', ecolor='#8aa6c1')
             ax.axhline(0, color='black', lw=0.8)
             s = rho[(fold, K)]
-            name = 'validation' if fold == 'validation' else 'test (reported only)'
+            name = 'validation (decision fold)' if fold == 'validation' else 'test'
             ax.set_title('%s: rho=%.2f [%.2f, %.2f]' % (name, s['rho'], s['ci_lo'], s['ci_hi']), fontsize=10)
             ax.set_xlabel('log10 train support (rows per class)')
         axes[0].set_ylabel('CEI minus mean of baselines (F1, seed SD bars)')
@@ -450,21 +458,24 @@ def main(argv=None):
     pc_fields = (['fold', 'K', 'class', 'train_support', 'eval_support'] + ['f1_' + m for m in methods] +
                  ['f1sd_' + m for m in methods] + ['best_baseline', 'delta_best', 'delta_best_sd', 'delta_mean', 'delta_mean_sd'] +
                  ['delta_vs_' + m for m in baselines])
+    rows, sp_rows, terc_rows, same_rows = (report_order(x) for x in (rows, sp_rows, terc_rows, same_rows))
     write_csv(os.path.join(a.out, 'per_class_delta.csv'), rows, pc_fields)
 
     sp_fields = ['fold', 'K', 'delta', 'classes', 'n_classes', 'rho', 'ci_lo', 'ci_hi', 'B', 'n_subjects', 'n_rows']
     write_csv(os.path.join(a.out, 'spearman.csv'), sp_rows, sp_fields)
     write_md(os.path.join(a.out, 'spearman.md'), 'Spearman rho of CEI-minus-baseline delta vs log10 train support',
-             'delta_best: CEI minus the validation-chosen best baseline; delta_mean: CEI minus the mean of the baselines. '
+             'Test = reported result (listed first); validation = decision fold. '
+             'delta_best: CEI minus the best baseline (chosen on validation, also used on test); delta_mean: CEI minus the mean of the baselines. '
              'classes: all = classes with rows in the fold; ge%d = classes with at least %d rows in the fold. '
-             '95%% interval: subject bootstrap (B=%d, seed %d). Test is reported only, not used for decisions.' % (MIN_ROWS, MIN_ROWS, a.b, BOOT_SEED),
+             '95%% interval: subject bootstrap (B=%d, seed %d).' % (MIN_ROWS, MIN_ROWS, a.b, BOOT_SEED),
              sp_rows, sp_fields)
 
     tf = ['fold', 'K', 'tercile', 'n_classes', 'train_support_min', 'train_support_max', 'f1_cei', 'f1_mean_baselines',
           'f1_best_baseline', 'best_baseline', 'delta_best', 'delta_mean', 'n_cei_above_best']
     write_csv(os.path.join(a.out, 'terciles.csv'), terc_rows, tf)
     write_md(os.path.join(a.out, 'terciles.md'), 'Terciles of train support: mean per-class delta',
-             'Classes with rows in the fold, split into equal-size terciles by train support (low, mid, high). Test is reported only.',
+             'Classes with rows in the fold, split into equal-size terciles by train support (low, mid, high). Test = reported result '
+             '(listed first); validation = decision fold. best_baseline was chosen on validation.',
              terc_rows, tf)
 
     sf = (['fold', 'class_set', 'K', 'n_classes_in_set', 'n_rows_fold', 'n_patients_fold', 'f1_cei', 'f1_mean_baselines', 'f1_best_baseline',
@@ -489,16 +500,18 @@ def main(argv=None):
         md_rows.append(q)
     write_md(os.path.join(a.out, 'same_classes_across_k.md'), 'Same classes across K (K-way task)',
              'F1 averaged over a fixed class set (top10: the K=10 classes, top20: the K=20 classes, all: all K classes), '
-             'computed inside each K-way task. delta = CEI minus the mean of the baselines (delta_mean) or minus the validation-chosen '
-             'best baseline (delta_best); the change is relative to the first K that contains the set, with the same best baseline (chosen at the later K) at both ends. '
+             'computed inside each K-way task. Test = reported result (listed first); validation = decision fold. '
+             'delta = CEI minus the mean of the baselines (delta_mean) or minus the best baseline chosen on validation '
+             '(delta_best); the change is relative to the first K that contains the set, with the same best baseline (chosen at the later K) at both ends. '
              'class_set=all is the official K-way macro-F1 gap. 95%% interval: subject bootstrap over the pooled subjects of the fold '
-             '(B=%d, seed %d). Test is reported only, not used for decisions.' % (a.b, BOOT_SEED), md_rows, md_f)
+             '(B=%d, seed %d).' % (a.b, BOOT_SEED), md_rows, md_f)
 
     figures(rows, sp_rows, a.out, methods)
 
     summary = {
-        'methods': methods, 'focus': FOCUS, 'baselines': baselines, 'seeds': SEEDS, 'K': KS, 'folds': FOLDS,
-        'fold_note': {'validation': 'decisions (best baseline, choices)', 'test': 'reported only, not used for decisions'},
+        'methods': methods, 'focus': FOCUS, 'baselines': baselines, 'seeds': SEEDS, 'K': KS, 'folds': REPORT_FOLDS,
+        'fold_note': {'test': 'reported result (scored once per run at the validation-selected checkpoint)',
+                      'validation': 'decision fold (checkpoint, HPO, best-baseline choice)'},
         'bootstrap': {'unit': 'subjects of the fold (pooled across K for same_classes_across_k)', 'B': a.b, 'seed': BOOT_SEED},
         'sd_note': 'seed SD ddof=1; SD of a delta = sqrt(sdA^2/n + sdB^2/n), mean of m baselines: sqrt(sdA^2/n + sum sd_b^2/(n m^2)), n=%d' % len(SEEDS),
         'runs_root': os.path.basename(os.path.normpath(a.runs)),

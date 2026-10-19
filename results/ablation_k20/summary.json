@@ -40,7 +40,7 @@
   "statistic": "mean over drawn seeds of macro-F1(arm) - macro-F1(reference)",
   "ci": "95% percentile"
  },
- "test_note": "reported only, not used for decisions",
+ "protocol_note": "Decisions (checkpoint, HPO, baseline choice) use VALIDATION; every reported result is on TEST (scored once per run at the validation-selected checkpoint).",
  "notes": [],
  "groups": [
   {
@@ -56,7 +56,7 @@
    ],
    "runs": [
     {
-     "path": "full/cei_mp2_seed7",
+     "path": "a1_full/cei_mp2_seed7",
      "method": "cei_mp2",
      "seed": 7,
      "binding_method": "cei_gnn_mp2",
@@ -70,7 +70,7 @@
      "test_accuracy": 0.7055582175371347
     },
     {
-     "path": "full/cei_mp2_seed42",
+     "path": "a1_full/cei_mp2_seed42",
      "method": "cei_mp2",
      "seed": 42,
      "binding_method": "cei_gnn_mp2",
@@ -84,7 +84,7 @@
      "test_accuracy": 0.7019645424053665
     },
     {
-     "path": "full/cei_mp2_seed1234",
+     "path": "a1_full/cei_mp2_seed1234",
      "method": "cei_mp2",
      "seed": 1234,
      "binding_method": "cei_gnn_mp2",
@@ -98,7 +98,7 @@
      "test_accuracy": 0.7036415908001916
     },
     {
-     "path": "full/cei_mp2_seed2025",
+     "path": "a1_full/cei_mp2_seed2025",
      "method": "cei_mp2",
      "seed": 2025,
      "binding_method": "cei_gnn_mp2",
@@ -112,7 +112,7 @@
      "test_accuracy": 0.7036415908001916
     },
     {
-     "path": "full/cei_mp2_seed3407",
+     "path": "a1_full/cei_mp2_seed3407",
      "method": "cei_mp2",
      "seed": 3407,
      "binding_method": "cei_gnn_mp2",
@@ -271,61 +271,6 @@
    "vs_reference": {
     "n_matched_seeds": 5,
     "per_seed": [],
-    "validation": {
-     "per_seed": [
-      {
-       "seed": 7,
-       "macro_f1_delta": -0.006170570924572294,
-       "accuracy_delta": -0.004303131723643272
-      },
-      {
-       "seed": 42,
-       "macro_f1_delta": -0.0006266045568505962,
-       "accuracy_delta": 0.002868754482428848
-      },
-      {
-       "seed": 1234,
-       "macro_f1_delta": -0.004738183561307063,
-       "accuracy_delta": 0.000717188620607212
-      },
-      {
-       "seed": 2025,
-       "macro_f1_delta": 0.0031166985986069706,
-       "accuracy_delta": 0.00023906287353570033
-      },
-      {
-       "seed": 3407,
-       "macro_f1_delta": -0.00014776880601197195,
-       "accuracy_delta": -0.0009562514941430234
-      }
-     ],
-     "macro_f1_delta": {
-      "mean": -0.001713285850026991,
-      "sd": 0.003740917869372392,
-      "n": 5
-     },
-     "accuracy_delta": {
-      "mean": -0.000286875448242907,
-      "sd": 0.00263728718537346,
-      "n": 5
-     },
-     "bootstrap": {
-      "seeds_and_patients": {
-       "ci95": [
-        -0.008799379762740232,
-        0.005465720021059463
-       ],
-       "p_delta_gt_0": 0.3085
-      },
-      "patients_only": {
-       "ci95": [
-        -0.00708382181438314,
-        0.0035379022573551796
-       ],
-       "p_delta_gt_0": 0.2675
-      }
-     }
-    },
     "test": {
      "per_seed": [
       {
@@ -380,7 +325,65 @@
        "p_delta_gt_0": 0.384
       }
      },
-     "note": "reported only, not used for decisions"
+     "reading": "no measurable effect",
+     "reading_note": ""
+    },
+    "validation": {
+     "per_seed": [
+      {
+       "seed": 7,
+       "macro_f1_delta": -0.006170570924572294,
+       "accuracy_delta": -0.004303131723643272
+      },
+      {
+       "seed": 42,
+       "macro_f1_delta": -0.0006266045568505962,
+       "accuracy_delta": 0.002868754482428848
+      },
+      {
+       "seed": 1234,
+       "macro_f1_delta": -0.004738183561307063,
+       "accuracy_delta": 0.000717188620607212
+      },
+      {
+       "seed": 2025,
+       "macro_f1_delta": 0.0031166985986069706,
+       "accuracy_delta": 0.00023906287353570033
+      },
+      {
+       "seed": 3407,
+       "macro_f1_delta": -0.00014776880601197195,
+       "accuracy_delta": -0.0009562514941430234
+      }
+     ],
+     "macro_f1_delta": {
+      "mean": -0.001713285850026991,
+      "sd": 0.003740917869372392,
+      "n": 5
+     },
+     "accuracy_delta": {
+      "mean": -0.000286875448242907,
+      "sd": 0.00263728718537346,
+      "n": 5
+     },
+     "bootstrap": {
+      "seeds_and_patients": {
+       "ci95": [
+        -0.008799379762740232,
+        0.005465720021059463
+       ],
+       "p_delta_gt_0": 0.3085
+      },
+      "patients_only": {
+       "ci95": [
+        -0.00708382181438314,
+        0.0035379022573551796
+       ],
+       "p_delta_gt_0": 0.2675
+      }
+     },
+     "reading": "no measurable effect",
+     "reading_note": ""
     }
    }
   },
@@ -503,61 +506,6 @@
    "vs_reference": {
     "n_matched_seeds": 5,
     "per_seed": [],
-    "validation": {
-     "per_seed": [
-      {
-       "seed": 7,
-       "macro_f1_delta": 0.001719954945101354,
-       "accuracy_delta": 0.0011953143676787237
-      },
-      {
-       "seed": 42,
-       "macro_f1_delta": 0.000983878063596677,
-       "accuracy_delta": 0.0016734401147502354
-      },
-      {
-       "seed": 1234,
-       "macro_f1_delta": 0.0014771719458068766,
-       "accuracy_delta": 0.0023906287353574474
-      },
-      {
-       "seed": 2025,
-       "macro_f1_delta": -0.0022057658804467417,
-       "accuracy_delta": -0.0033468802295003597
-      },
-      {
-       "seed": 3407,
-       "macro_f1_delta": -0.0013282538333082572,
-       "accuracy_delta": 0.00047812574707140065
-      }
-     ],
-     "macro_f1_delta": {
-      "mean": 0.00012939704814998176,
-      "sd": 0.0017786400281799327,
-      "n": 5
-     },
-     "accuracy_delta": {
-      "mean": 0.00047812574707148945,
-      "sd": 0.002248970562063943,
-      "n": 5
-     },
-     "bootstrap": {
-      "seeds_and_patients": {
-       "ci95": [
-        -0.004574655113178719,
-        0.004090504412800814
-       ],
-       "p_delta_gt_0": 0.5265
-      },
-      "patients_only": {
-       "ci95": [
-        -0.0028912946598387834,
-        0.0032106376562230044
-       ],
-       "p_delta_gt_0": 0.5265
-      }
-     }
-    },
     "test": {
      "per_seed": [
       {
@@ -612,7 +560,65 @@
        "p_delta_gt_0": 0.03
       }
      },
-     "note": "reported only, not used for decisions"
+     "reading": "no measurable effect",
+     "reading_note": ""
+    },
+    "validation": {
+     "per_seed": [
+      {
+       "seed": 7,
+       "macro_f1_delta": 0.001719954945101354,
+       "accuracy_delta": 0.0011953143676787237
+      },
+      {
+       "seed": 42,
+       "macro_f1_delta": 0.000983878063596677,
+       "accuracy_delta": 0.0016734401147502354
+      },
+      {
+       "seed": 1234,
+       "macro_f1_delta": 0.0014771719458068766,
+       "accuracy_delta": 0.0023906287353574474
+      },
+      {
+       "seed": 2025,
+       "macro_f1_delta": -0.0022057658804467417,
+       "accuracy_delta": -0.0033468802295003597
+      },
+      {
+       "seed": 3407,
+       "macro_f1_delta": -0.0013282538333082572,
+       "accuracy_delta": 0.00047812574707140065
+      }
+     ],
+     "macro_f1_delta": {
+      "mean": 0.00012939704814998176,
+      "sd": 0.0017786400281799327,
+      "n": 5
+     },
+     "accuracy_delta": {
+      "mean": 0.00047812574707148945,
+      "sd": 0.002248970562063943,
+      "n": 5
+     },
+     "bootstrap": {
+      "seeds_and_patients": {
+       "ci95": [
+        -0.004574655113178719,
+        0.004090504412800814
+       ],
+       "p_delta_gt_0": 0.5265
+      },
+      "patients_only": {
+       "ci95": [
+        -0.0028912946598387834,
+        0.0032106376562230044
+       ],
+       "p_delta_gt_0": 0.5265
+      }
+     },
+     "reading": "no measurable effect",
+     "reading_note": ""
     }
    }
   },
@@ -735,61 +741,6 @@
    "vs_reference": {
     "n_matched_seeds": 5,
     "per_seed": [],
-    "validation": {
-     "per_seed": [
-      {
-       "seed": 7,
-       "macro_f1_delta": -0.004528090473085777,
-       "accuracy_delta": -0.0023906287353573363
-      },
-      {
-       "seed": 42,
-       "macro_f1_delta": -0.0034695354198379658,
-       "accuracy_delta": -0.0009562514941429123
-      },
-      {
-       "seed": 1234,
-       "macro_f1_delta": 0.001373973397352457,
-       "accuracy_delta": 0.000717188620607212
-      },
-      {
-       "seed": 2025,
-       "macro_f1_delta": 0.004317653636563223,
-       "accuracy_delta": -0.0009562514941429123
-      },
-      {
-       "seed": 3407,
-       "macro_f1_delta": -0.0005735362834701219,
-       "accuracy_delta": -0.0009562514941430234
-      }
-     ],
-     "macro_f1_delta": {
-      "mean": -0.0005759070284956369,
-      "sd": 0.0035965891663152054,
-      "n": 5
-     },
-     "accuracy_delta": {
-      "mean": -0.0009084389194357944,
-      "sd": 0.0011007281313144713,
-      "n": 5
-     },
-     "bootstrap": {
-      "seeds_and_patients": {
-       "ci95": [
-        -0.0066056677371624795,
-        0.005139187843193223
-       ],
-       "p_delta_gt_0": 0.433
-      },
-      "patients_only": {
-       "ci95": [
-        -0.004381872136227877,
-        0.0031995952694450574
-       ],
-       "p_delta_gt_0": 0.387
-      }
-     }
-    },
     "test": {
      "per_seed": [
       {
@@ -844,7 +795,65 @@
        "p_delta_gt_0": 0.932
       }
      },
-     "note": "reported only, not used for decisions"
+     "reading": "no measurable effect",
+     "reading_note": ""
+    },
+    "validation": {
+     "per_seed": [
+      {
+       "seed": 7,
+       "macro_f1_delta": -0.004528090473085777,
+       "accuracy_delta": -0.0023906287353573363
+      },
+      {
+       "seed": 42,
+       "macro_f1_delta": -0.0034695354198379658,
+       "accuracy_delta": -0.0009562514941429123
+      },
+      {
+       "seed": 1234,
+       "macro_f1_delta": 0.001373973397352457,
+       "accuracy_delta": 0.000717188620607212
+      },
+      {
+       "seed": 2025,
+       "macro_f1_delta": 0.004317653636563223,
+       "accuracy_delta": -0.0009562514941429123
+      },
+      {
+       "seed": 3407,
+       "macro_f1_delta": -0.0005735362834701219,
+       "accuracy_delta": -0.0009562514941430234
+      }
+     ],
+     "macro_f1_delta": {
+      "mean": -0.0005759070284956369,
+      "sd": 0.0035965891663152054,
+      "n": 5
+     },
+     "accuracy_delta": {
+      "mean": -0.0009084389194357944,
+      "sd": 0.0011007281313144713,
+      "n": 5
+     },
+     "bootstrap": {
+      "seeds_and_patients": {
+       "ci95": [
+        -0.0066056677371624795,
+        0.005139187843193223
+       ],
+       "p_delta_gt_0": 0.433
+      },
+      "patients_only": {
+       "ci95": [
+        -0.004381872136227877,
+        0.0031995952694450574
+       ],
+       "p_delta_gt_0": 0.387
+      }
+     },
+     "reading": "no measurable effect",
+     "reading_note": ""
     }
    }
   },
@@ -967,61 +976,6 @@
    "vs_reference": {
     "n_matched_seeds": 5,
     "per_seed": [],
-    "validation": {
-     "per_seed": [
-      {
-       "seed": 7,
-       "macro_f1_delta": -0.00496255724624306,
-       "accuracy_delta": -0.0033468802295003597
-      },
-      {
-       "seed": 42,
-       "macro_f1_delta": -0.003248087129450572,
-       "accuracy_delta": 0.000717188620607212
-      },
-      {
-       "seed": 1234,
-       "macro_f1_delta": -9.596160198011017e-05,
-       "accuracy_delta": 0.0023906287353574474
-      },
-      {
-       "seed": 2025,
-       "macro_f1_delta": 0.0010354738328235413,
-       "accuracy_delta": 0.0
-      },
-      {
-       "seed": 3407,
-       "macro_f1_delta": -0.00014242972267231035,
-       "accuracy_delta": 0.000717188620607212
-      }
-     ],
-     "macro_f1_delta": {
-      "mean": -0.0014827123735045022,
-      "sd": 0.002514287444955457,
-      "n": 5
-     },
-     "accuracy_delta": {
-      "mean": 9.562514941430234e-05,
-      "sd": 0.0021154025154797103,
-      "n": 5
-     },
-     "bootstrap": {
-      "seeds_and_patients": {
-       "ci95": [
-        -0.008117168839612282,
-        0.005591129546298393
-       ],
-       "p_delta_gt_0": 0.349
-      },
-      "patients_only": {
-       "ci95": [
-        -0.00669580106505492,
-        0.004106889721663544
-       ],
-       "p_delta_gt_0": 0.3165
-      }
-     }
-    },
     "test": {
      "per_seed": [
       {
@@ -1076,7 +1030,65 @@
        "p_delta_gt_0": 0.1735
       }
      },
-     "note": "reported only, not used for decisions"
+     "reading": "no measurable effect",
+     "reading_note": ""
+    },
+    "validation": {
+     "per_seed": [
+      {
+       "seed": 7,
+       "macro_f1_delta": -0.00496255724624306,
+       "accuracy_delta": -0.0033468802295003597
+      },
+      {
+       "seed": 42,
+       "macro_f1_delta": -0.003248087129450572,
+       "accuracy_delta": 0.000717188620607212
+      },
+      {
+       "seed": 1234,
+       "macro_f1_delta": -9.596160198011017e-05,
+       "accuracy_delta": 0.0023906287353574474
+      },
+      {
+       "seed": 2025,
+       "macro_f1_delta": 0.0010354738328235413,
+       "accuracy_delta": 0.0
+      },
+      {
+       "seed": 3407,
+       "macro_f1_delta": -0.00014242972267231035,
+       "accuracy_delta": 0.000717188620607212
+      }
+     ],
+     "macro_f1_delta": {
+      "mean": -0.0014827123735045022,
+      "sd": 0.002514287444955457,
+      "n": 5
+     },
+     "accuracy_delta": {
+      "mean": 9.562514941430234e-05,
+      "sd": 0.0021154025154797103,
+      "n": 5
+     },
+     "bootstrap": {
+      "seeds_and_patients": {
+       "ci95": [
+        -0.008117168839612282,
+        0.005591129546298393
+       ],
+       "p_delta_gt_0": 0.349
+      },
+      "patients_only": {
+       "ci95": [
+        -0.00669580106505492,
+        0.004106889721663544
+       ],
+       "p_delta_gt_0": 0.3165
+      }
+     },
+     "reading": "no measurable effect",
+     "reading_note": ""
     }
    }
   },
@@ -1199,61 +1211,6 @@
    "vs_reference": {
     "n_matched_seeds": 5,
     "per_seed": [],
-    "validation": {
-     "per_seed": [
-      {
-       "seed": 7,
-       "macro_f1_delta": -0.010073972152032984,
-       "accuracy_delta": -0.010996892182643991
-      },
-      {
-       "seed": 42,
-       "macro_f1_delta": -0.004341333166279382,
-       "accuracy_delta": 0.00023906287353570033
-      },
-      {
-       "seed": 1234,
-       "macro_f1_delta": -0.006328074588305088,
-       "accuracy_delta": -0.0038250059765718714
-      },
-      {
-       "seed": 2025,
-       "macro_f1_delta": 0.000602929485079895,
-       "accuracy_delta": -0.0011953143676787237
-      },
-      {
-       "seed": 3407,
-       "macro_f1_delta": -0.0033107407974356517,
-       "accuracy_delta": -0.004542194597179083
-      }
-     ],
-     "macro_f1_delta": {
-      "mean": -0.004690238243794642,
-      "sd": 0.00392776880842484,
-      "n": 5
-     },
-     "accuracy_delta": {
-      "mean": -0.004064068850107594,
-      "sd": 0.004332911537267925,
-      "n": 5
-     },
-     "bootstrap": {
-      "seeds_and_patients": {
-       "ci95": [
-        -0.011407132920156859,
-        0.0017251115162316873
-       ],
-       "p_delta_gt_0": 0.085
-      },
-      "patients_only": {
-       "ci95": [
-        -0.009600968631053804,
-        0.00021389494683727428
-       ],
-       "p_delta_gt_0": 0.03
-      }
-     }
-    },
     "test": {
      "per_seed": [
       {
@@ -1308,7 +1265,65 @@
        "p_delta_gt_0": 0.4795
       }
      },
-     "note": "reported only, not used for decisions"
+     "reading": "no measurable effect",
+     "reading_note": ""
+    },
+    "validation": {
+     "per_seed": [
+      {
+       "seed": 7,
+       "macro_f1_delta": -0.010073972152032984,
+       "accuracy_delta": -0.010996892182643991
+      },
+      {
+       "seed": 42,
+       "macro_f1_delta": -0.004341333166279382,
+       "accuracy_delta": 0.00023906287353570033
+      },
+      {
+       "seed": 1234,
+       "macro_f1_delta": -0.006328074588305088,
+       "accuracy_delta": -0.0038250059765718714
+      },
+      {
+       "seed": 2025,
+       "macro_f1_delta": 0.000602929485079895,
+       "accuracy_delta": -0.0011953143676787237
+      },
+      {
+       "seed": 3407,
+       "macro_f1_delta": -0.0033107407974356517,
+       "accuracy_delta": -0.004542194597179083
+      }
+     ],
+     "macro_f1_delta": {
+      "mean": -0.004690238243794642,
+      "sd": 0.00392776880842484,
+      "n": 5
+     },
+     "accuracy_delta": {
+      "mean": -0.004064068850107594,
+      "sd": 0.004332911537267925,
+      "n": 5
+     },
+     "bootstrap": {
+      "seeds_and_patients": {
+       "ci95": [
+        -0.011407132920156859,
+        0.0017251115162316873
+       ],
+       "p_delta_gt_0": 0.085
+      },
+      "patients_only": {
+       "ci95": [
+        -0.009600968631053804,
+        0.00021389494683727428
+       ],
+       "p_delta_gt_0": 0.03
+      }
+     },
+     "reading": "no measurable effect",
+     "reading_note": ""
     }
    }
   },
@@ -1431,61 +1446,6 @@
    "vs_reference": {
     "n_matched_seeds": 5,
     "per_seed": [],
-    "validation": {
-     "per_seed": [
-      {
-       "seed": 7,
-       "macro_f1_delta": -0.005651675235136766,
-       "accuracy_delta": -0.006215634711929208
-      },
-      {
-       "seed": 42,
-       "macro_f1_delta": -0.017520043681705455,
-       "accuracy_delta": -0.011953143676787015
-      },
-      {
-       "seed": 1234,
-       "macro_f1_delta": -0.009625467061695203,
-       "accuracy_delta": -0.006693760459000719
-      },
-      {
-       "seed": 2025,
-       "macro_f1_delta": -0.004618205441828227,
-       "accuracy_delta": -0.007410949079607931
-      },
-      {
-       "seed": 3407,
-       "macro_f1_delta": -0.01317672208853593,
-       "accuracy_delta": -0.012431269423858526
-      }
-     ],
-     "macro_f1_delta": {
-      "mean": -0.010118422701780316,
-      "sd": 0.005352205535338467,
-      "n": 5
-     },
-     "accuracy_delta": {
-      "mean": -0.00894095147023668,
-      "sd": 0.003003071240247162,
-      "n": 5
-     },
-     "bootstrap": {
-      "seeds_and_patients": {
-       "ci95": [
-        -0.017746324192702063,
-        -0.0027285913853436912
-       ],
-       "p_delta_gt_0": 0.0035
-      },
-      "patients_only": {
-       "ci95": [
-        -0.015303661399832314,
-        -0.005076949903736022
-       ],
-       "p_delta_gt_0": 0.0
-      }
-     }
-    },
     "test": {
      "per_seed": [
       {
@@ -1540,7 +1500,65 @@
        "p_delta_gt_0": 0.0465
       }
      },
-     "note": "reported only, not used for decisions"
+     "reading": "no measurable effect",
+     "reading_note": ""
+    },
+    "validation": {
+     "per_seed": [
+      {
+       "seed": 7,
+       "macro_f1_delta": -0.005651675235136766,
+       "accuracy_delta": -0.006215634711929208
+      },
+      {
+       "seed": 42,
+       "macro_f1_delta": -0.017520043681705455,
+       "accuracy_delta": -0.011953143676787015
+      },
+      {
+       "seed": 1234,
+       "macro_f1_delta": -0.009625467061695203,
+       "accuracy_delta": -0.006693760459000719
+      },
+      {
+       "seed": 2025,
+       "macro_f1_delta": -0.004618205441828227,
+       "accuracy_delta": -0.007410949079607931
+      },
+      {
+       "seed": 3407,
+       "macro_f1_delta": -0.01317672208853593,
+       "accuracy_delta": -0.012431269423858526
+      }
+     ],
+     "macro_f1_delta": {
+      "mean": -0.010118422701780316,
+      "sd": 0.005352205535338467,
+      "n": 5
+     },
+     "accuracy_delta": {
+      "mean": -0.00894095147023668,
+      "sd": 0.003003071240247162,
+      "n": 5
+     },
+     "bootstrap": {
+      "seeds_and_patients": {
+       "ci95": [
+        -0.017746324192702063,
+        -0.0027285913853436912
+       ],
+       "p_delta_gt_0": 0.0035
+      },
+      "patients_only": {
+       "ci95": [
+        -0.015303661399832314,
+        -0.005076949903736022
+       ],
+       "p_delta_gt_0": 0.0
+      }
+     },
+     "reading": "matters",
+     "reading_note": ""
     }
    }
   },
@@ -1663,61 +1681,6 @@
    "vs_reference": {
     "n_matched_seeds": 5,
     "per_seed": [],
-    "validation": {
-     "per_seed": [
-      {
-       "seed": 7,
-       "macro_f1_delta": -0.01098642249970605,
-       "accuracy_delta": -0.011475017929715503
-      },
-      {
-       "seed": 42,
-       "macro_f1_delta": -0.007277157465267026,
-       "accuracy_delta": -0.0026296916088931477
-      },
-      {
-       "seed": 1234,
-       "macro_f1_delta": -0.002363804783289014,
-       "accuracy_delta": -0.002151565861821636
-      },
-      {
-       "seed": 2025,
-       "macro_f1_delta": -0.00031464900185596,
-       "accuracy_delta": -0.005737508964857807
-      },
-      {
-       "seed": 3407,
-       "macro_f1_delta": -0.006447423006104347,
-       "accuracy_delta": -0.004303131723643383
-      }
-     ],
-     "macro_f1_delta": {
-      "mean": -0.005477891351244479,
-      "sd": 0.004209449854305672,
-      "n": 5
-     },
-     "accuracy_delta": {
-      "mean": -0.005259383217786295,
-      "sd": 0.00375336324841204,
-      "n": 5
-     },
-     "bootstrap": {
-      "seeds_and_patients": {
-       "ci95": [
-        -0.013874231022033258,
-        0.003161643221346891
-       ],
-       "p_delta_gt_0": 0.1005
-      },
-      "patients_only": {
-       "ci95": [
-        -0.01184509783626561,
-        0.001153195138511506
-       ],
-       "p_delta_gt_0": 0.0585
-      }
-     }
-    },
     "test": {
      "per_seed": [
       {
@@ -1772,7 +1735,65 @@
        "p_delta_gt_0": 0.039
       }
      },
-     "note": "reported only, not used for decisions"
+     "reading": "no measurable effect",
+     "reading_note": "not resolved at this precision"
+    },
+    "validation": {
+     "per_seed": [
+      {
+       "seed": 7,
+       "macro_f1_delta": -0.01098642249970605,
+       "accuracy_delta": -0.011475017929715503
+      },
+      {
+       "seed": 42,
+       "macro_f1_delta": -0.007277157465267026,
+       "accuracy_delta": -0.0026296916088931477
+      },
+      {
+       "seed": 1234,
+       "macro_f1_delta": -0.002363804783289014,
+       "accuracy_delta": -0.002151565861821636
+      },
+      {
+       "seed": 2025,
+       "macro_f1_delta": -0.00031464900185596,
+       "accuracy_delta": -0.005737508964857807
+      },
+      {
+       "seed": 3407,
+       "macro_f1_delta": -0.006447423006104347,
+       "accuracy_delta": -0.004303131723643383
+      }
+     ],
+     "macro_f1_delta": {
+      "mean": -0.005477891351244479,
+      "sd": 0.004209449854305672,
+      "n": 5
+     },
+     "accuracy_delta": {
+      "mean": -0.005259383217786295,
+      "sd": 0.00375336324841204,
+      "n": 5
+     },
+     "bootstrap": {
+      "seeds_and_patients": {
+       "ci95": [
+        -0.013874231022033258,
+        0.003161643221346891
+       ],
+       "p_delta_gt_0": 0.1005
+      },
+      "patients_only": {
+       "ci95": [
+        -0.01184509783626561,
+        0.001153195138511506
+       ],
+       "p_delta_gt_0": 0.0585
+      }
+     },
+     "reading": "no measurable effect",
+     "reading_note": "not resolved at this precision"
     }
    }
   }

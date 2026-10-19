@@ -3,7 +3,7 @@
 This repository holds the final benchmark of five self-explainable graph neural networks (CEI-GNN mp2, ProtGNN, GSAT,
 GraphCare, GCHM-PNA) for primary-diagnosis prediction on multi-visit clinical graphs built from MIMIC-IV
 emergency-department data. Protocol `fair_v10t`: the K = 10 / 20 / 30 most frequent diagnoses, train = the whole TRAIN
-fold, checkpoint selection on validation, the held-out test fold scored once per run; 3 seeds per method.
+fold, checkpoint selection on validation, the held-out test fold scored once per run; 3 seeds per method. Decisions (checkpoint, hyper-parameters, baseline choice) use validation; every reported result is on test.
 It contains only the code and data behind the final results. The exact commands are listed under "Final commands" below.
 
 ## Setup
@@ -75,10 +75,10 @@ The graph hash is that of the `graphs.jsonl` file as produced by this repository
 env -u PYTHONPATH PYTHONDONTWRITEBYTECODE=1 /usr/bin/python3 -m comparison.final.compare_all \
   --runs comparison/standardized/clinical_runs_fair_v10t_20261011 \
   --out <new dir> \
-  --check comparison/standardized/final_compare_fv10t_20261012
+  --check comparison/standardized/final_compare_fv10t_test_20261019
 ```
 
-Result: all 6 files (`compare_top{10,20,30}.txt` and `compare_top{10,20,30}.json/comparison.json`) match the stored tables: the JSON files byte for byte, the `.txt` files byte for byte from the first "Ranking by" line on (the stored `.txt` files begin with two interpreter-warning lines from the original capture, which the check skips). The default method list reproduces the published tables; `--methods` selects a subset.
+The stored tables in `final_compare_fv10t_test_20261019` list the test ranking first and keep the validation ranking as the labelled selection column. The folder `final_compare_fv10t_20261012` is the earlier layout (validation ranking first) and stays untouched. The check compares every produced file (`compare_top{10,20,30}.txt` and `compare_top{10,20,30}.json/comparison.json`) with the stored tables byte for byte. The default method list reproduces the published tables; `--methods` selects a subset.
 
 ### Hyper-parameter search
 
@@ -130,17 +130,33 @@ The `--weight-decay 1.03e-6` flag of the cei_mp2 command is ignored: CEI-GNN bui
 
 ## Results
 
-Test macro-F1, mean ± SD over 3 seeds (methods in validation-ranking order of K = 10). Full tables with accuracy, top-3 accuracy and paired bootstrap comparisons: [K = 10](results/test_top10.md), [K = 20](results/test_top20.md), [K = 30](results/test_top30.md).
+Test macro-F1, mean ± SD over 3 seeds (methods in test-ranking order of K = 10; the validation macro-F1 is the decision fold and is listed in the full tables). Full tables with accuracy, top-3 accuracy and paired bootstrap comparisons: [K = 10](results/test_top10.md), [K = 20](results/test_top20.md), [K = 30](results/test_top30.md).
 
 | Method | K = 10 | K = 20 | K = 30 |
 |---|---|---|---|
-| CEI-GNN mp2 | 0.761 ± 0.009 | 0.689 ± 0.001 | 0.578 ± 0.004 |
-| ProtGNN | 0.751 ± 0.006 | 0.665 ± 0.002 | 0.557 ± 0.002 |
-| GCHM-PNA | 0.756 ± 0.005 | 0.671 ± 0.010 | 0.556 ± 0.009 |
-| GSAT | 0.751 ± 0.004 | 0.669 ± 0.004 | 0.557 ± 0.008 |
 | GraphCare | 0.763 ± 0.003 | 0.671 ± 0.004 | 0.547 ± 0.002 |
+| CEI-GNN mp2 | 0.761 ± 0.009 | 0.689 ± 0.001 | 0.578 ± 0.004 |
+| GCHM-PNA | 0.756 ± 0.005 | 0.671 ± 0.010 | 0.556 ± 0.009 |
+| ProtGNN | 0.751 ± 0.006 | 0.665 ± 0.002 | 0.557 ± 0.002 |
+| GSAT | 0.751 ± 0.004 | 0.669 ± 0.004 | 0.557 ± 0.008 |
 
 At K = 30, Hypothyroidism has 0 test rows (F1 0 for every method) and End stage renal disease has 5.
+
+### Analysis packages and their results
+
+Further analyses read the stored predictions of the final runs (no training). Each reports on test; validation stays as the labelled decision fold (checkpoint, best baseline, which arms enter an analysis).
+
+| Package | What it analyses | Tables |
+|---|---|---|
+| `comparison/nasim` | section 2: CEI-GNN with the baselines' training recipe, GSAT grid, ProtGNN projection, GCHM-PNA cosine schedule (the paired analysis `analyze.py`) | printed to a new output folder, no tracked table |
+| `comparison/ablation` | section 4: CEI-GNN component ablation at K = 20 | `results/ablation_k20/` |
+| `comparison/splits` | section 4/6: replication of the ablation on two further patient splits | `results/split_replication_k20/` |
+| `comparison/s6_stats` | section 6: per-seed results, patient-only and two-level seed and patient intervals, macro-F1 variants, per-class tables | `results/s6_stats/` |
+| `comparison/s7_why` | section 7: class-support analysis, same classes across K (`support.py`), inference-time source masking (`masking.py`) | `results/s7_why/support/`, `results/s7_why/masking/` |
+| `comparison/s8_cost` | section 8: parameter counts, inference benchmark, inference memory, training cost | `results/s8_cost/` |
+| `comparison/s9_repro` | section 9: graph scan for the reproduction check | `results/s9_repro/` |
+
+Source masking (`results/s7_why/masking/`) is still validation-only; a test pass is pending.
 
 # Folder guide
 
@@ -157,7 +173,7 @@ MedicalGNN/
 ├── data/           data pipeline, raw CSVs -> patient graphs (5 stages)
 ├── comparison/     final runner, comparison, split, inputs and results
 ├── tests/          unit tests for the kept code (run only in a testing phase)
-├── results/        result tables (aggregates only): test_top10.md, test_top20.md, test_top30.md
+├── results/        result tables (aggregates only): test_top{10,20,30}.md and one folder per analysis package (ablation_k20, split_replication_k20, s6_stats, s7_why, s8_cost, s9_repro)
 ├── README.md       public front page
 ├── environment.yml / LICENSE / .gitignore
 ```
@@ -227,13 +243,16 @@ comparison/
 │   │                         events -> stays -> labels -> graph -> k4 (needs MIMIC_RAW_DIR)
 │   ├── common_stays.py       stay list incl. test rows (legacy max6, v5 max6, v5 +60 cohorts), used to restrict the labels
 │   ├── fit_k4.py             fits the CEI v3 state for one K
-│   ├── compare_all.py        regenerates the three comparison tables (K = 10/20/30) from the 45 runs; --check = compare with the stored tables
+│   ├── compare_all.py        regenerates the three comparison tables (K = 10/20/30) from the 45 runs; --check = compare with the stored tables (default: final_compare_fv10t_test_20261019)
 │   ├── hpo.py                the light hyper-parameter search (K=17, 10k sample, 20 epochs, dev only)
 │   ├── hpo_all.py            recorded HPO of the four tuned methods: commands, best trials vs run.py flags (plan only by default)
 │   ├── build_split.py        rebuilds canonical_split.json from merged_ed.csv and compares (never overwrites it)
 │   └── split_check.py        read-only consistency check of the frozen canonical_split.json (never regenerates it)
 ├── top3/
-│   └── compare.py            compares runs of one K: ranking (validation), test mean +- SD, paired bootstrap
+│   └── compare.py            compares runs of one K: ranking (test), validation ranking as the selection column, mean +- SD, paired bootstrap
+├── nasim/ ablation/ splits/  analysis packages of sections 2 and 4 (see "Analysis packages and their results")
+├── s6_stats/ s7_why/         statistics (section 6), class support and source masking (section 7)
+├── s8_cost/ s9_repro/        model cost (section 8), reproduction scan (section 9)
 └── standardized/             DATA AND RESULTS (git-ignored; disk-free APFS clones of the originals)
     ├── event_inputs/
     │   ├── clinical_graph_L4_plus60_v5c_20261009/       the final graph (graphs.jsonl, manifest.json, ...)
@@ -254,14 +273,16 @@ comparison/
     │   │       └── preprocessing.json  vocabulary / scaling fitted on train
     │   └── logs/top<K>_<method>_seed<s>.log              training logs
     ├── hpo_fv10_k17_20261011/                          HPO: per method study.db, trial logs, trials.json, best.json
-    └── final_compare_fv10t_20261012/                   compare_top{10,20,30}.txt/.json (the result tables), plan checks
+    ├── final_compare_fv10t_test_20261019/              compare_top{10,20,30}.txt/.json (the result tables, test ranking first)
+    └── final_compare_fv10t_20261012/                   the same tables in the earlier layout (validation ranking first), plan checks
 ```
 
 ## 6. Where do I find ...
 
 | I want ... | Look here |
 |---|---|
-| the final result tables | `results/test_top<K>.md` (aggregates; the full comparison files are written to `comparison/standardized/final_compare_fv10t_20261012/`) |
+| the final result tables | `results/test_top<K>.md` (aggregates; the full comparison files are in `comparison/standardized/final_compare_fv10t_test_20261019/`) |
+| the analysis tables (ablation, splits, statistics, class support, masking, cost) | `results/<package folder>/` (see "Analysis packages and their results") |
 | the test score of one run | `comparison/standardized/clinical_runs_fair_v10t_20261011/top<K>/<method>_seed<s>/result.json` (`test` key) |
 | the exact command / settings of a method | `comparison/final/run.py`, function `args()` (also under "Final commands" above) |
 | how the settings were tuned | `comparison/final/hpo.py`; results in `comparison/standardized/hpo_fv10_k17_20261011/<method>/best.json` |
@@ -280,7 +301,7 @@ Prefix every command with `env -u PYTHONPATH PYTHONDONTWRITEBYTECODE=1 /usr/bin/
 | Check that all 15 final plans are valid | `-m comparison.final.run --plan` | no |
 | Show the input-building steps | `MIMIC_RAW_DIR=<raw folder> bash comparison/final/pipeline.sh all` (no prefix) | no |
 | Compare the runs of one K | `-m comparison.top3.compare --run <run dir> ... --out <new path>` | no |
-| Regenerate and check the three comparison tables | `-m comparison.final.compare_all --check comparison/standardized/final_compare_fv10t_20261012 --out <new dir>` | no |
+| Regenerate and check the three comparison tables | `-m comparison.final.compare_all --check comparison/standardized/final_compare_fv10t_test_20261019 --out <new dir>` | no |
 | Plan the recorded HPO (prints only) | `-m comparison.final.hpo_all` | no |
 | Rebuild the split and compare with the frozen file | `-m comparison.final.build_split` | no |
 | Check the frozen split (read only) | `-m comparison.final.split_check` | no |
@@ -292,4 +313,4 @@ Prefix every command with `env -u PYTHONPATH PYTHONDONTWRITEBYTECODE=1 /usr/bin/
 - Frozen (byte-identical): `data/s1_clean/*`, `comparison/canonical_split.json`, `data/s3_labels/icd_mapping.py`, `data/s2_events/{enriched_spec,graph,ingest}.py`, `knowledge_seed.csv`.
 - Nothing under `comparison/standardized/` is committed (patient-derived data). Never overwrite an output folder; new runs go to a new dated folder.
 - New method: new top-level folder with `__init__.py` + `plugin_<name>.py` (or `adapter.py`), add it to `METHOD_FOLDERS` (`core/registry.py`) and `_METHOD_ROOTS` (`core/paths.py`).
-- The test fold is already opened: never tune or rerun because of a test score.
+- Decisions (checkpoint, HPO, baseline choice) use validation; every reported result is on test. The test fold is already opened: never tune, select or rerun because of a test score.

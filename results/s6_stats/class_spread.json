@@ -1,198 +1,4 @@
 {
- "validation_K10": {
-  "K": 10,
-  "fold": "validation",
-  "rows": 3165,
-  "patients": 2473,
-  "seeds": [
-   1234,
-   2025,
-   7
-  ],
-  "use": "decision fold",
-  "best_baseline_by_validation": "protgnn",
-  "validation_macro_f1_mean_of_baselines": {
-   "graphcare": 0.7331740592998869,
-   "gsat": 0.7261512570110148,
-   "protgnn": 0.7338279249413399
-  },
-  "baseline_macro_means_in_fold": {
-   "graphcare": 0.733174059299887,
-   "gsat": 0.7261512570110147,
-   "protgnn": 0.73382792494134
-  },
-  "cei_macro_mean": 0.7450926849617997,
-  "macro_gap_cei_minus_best": 0.011264760020459763,
-  "macro_gap_cei_minus_mean_of_baselines": 0.014041604544385832,
-  "n_classes": 10,
-  "n_classes_evaluable": 10,
-  "n_classes_not_evaluable": 0,
-  "n_classes_cei_beats_best_baseline": 8,
-  "n_classes_cei_below_best_baseline": 2,
-  "n_classes_cei_beats_every_baseline": 7,
-  "n_classes_cei_below_some_baseline": 3,
-  "evaluable_n_classes_cei_beats_best_baseline": 8,
-  "evaluable_n_classes_cei_beats_every_baseline": 7,
-  "top3_classes": [
-   {
-    "label": "Heart failure",
-    "support": 163,
-    "evaluable": true,
-    "cei_f1": 0.6800774901198374,
-    "best_baseline_f1": 0.6438435350679176,
-    "delta": 0.03623395505191984
-   },
-   {
-    "label": "Skin or soft-tissue infection",
-    "support": 325,
-    "evaluable": true,
-    "cei_f1": 0.6527509326094861,
-    "best_baseline_f1": 0.6317656392147732,
-    "delta": 0.02098529339471289
-   },
-   {
-    "label": "Head injury",
-    "support": 245,
-    "evaluable": true,
-    "cei_f1": 0.7406048648965596,
-    "best_baseline_f1": 0.721149326727016,
-    "delta": 0.019455538169543596
-   }
-  ],
-  "top3_share_of_macro_gap": 0.6806606308249334,
-  "top3_share_of_positive_deltas": 0.6589568992689298,
-  "bottom3_classes": [
-   {
-    "label": "Back or spine pain",
-    "support": 481,
-    "evaluable": true,
-    "delta": 0.0021617438841692316
-   },
-   {
-    "label": "Lower respiratory disease",
-    "support": 367,
-    "evaluable": true,
-    "delta": -0.0004838970976003276
-   },
-   {
-    "label": "Limb injury or pain",
-    "support": 403,
-    "evaluable": true,
-    "delta": -0.0032263201836528754
-   }
-  ],
-  "support_terciles": [
-   {
-    "tercile": 1,
-    "support_min": 158,
-    "support_max": 293,
-    "n_classes": 4,
-    "mean_delta_vs_best_baseline": 0.018064060995153064,
-    "cei_mean_f1": 0.7802208408099941,
-    "best_baseline_mean_f1": 0.762156779814841
-   },
-   {
-    "tercile": 2,
-    "support_min": 325,
-    "support_max": 367,
-    "n_classes": 3,
-    "mean_delta_vs_best_baseline": 0.008285064912779139,
-    "cei_mean_f1": 0.7351623361470526,
-    "best_baseline_mean_f1": 0.7268772712342734
-   },
-   {
-    "tercile": 3,
-    "support_min": 395,
-    "support_max": 481,
-    "n_classes": 3,
-    "mean_delta_vs_best_baseline": 0.005178720495215987,
-    "cei_mean_f1": 0.708185492645621,
-    "best_baseline_mean_f1": 0.7030067721504051
-   }
-  ],
-  "per_class_delta": [
-   {
-    "label": "Heart failure",
-    "support": 163,
-    "evaluable": true,
-    "delta_vs_best_baseline": 0.03623395505191984,
-    "delta_vs_classwise_max": 0.03496114442925069,
-    "delta_vs_mean_of_baselines": 0.03728831675993305
-   },
-   {
-    "label": "Skin or soft-tissue infection",
-    "support": 325,
-    "evaluable": true,
-    "delta_vs_best_baseline": 0.02098529339471289,
-    "delta_vs_classwise_max": 0.010910077936798324,
-    "delta_vs_mean_of_baselines": 0.016099385666704213
-   },
-   {
-    "label": "Head injury",
-    "support": 245,
-    "evaluable": true,
-    "delta_vs_best_baseline": 0.019455538169543596,
-    "delta_vs_classwise_max": 0.013042388648357606,
-    "delta_vs_mean_of_baselines": 0.018922014590113667
-   },
-   {
-    "label": "UTI or pyelonephritis",
-    "support": 395,
-    "evaluable": true,
-    "delta_vs_best_baseline": 0.016600737785131603,
-    "delta_vs_classwise_max": 0.016600737785131603,
-    "delta_vs_mean_of_baselines": 0.022307930198815606
-   },
-   {
-    "label": "Major depressive disorder",
-    "support": 293,
-    "evaluable": true,
-    "delta_vs_best_baseline": 0.009564681010498122,
-    "delta_vs_classwise_max": 0.004211160758329835,
-    "delta_vs_mean_of_baselines": 0.00797018596512089
-   },
-   {
-    "label": "Diabetes mellitus",
-    "support": 158,
-    "evaluable": true,
-    "delta_vs_best_baseline": 0.007002069748650697,
-    "delta_vs_classwise_max": 0.007002069748650697,
-    "delta_vs_mean_of_baselines": 0.018460619771668352
-   },
-   {
-    "label": "GI bleed",
-    "support": 335,
-    "evaluable": true,
-    "delta_vs_best_baseline": 0.004353798441224854,
-    "delta_vs_classwise_max": 0.004353798441224854,
-    "delta_vs_mean_of_baselines": 0.00899105660758348
-   },
-   {
-    "label": "Back or spine pain",
-    "support": 481,
-    "evaluable": true,
-    "delta_vs_best_baseline": 0.0021617438841692316,
-    "delta_vs_classwise_max": -0.006906290146738603,
-    "delta_vs_mean_of_baselines": 0.0017393543877010087
-   },
-   {
-    "label": "Lower respiratory disease",
-    "support": 367,
-    "evaluable": true,
-    "delta_vs_best_baseline": -0.0004838970976003276,
-    "delta_vs_classwise_max": -0.0004838970976003276,
-    "delta_vs_mean_of_baselines": 0.007984027306732755
-   },
-   {
-    "label": "Limb injury or pain",
-    "support": 403,
-    "evaluable": true,
-    "delta_vs_best_baseline": -0.0032263201836528754,
-    "delta_vs_classwise_max": -0.0032263201836528754,
-    "delta_vs_mean_of_baselines": 0.0006531541894853055
-   }
-  ]
- },
  "test_K10": {
   "K": 10,
   "fold": "test",
@@ -203,8 +9,10 @@
    2025,
    7
   ],
-  "use": "test fold: reported only, not used for decisions",
+  "use": "reported result",
   "best_baseline_by_validation": "protgnn",
+  "strongest_baseline_in_fold": "graphcare",
+  "macro_gap_cei_minus_strongest_in_fold": -0.00165233363064754,
   "validation_macro_f1_mean_of_baselines": {
    "graphcare": 0.7331740592998869,
    "gsat": 0.7261512570110148,
@@ -387,277 +195,199 @@
    }
   ]
  },
- "validation_K20": {
-  "K": 20,
+ "validation_K10": {
+  "K": 10,
   "fold": "validation",
-  "rows": 4183,
-  "patients": 3142,
+  "rows": 3165,
+  "patients": 2473,
   "seeds": [
    1234,
    2025,
    7
   ],
-  "use": "decision fold",
+  "use": "validation: decision fold",
   "best_baseline_by_validation": "protgnn",
+  "strongest_baseline_in_fold": "protgnn",
+  "macro_gap_cei_minus_strongest_in_fold": 0.01126476002045973,
   "validation_macro_f1_mean_of_baselines": {
-   "graphcare": 0.6742312268763953,
-   "gsat": 0.6717937916198137,
-   "protgnn": 0.6743391897386468
+   "graphcare": 0.7331740592998869,
+   "gsat": 0.7261512570110148,
+   "protgnn": 0.7338279249413399
   },
   "baseline_macro_means_in_fold": {
-   "graphcare": 0.6742312268763953,
-   "gsat": 0.6717937916198137,
-   "protgnn": 0.6743391897386469
+   "graphcare": 0.733174059299887,
+   "gsat": 0.7261512570110147,
+   "protgnn": 0.73382792494134
   },
-  "cei_macro_mean": 0.685870804454791,
-  "macro_gap_cei_minus_best": 0.011531614716144101,
-  "macro_gap_cei_minus_mean_of_baselines": 0.0124160683765057,
-  "n_classes": 20,
-  "n_classes_evaluable": 20,
+  "cei_macro_mean": 0.7450926849617997,
+  "macro_gap_cei_minus_best": 0.011264760020459763,
+  "macro_gap_cei_minus_mean_of_baselines": 0.014041604544385832,
+  "n_classes": 10,
+  "n_classes_evaluable": 10,
   "n_classes_not_evaluable": 0,
-  "n_classes_cei_beats_best_baseline": 16,
-  "n_classes_cei_below_best_baseline": 4,
-  "n_classes_cei_beats_every_baseline": 13,
-  "n_classes_cei_below_some_baseline": 7,
-  "evaluable_n_classes_cei_beats_best_baseline": 16,
-  "evaluable_n_classes_cei_beats_every_baseline": 13,
+  "n_classes_cei_beats_best_baseline": 8,
+  "n_classes_cei_below_best_baseline": 2,
+  "n_classes_cei_beats_every_baseline": 7,
+  "n_classes_cei_below_some_baseline": 3,
+  "evaluable_n_classes_cei_beats_best_baseline": 8,
+  "evaluable_n_classes_cei_beats_every_baseline": 7,
   "top3_classes": [
    {
-    "label": "Alcohol abuse with intoxication",
-    "support": 102,
+    "label": "Heart failure",
+    "support": 163,
     "evaluable": true,
-    "cei_f1": 0.7621803743348825,
-    "best_baseline_f1": 0.7173151238413422,
-    "delta": 0.04486525049354029
-   },
-   {
-    "label": "Hypokalemia",
-    "support": 96,
-    "evaluable": true,
-    "cei_f1": 0.6085759697699996,
-    "best_baseline_f1": 0.5766741286768099,
-    "delta": 0.03190184109318972
-   },
-   {
-    "label": "Anemia",
-    "support": 89,
-    "evaluable": true,
-    "cei_f1": 0.645976376095906,
-    "best_baseline_f1": 0.616431623931624,
-    "delta": 0.029544752164281984
-   }
-  ],
-  "top3_share_of_macro_gap": 0.46095818481594286,
-  "top3_share_of_positive_deltas": 0.36865923892332314,
-  "bottom3_classes": [
-   {
-    "label": "Sepsis",
-    "support": 69,
-    "evaluable": true,
-    "delta": -0.007971089345063298
-   },
-   {
-    "label": "Unspecified atrial fibrillation",
-    "support": 145,
-    "evaluable": true,
-    "delta": -0.014539888954687052
-   },
-   {
-    "label": "Acute pharyngitis",
-    "support": 74,
-    "evaluable": true,
-    "delta": -0.03232328773686444
-   }
-  ],
-  "support_terciles": [
-   {
-    "tercile": 1,
-    "support_min": 69,
-    "support_max": 105,
-    "n_classes": 7,
-    "mean_delta_vs_best_baseline": 0.013388031311518746,
-    "cei_mean_f1": 0.6775110925765805,
-    "best_baseline_mean_f1": 0.6641230612650618
-   },
-   {
-    "tercile": 2,
-    "support_min": 111,
-    "support_max": 293,
-    "n_classes": 7,
-    "mean_delta_vs_best_baseline": 0.00623535774738182,
-    "cei_mean_f1": 0.6905240750159402,
-    "best_baseline_mean_f1": 0.6842887172685584
-   },
-   {
-    "tercile": 3,
-    "support_min": 325,
-    "support_max": 481,
-    "n_classes": 6,
-    "mean_delta_vs_best_baseline": 0.015544761818429675,
-    "cei_mean_f1": 0.6901949859913622,
-    "best_baseline_mean_f1": 0.6746502241729325
-   }
-  ],
-  "per_class_delta": [
-   {
-    "label": "Alcohol abuse with intoxication",
-    "support": 102,
-    "evaluable": true,
-    "delta_vs_best_baseline": 0.04486525049354029,
-    "delta_vs_classwise_max": 0.02255224915146481,
-    "delta_vs_mean_of_baselines": 0.03150824959140486
-   },
-   {
-    "label": "Hypokalemia",
-    "support": 96,
-    "evaluable": true,
-    "delta_vs_best_baseline": 0.03190184109318972,
-    "delta_vs_classwise_max": 0.020675536869566802,
-    "delta_vs_mean_of_baselines": 0.02793097884480522
-   },
-   {
-    "label": "Anemia",
-    "support": 89,
-    "evaluable": true,
-    "delta_vs_best_baseline": 0.029544752164281984,
-    "delta_vs_classwise_max": 0.007315732016809573,
-    "delta_vs_mean_of_baselines": 0.022223144921259208
-   },
-   {
-    "label": "UTI or pyelonephritis",
-    "support": 395,
-    "evaluable": true,
-    "delta_vs_best_baseline": 0.029065429798821762,
-    "delta_vs_classwise_max": 0.02004936545490399,
-    "delta_vs_mean_of_baselines": 0.023819086276001045
-   },
-   {
-    "label": "Non-ST elevation (NSTEMI) myocardial infarction",
-    "support": 86,
-    "evaluable": true,
-    "delta_vs_best_baseline": 0.026950456533054612,
-    "delta_vs_classwise_max": 0.026950456533054612,
-    "delta_vs_mean_of_baselines": 0.03290072872999816
+    "cei_f1": 0.6800774901198374,
+    "best_baseline_f1": 0.6438435350679176,
+    "delta": 0.03623395505191984
    },
    {
     "label": "Skin or soft-tissue infection",
     "support": 325,
     "evaluable": true,
-    "delta_vs_best_baseline": 0.02158464023169515,
-    "delta_vs_classwise_max": 0.009157991616950412,
-    "delta_vs_mean_of_baselines": 0.013567181993872302
+    "cei_f1": 0.6527509326094861,
+    "best_baseline_f1": 0.6317656392147732,
+    "delta": 0.02098529339471289
    },
    {
     "label": "Head injury",
     "support": 245,
     "evaluable": true,
-    "delta_vs_best_baseline": 0.016896255514674552,
-    "delta_vs_classwise_max": 0.0015079891081128949,
-    "delta_vs_mean_of_baselines": 0.011429934775386563
-   },
+    "cei_f1": 0.7406048648965596,
+    "best_baseline_f1": 0.721149326727016,
+    "delta": 0.019455538169543596
+   }
+  ],
+  "top3_share_of_macro_gap": 0.6806606308249334,
+  "top3_share_of_positive_deltas": 0.6589568992689298,
+  "bottom3_classes": [
    {
-    "label": "Major depressive disorder",
-    "support": 293,
+    "label": "Back or spine pain",
+    "support": 481,
     "evaluable": true,
-    "delta_vs_best_baseline": 0.015960820893081373,
-    "delta_vs_classwise_max": 0.01133184995467651,
-    "delta_vs_mean_of_baselines": 0.013339568000497848
-   },
-   {
-    "label": "Heart failure",
-    "support": 163,
-    "evaluable": true,
-    "delta_vs_best_baseline": 0.01591092550970319,
-    "delta_vs_classwise_max": 0.01591092550970319,
-    "delta_vs_mean_of_baselines": 0.020159671806787904
+    "delta": 0.0021617438841692316
    },
    {
     "label": "Lower respiratory disease",
     "support": 367,
     "evaluable": true,
-    "delta_vs_best_baseline": 0.015336148244652237,
-    "delta_vs_classwise_max": 0.005437434792242457,
-    "delta_vs_mean_of_baselines": 0.014045135383755292
-   },
-   {
-    "label": "GI bleed",
-    "support": 335,
-    "evaluable": true,
-    "delta_vs_best_baseline": 0.01296457393542283,
-    "delta_vs_classwise_max": 0.010059451158819233,
-    "delta_vs_mean_of_baselines": 0.01239996637265417
-   },
-   {
-    "label": "Unsp intestnl obst",
-    "support": 141,
-    "evaluable": true,
-    "delta_vs_best_baseline": 0.008412359267225167,
-    "delta_vs_classwise_max": 0.008412359267225167,
-    "delta_vs_mean_of_baselines": 0.022920767775249096
-   },
-   {
-    "label": "Back or spine pain",
-    "support": 481,
-    "evaluable": true,
-    "delta_vs_best_baseline": 0.00826199565367014,
-    "delta_vs_classwise_max": -0.0030496381933691197,
-    "delta_vs_mean_of_baselines": 0.003325718534825106
+    "delta": -0.0004838970976003276
    },
    {
     "label": "Limb injury or pain",
     "support": 403,
     "evaluable": true,
-    "delta_vs_best_baseline": 0.006055783046315932,
-    "delta_vs_classwise_max": 0.006055783046315932,
-    "delta_vs_mean_of_baselines": 0.012343141851761441
+    "delta": -0.0032263201836528754
+   }
+  ],
+  "support_terciles": [
+   {
+    "tercile": 1,
+    "support_min": 158,
+    "support_max": 293,
+    "n_classes": 4,
+    "mean_delta_vs_best_baseline": 0.018064060995153064,
+    "cei_mean_f1": 0.7802208408099941,
+    "best_baseline_mean_f1": 0.762156779814841
+   },
+   {
+    "tercile": 2,
+    "support_min": 325,
+    "support_max": 367,
+    "n_classes": 3,
+    "mean_delta_vs_best_baseline": 0.008285064912779139,
+    "cei_mean_f1": 0.7351623361470526,
+    "best_baseline_mean_f1": 0.7268772712342734
+   },
+   {
+    "tercile": 3,
+    "support_min": 395,
+    "support_max": 481,
+    "n_classes": 3,
+    "mean_delta_vs_best_baseline": 0.005178720495215987,
+    "cei_mean_f1": 0.708185492645621,
+    "best_baseline_mean_f1": 0.7030067721504051
+   }
+  ],
+  "per_class_delta": [
+   {
+    "label": "Heart failure",
+    "support": 163,
+    "evaluable": true,
+    "delta_vs_best_baseline": 0.03623395505191984,
+    "delta_vs_classwise_max": 0.03496114442925069,
+    "delta_vs_mean_of_baselines": 0.03728831675993305
+   },
+   {
+    "label": "Skin or soft-tissue infection",
+    "support": 325,
+    "evaluable": true,
+    "delta_vs_best_baseline": 0.02098529339471289,
+    "delta_vs_classwise_max": 0.010910077936798324,
+    "delta_vs_mean_of_baselines": 0.016099385666704213
+   },
+   {
+    "label": "Head injury",
+    "support": 245,
+    "evaluable": true,
+    "delta_vs_best_baseline": 0.019455538169543596,
+    "delta_vs_classwise_max": 0.013042388648357606,
+    "delta_vs_mean_of_baselines": 0.018922014590113667
+   },
+   {
+    "label": "UTI or pyelonephritis",
+    "support": 395,
+    "evaluable": true,
+    "delta_vs_best_baseline": 0.016600737785131603,
+    "delta_vs_classwise_max": 0.016600737785131603,
+    "delta_vs_mean_of_baselines": 0.022307930198815606
+   },
+   {
+    "label": "Major depressive disorder",
+    "support": 293,
+    "evaluable": true,
+    "delta_vs_best_baseline": 0.009564681010498122,
+    "delta_vs_classwise_max": 0.004211160758329835,
+    "delta_vs_mean_of_baselines": 0.00797018596512089
    },
    {
     "label": "Diabetes mellitus",
     "support": 158,
     "evaluable": true,
-    "delta_vs_best_baseline": 0.003914754791837227,
-    "delta_vs_classwise_max": -0.012197596179327252,
-    "delta_vs_mean_of_baselines": 0.001185017840475422
+    "delta_vs_best_baseline": 0.007002069748650697,
+    "delta_vs_classwise_max": 0.007002069748650697,
+    "delta_vs_mean_of_baselines": 0.018460619771668352
    },
    {
-    "label": "Epilepsy",
-    "support": 105,
+    "label": "GI bleed",
+    "support": 335,
     "evaluable": true,
-    "delta_vs_best_baseline": 0.0007482959784923526,
-    "delta_vs_classwise_max": -0.013885070735901728,
-    "delta_vs_mean_of_baselines": -0.0030131370569232985
+    "delta_vs_best_baseline": 0.004353798441224854,
+    "delta_vs_classwise_max": 0.004353798441224854,
+    "delta_vs_mean_of_baselines": 0.00899105660758348
    },
    {
-    "label": "Acute kidney failure",
-    "support": 111,
+    "label": "Back or spine pain",
+    "support": 481,
     "evaluable": true,
-    "delta_vs_best_baseline": -0.0029077227901617153,
-    "delta_vs_classwise_max": -0.0029077227901617153,
-    "delta_vs_mean_of_baselines": 0.02093234269712002
+    "delta_vs_best_baseline": 0.0021617438841692316,
+    "delta_vs_classwise_max": -0.006906290146738603,
+    "delta_vs_mean_of_baselines": 0.0017393543877010087
    },
    {
-    "label": "Sepsis",
-    "support": 69,
+    "label": "Lower respiratory disease",
+    "support": 367,
     "evaluable": true,
-    "delta_vs_best_baseline": -0.007971089345063298,
-    "delta_vs_classwise_max": -0.007971089345063298,
-    "delta_vs_mean_of_baselines": -0.00032246814059527784
+    "delta_vs_best_baseline": -0.0004838970976003276,
+    "delta_vs_classwise_max": -0.0004838970976003276,
+    "delta_vs_mean_of_baselines": 0.007984027306732755
    },
    {
-    "label": "Unspecified atrial fibrillation",
-    "support": 145,
+    "label": "Limb injury or pain",
+    "support": 403,
     "evaluable": true,
-    "delta_vs_best_baseline": -0.014539888954687052,
-    "delta_vs_classwise_max": -0.01987440473801816,
-    "delta_vs_mean_of_baselines": -0.014977220245114387
-   },
-   {
-    "label": "Acute pharyngitis",
-    "support": 74,
-    "evaluable": true,
-    "delta_vs_best_baseline": -0.03232328773686444,
-    "delta_vs_classwise_max": -0.03232328773686444,
-    "delta_vs_mean_of_baselines": -0.017396442423106673
+    "delta_vs_best_baseline": -0.0032263201836528754,
+    "delta_vs_classwise_max": -0.0032263201836528754,
+    "delta_vs_mean_of_baselines": 0.0006531541894853055
    }
   ]
  },
@@ -671,8 +401,10 @@
    2025,
    7
   ],
-  "use": "test fold: reported only, not used for decisions",
+  "use": "reported result",
   "best_baseline_by_validation": "protgnn",
+  "strongest_baseline_in_fold": "graphcare",
+  "macro_gap_cei_minus_strongest_in_fold": 0.01802490308174054,
   "validation_macro_f1_mean_of_baselines": {
    "graphcare": 0.6742312268763953,
    "gsat": 0.6717937916198137,
@@ -935,357 +667,279 @@
    }
   ]
  },
- "validation_K30": {
-  "K": 30,
+ "validation_K20": {
+  "K": 20,
   "fold": "validation",
-  "rows": 4534,
-  "patients": 3388,
+  "rows": 4183,
+  "patients": 3142,
   "seeds": [
    1234,
    2025,
    7
   ],
-  "use": "decision fold",
+  "use": "validation: decision fold",
   "best_baseline_by_validation": "protgnn",
+  "strongest_baseline_in_fold": "protgnn",
+  "macro_gap_cei_minus_strongest_in_fold": 0.011531614716144056,
   "validation_macro_f1_mean_of_baselines": {
-   "graphcare": 0.5491296562483683,
-   "gsat": 0.5547554533352094,
-   "protgnn": 0.5631723120328487
+   "graphcare": 0.6742312268763953,
+   "gsat": 0.6717937916198137,
+   "protgnn": 0.6743391897386468
   },
   "baseline_macro_means_in_fold": {
-   "graphcare": 0.5491296562483683,
-   "gsat": 0.5547554533352094,
-   "protgnn": 0.5631723120328487
+   "graphcare": 0.6742312268763953,
+   "gsat": 0.6717937916198137,
+   "protgnn": 0.6743391897386469
   },
-  "cei_macro_mean": 0.5707929305601528,
-  "macro_gap_cei_minus_best": 0.007620618527304035,
-  "macro_gap_cei_minus_mean_of_baselines": 0.01510712335467728,
-  "n_classes": 30,
-  "n_classes_evaluable": 27,
-  "n_classes_not_evaluable": 3,
-  "n_classes_cei_beats_best_baseline": 18,
-  "n_classes_cei_below_best_baseline": 11,
-  "n_classes_cei_beats_every_baseline": 11,
-  "n_classes_cei_below_some_baseline": 18,
-  "evaluable_n_classes_cei_beats_best_baseline": 18,
-  "evaluable_n_classes_cei_beats_every_baseline": 11,
+  "cei_macro_mean": 0.685870804454791,
+  "macro_gap_cei_minus_best": 0.011531614716144101,
+  "macro_gap_cei_minus_mean_of_baselines": 0.0124160683765057,
+  "n_classes": 20,
+  "n_classes_evaluable": 20,
+  "n_classes_not_evaluable": 0,
+  "n_classes_cei_beats_best_baseline": 16,
+  "n_classes_cei_below_best_baseline": 4,
+  "n_classes_cei_beats_every_baseline": 13,
+  "n_classes_cei_below_some_baseline": 7,
+  "evaluable_n_classes_cei_beats_best_baseline": 16,
+  "evaluable_n_classes_cei_beats_every_baseline": 13,
   "top3_classes": [
    {
-    "label": "Acute upper respiratory infection",
-    "support": 36,
+    "label": "Alcohol abuse with intoxication",
+    "support": 102,
     "evaluable": true,
-    "cei_f1": 0.3672978407203427,
-    "best_baseline_f1": 0.28455632752767995,
-    "delta": 0.08274151319266276
-   },
-   {
-    "label": "Anemia",
-    "support": 89,
-    "evaluable": true,
-    "cei_f1": 0.6614186453914477,
-    "best_baseline_f1": 0.6131723568438737,
-    "delta": 0.04824628854757396
-   },
-   {
-    "label": "Dehydration",
-    "support": 45,
-    "evaluable": true,
-    "cei_f1": 0.2939244663382594,
-    "best_baseline_f1": 0.24655779564333655,
-    "delta": 0.04736667069492287
-   }
-  ],
-  "top3_share_of_macro_gap": 0.7801399663125791,
-  "top3_share_of_positive_deltas": 0.4319235708964173,
-  "bottom3_classes": [
-   {
-    "label": "Cardiovascular risk factor",
-    "support": 51,
-    "evaluable": true,
-    "delta": -0.03295707512261392
-   },
-   {
-    "label": "Laceration w/o fb of l idx fngr w/o damage to nail",
-    "support": 18,
-    "evaluable": false,
-    "delta": -0.03881680752914948
-   },
-   {
-    "label": "End stage renal disease",
-    "support": 2,
-    "evaluable": false,
-    "delta": -0.050053676865271096
-   }
-  ],
-  "support_terciles": [
-   {
-    "tercile": 1,
-    "support_min": 1,
-    "support_max": 60,
-    "n_classes": 10,
-    "mean_delta_vs_best_baseline": 0.005201713592571886,
-    "cei_mean_f1": 0.3814041571729302,
-    "best_baseline_mean_f1": 0.3762024435803583
-   },
-   {
-    "tercile": 2,
-    "support_min": 69,
-    "support_max": 145,
-    "n_classes": 10,
-    "mean_delta_vs_best_baseline": 0.005757937382239375,
-    "cei_mean_f1": 0.6454280409269688,
-    "best_baseline_mean_f1": 0.6396701035447295
-   },
-   {
-    "tercile": 3,
-    "support_min": 158,
-    "support_max": 481,
-    "n_classes": 10,
-    "mean_delta_vs_best_baseline": 0.011902204607100841,
-    "cei_mean_f1": 0.6855465935805591,
-    "best_baseline_mean_f1": 0.6736443889734581
-   }
-  ],
-  "per_class_delta": [
-   {
-    "label": "Acute upper respiratory infection",
-    "support": 36,
-    "evaluable": true,
-    "delta_vs_best_baseline": 0.08274151319266276,
-    "delta_vs_classwise_max": 0.059788262176281415,
-    "delta_vs_mean_of_baselines": 0.06826094424795004
-   },
-   {
-    "label": "Anemia",
-    "support": 89,
-    "evaluable": true,
-    "delta_vs_best_baseline": 0.04824628854757396,
-    "delta_vs_classwise_max": 0.03833693992168241,
-    "delta_vs_mean_of_baselines": 0.048040972305588014
-   },
-   {
-    "label": "Dehydration",
-    "support": 45,
-    "evaluable": true,
-    "delta_vs_best_baseline": 0.04736667069492287,
-    "delta_vs_classwise_max": -0.001298198121135019,
-    "delta_vs_mean_of_baselines": 0.019508358048907437
-   },
-   {
-    "label": "Unspecified asthma with (acute) exacerbation",
-    "support": 55,
-    "evaluable": true,
-    "delta_vs_best_baseline": 0.035268033082488826,
-    "delta_vs_classwise_max": 0.006512559327552125,
-    "delta_vs_mean_of_baselines": 0.03234899413620629
+    "cei_f1": 0.7621803743348825,
+    "best_baseline_f1": 0.7173151238413422,
+    "delta": 0.04486525049354029
    },
    {
     "label": "Hypokalemia",
     "support": 96,
     "evaluable": true,
-    "delta_vs_best_baseline": 0.030211242774802027,
-    "delta_vs_classwise_max": -0.004943170272238118,
-    "delta_vs_mean_of_baselines": 0.01264943436605015
+    "cei_f1": 0.6085759697699996,
+    "best_baseline_f1": 0.5766741286768099,
+    "delta": 0.03190184109318972
    },
    {
-    "label": "UTI or pyelonephritis",
-    "support": 395,
+    "label": "Anemia",
+    "support": 89,
     "evaluable": true,
-    "delta_vs_best_baseline": 0.030041696493745107,
-    "delta_vs_classwise_max": 0.023716001330180814,
-    "delta_vs_mean_of_baselines": 0.02777021301122362
-   },
-   {
-    "label": "Lower respiratory disease",
-    "support": 367,
-    "evaluable": true,
-    "delta_vs_best_baseline": 0.026954657058674503,
-    "delta_vs_classwise_max": 0.015252145233449532,
-    "delta_vs_mean_of_baselines": 0.021649018344669035
-   },
-   {
-    "label": "Major depressive disorder",
-    "support": 293,
-    "evaluable": true,
-    "delta_vs_best_baseline": 0.026420963609795622,
-    "delta_vs_classwise_max": 0.005819451747435034,
-    "delta_vs_mean_of_baselines": 0.014736315704602765
-   },
-   {
-    "label": "Multiple fractures of ribs",
-    "support": 60,
-    "evaluable": true,
-    "delta_vs_best_baseline": 0.015343673402402114,
-    "delta_vs_classwise_max": 0.015343673402402114,
-    "delta_vs_mean_of_baselines": 0.03222289098049108
-   },
-   {
-    "label": "Head injury",
-    "support": 245,
-    "evaluable": true,
-    "delta_vs_best_baseline": 0.012159100192650873,
-    "delta_vs_classwise_max": 0.012159100192650873,
-    "delta_vs_mean_of_baselines": 0.016292245261352756
-   },
-   {
-    "label": "GI bleed",
-    "support": 335,
-    "evaluable": true,
-    "delta_vs_best_baseline": 0.011269928444662236,
-    "delta_vs_classwise_max": 0.008885278588749435,
-    "delta_vs_mean_of_baselines": 0.010076236015045925
-   },
-   {
-    "label": "Limb injury or pain",
-    "support": 403,
-    "evaluable": true,
-    "delta_vs_best_baseline": 0.010959045307985749,
-    "delta_vs_classwise_max": -0.0011624786874249171,
-    "delta_vs_mean_of_baselines": 0.010639923804632745
-   },
-   {
-    "label": "Acute pharyngitis",
-    "support": 74,
-    "evaluable": true,
-    "delta_vs_best_baseline": 0.009101091861755783,
-    "delta_vs_classwise_max": 0.009101091861755783,
-    "delta_vs_mean_of_baselines": 0.018248165856644682
-   },
+    "cei_f1": 0.645976376095906,
+    "best_baseline_f1": 0.616431623931624,
+    "delta": 0.029544752164281984
+   }
+  ],
+  "top3_share_of_macro_gap": 0.46095818481594286,
+  "top3_share_of_positive_deltas": 0.36865923892332314,
+  "bottom3_classes": [
    {
     "label": "Sepsis",
     "support": 69,
     "evaluable": true,
-    "delta_vs_best_baseline": 0.008492746803305862,
-    "delta_vs_classwise_max": 0.004507349984701092,
-    "delta_vs_mean_of_baselines": 0.012094120212504222
-   },
-   {
-    "label": "Epilepsy",
-    "support": 105,
-    "evaluable": true,
-    "delta_vs_best_baseline": 0.006620992698101014,
-    "delta_vs_classwise_max": -0.011166566316011206,
-    "delta_vs_mean_of_baselines": 0.007007115758648985
-   },
-   {
-    "label": "Diabetes mellitus",
-    "support": 158,
-    "evaluable": true,
-    "delta_vs_best_baseline": 0.00573664420680009,
-    "delta_vs_classwise_max": -0.00949530909709917,
-    "delta_vs_mean_of_baselines": -0.00017660948380171515
-   },
-   {
-    "label": "Back or spine pain",
-    "support": 481,
-    "evaluable": true,
-    "delta_vs_best_baseline": 0.005476900989027644,
-    "delta_vs_classwise_max": -0.005145842437983106,
-    "delta_vs_mean_of_baselines": 0.000648743180310829
-   },
-   {
-    "label": "Anxiety disorder",
-    "support": 47,
-    "evaluable": true,
-    "delta_vs_best_baseline": 0.0005194410856024234,
-    "delta_vs_classwise_max": -0.03287922433553503,
-    "delta_vs_mean_of_baselines": -0.009734592568118483
-   },
-   {
-    "label": "Hypothyroidism",
-    "support": 1,
-    "evaluable": false,
-    "delta_vs_best_baseline": 0.0,
-    "delta_vs_classwise_max": 0.0,
-    "delta_vs_mean_of_baselines": 0.0
-   },
-   {
-    "label": "Alcohol abuse with intoxication",
-    "support": 102,
-    "evaluable": true,
-    "delta_vs_best_baseline": -0.0012222020240431064,
-    "delta_vs_classwise_max": -0.015210790131365282,
-    "delta_vs_mean_of_baselines": -0.009053712930448876
-   },
-   {
-    "label": "Acute kidney failure",
-    "support": 111,
-    "evaluable": true,
-    "delta_vs_best_baseline": -0.003030493559772307,
-    "delta_vs_classwise_max": -0.003030493559772307,
-    "delta_vs_mean_of_baselines": 0.005522033952210792
-   },
-   {
-    "label": "Skin or soft-tissue infection",
-    "support": 325,
-    "evaluable": true,
-    "delta_vs_best_baseline": -0.003677861181074382,
-    "delta_vs_classwise_max": -0.003677861181074382,
-    "delta_vs_mean_of_baselines": 0.008435009288078499
-   },
-   {
-    "label": "Non-ST elevation (NSTEMI) myocardial infarction",
-    "support": 86,
-    "evaluable": true,
-    "delta_vs_best_baseline": -0.004612625424197714,
-    "delta_vs_classwise_max": -0.004612625424197714,
-    "delta_vs_mean_of_baselines": 0.005359598077150696
-   },
-   {
-    "label": "Heart failure",
-    "support": 163,
-    "evaluable": true,
-    "delta_vs_best_baseline": -0.006319029051259029,
-    "delta_vs_classwise_max": -0.006319029051259029,
-    "delta_vs_mean_of_baselines": 0.014217432897861926
-   },
-   {
-    "label": "Hypotension",
-    "support": 36,
-    "evaluable": true,
-    "delta_vs_best_baseline": -0.00739463601532564,
-    "delta_vs_classwise_max": -0.00739463601532564,
-    "delta_vs_mean_of_baselines": 0.0033722690194407656
-   },
-   {
-    "label": "Unsp intestnl obst",
-    "support": 141,
-    "evaluable": true,
-    "delta_vs_best_baseline": -0.007603479544834535,
-    "delta_vs_classwise_max": -0.007603479544834535,
-    "delta_vs_mean_of_baselines": 0.020613584975057497
+    "delta": -0.007971089345063298
    },
    {
     "label": "Unspecified atrial fibrillation",
     "support": 145,
     "evaluable": true,
-    "delta_vs_best_baseline": -0.028624188310297227,
-    "delta_vs_classwise_max": -0.028624188310297227,
-    "delta_vs_mean_of_baselines": -0.005667135098997411
+    "delta": -0.014539888954687052
    },
    {
-    "label": "Cardiovascular risk factor",
-    "support": 51,
+    "label": "Acute pharyngitis",
+    "support": 74,
     "evaluable": true,
-    "delta_vs_best_baseline": -0.03295707512261392,
-    "delta_vs_classwise_max": -0.03814196831796768,
-    "delta_vs_mean_of_baselines": -0.0248793698942813
+    "delta": -0.03232328773686444
+   }
+  ],
+  "support_terciles": [
+   {
+    "tercile": 1,
+    "support_min": 69,
+    "support_max": 105,
+    "n_classes": 7,
+    "mean_delta_vs_best_baseline": 0.013388031311518746,
+    "cei_mean_f1": 0.6775110925765805,
+    "best_baseline_mean_f1": 0.6641230612650618
    },
    {
-    "label": "Laceration w/o fb of l idx fngr w/o damage to nail",
-    "support": 18,
-    "evaluable": false,
-    "delta_vs_best_baseline": -0.03881680752914948,
-    "delta_vs_classwise_max": -0.03881680752914948,
-    "delta_vs_mean_of_baselines": 0.007556653639195249
+    "tercile": 2,
+    "support_min": 111,
+    "support_max": 293,
+    "n_classes": 7,
+    "mean_delta_vs_best_baseline": 0.00623535774738182,
+    "cei_mean_f1": 0.6905240750159402,
+    "best_baseline_mean_f1": 0.6842887172685584
    },
    {
-    "label": "End stage renal disease",
-    "support": 2,
-    "evaluable": false,
-    "delta_vs_best_baseline": -0.050053676865271096,
-    "delta_vs_classwise_max": -0.050053676865271096,
-    "delta_vs_mean_of_baselines": 0.08545484753214219
+    "tercile": 3,
+    "support_min": 325,
+    "support_max": 481,
+    "n_classes": 6,
+    "mean_delta_vs_best_baseline": 0.015544761818429675,
+    "cei_mean_f1": 0.6901949859913622,
+    "best_baseline_mean_f1": 0.6746502241729325
+   }
+  ],
+  "per_class_delta": [
+   {
+    "label": "Alcohol abuse with intoxication",
+    "support": 102,
+    "evaluable": true,
+    "delta_vs_best_baseline": 0.04486525049354029,
+    "delta_vs_classwise_max": 0.02255224915146481,
+    "delta_vs_mean_of_baselines": 0.03150824959140486
+   },
+   {
+    "label": "Hypokalemia",
+    "support": 96,
+    "evaluable": true,
+    "delta_vs_best_baseline": 0.03190184109318972,
+    "delta_vs_classwise_max": 0.020675536869566802,
+    "delta_vs_mean_of_baselines": 0.02793097884480522
+   },
+   {
+    "label": "Anemia",
+    "support": 89,
+    "evaluable": true,
+    "delta_vs_best_baseline": 0.029544752164281984,
+    "delta_vs_classwise_max": 0.007315732016809573,
+    "delta_vs_mean_of_baselines": 0.022223144921259208
+   },
+   {
+    "label": "UTI or pyelonephritis",
+    "support": 395,
+    "evaluable": true,
+    "delta_vs_best_baseline": 0.029065429798821762,
+    "delta_vs_classwise_max": 0.02004936545490399,
+    "delta_vs_mean_of_baselines": 0.023819086276001045
+   },
+   {
+    "label": "Non-ST elevation (NSTEMI) myocardial infarction",
+    "support": 86,
+    "evaluable": true,
+    "delta_vs_best_baseline": 0.026950456533054612,
+    "delta_vs_classwise_max": 0.026950456533054612,
+    "delta_vs_mean_of_baselines": 0.03290072872999816
+   },
+   {
+    "label": "Skin or soft-tissue infection",
+    "support": 325,
+    "evaluable": true,
+    "delta_vs_best_baseline": 0.02158464023169515,
+    "delta_vs_classwise_max": 0.009157991616950412,
+    "delta_vs_mean_of_baselines": 0.013567181993872302
+   },
+   {
+    "label": "Head injury",
+    "support": 245,
+    "evaluable": true,
+    "delta_vs_best_baseline": 0.016896255514674552,
+    "delta_vs_classwise_max": 0.0015079891081128949,
+    "delta_vs_mean_of_baselines": 0.011429934775386563
+   },
+   {
+    "label": "Major depressive disorder",
+    "support": 293,
+    "evaluable": true,
+    "delta_vs_best_baseline": 0.015960820893081373,
+    "delta_vs_classwise_max": 0.01133184995467651,
+    "delta_vs_mean_of_baselines": 0.013339568000497848
+   },
+   {
+    "label": "Heart failure",
+    "support": 163,
+    "evaluable": true,
+    "delta_vs_best_baseline": 0.01591092550970319,
+    "delta_vs_classwise_max": 0.01591092550970319,
+    "delta_vs_mean_of_baselines": 0.020159671806787904
+   },
+   {
+    "label": "Lower respiratory disease",
+    "support": 367,
+    "evaluable": true,
+    "delta_vs_best_baseline": 0.015336148244652237,
+    "delta_vs_classwise_max": 0.005437434792242457,
+    "delta_vs_mean_of_baselines": 0.014045135383755292
+   },
+   {
+    "label": "GI bleed",
+    "support": 335,
+    "evaluable": true,
+    "delta_vs_best_baseline": 0.01296457393542283,
+    "delta_vs_classwise_max": 0.010059451158819233,
+    "delta_vs_mean_of_baselines": 0.01239996637265417
+   },
+   {
+    "label": "Unsp intestnl obst",
+    "support": 141,
+    "evaluable": true,
+    "delta_vs_best_baseline": 0.008412359267225167,
+    "delta_vs_classwise_max": 0.008412359267225167,
+    "delta_vs_mean_of_baselines": 0.022920767775249096
+   },
+   {
+    "label": "Back or spine pain",
+    "support": 481,
+    "evaluable": true,
+    "delta_vs_best_baseline": 0.00826199565367014,
+    "delta_vs_classwise_max": -0.0030496381933691197,
+    "delta_vs_mean_of_baselines": 0.003325718534825106
+   },
+   {
+    "label": "Limb injury or pain",
+    "support": 403,
+    "evaluable": true,
+    "delta_vs_best_baseline": 0.006055783046315932,
+    "delta_vs_classwise_max": 0.006055783046315932,
+    "delta_vs_mean_of_baselines": 0.012343141851761441
+   },
+   {
+    "label": "Diabetes mellitus",
+    "support": 158,
+    "evaluable": true,
+    "delta_vs_best_baseline": 0.003914754791837227,
+    "delta_vs_classwise_max": -0.012197596179327252,
+    "delta_vs_mean_of_baselines": 0.001185017840475422
+   },
+   {
+    "label": "Epilepsy",
+    "support": 105,
+    "evaluable": true,
+    "delta_vs_best_baseline": 0.0007482959784923526,
+    "delta_vs_classwise_max": -0.013885070735901728,
+    "delta_vs_mean_of_baselines": -0.0030131370569232985
+   },
+   {
+    "label": "Acute kidney failure",
+    "support": 111,
+    "evaluable": true,
+    "delta_vs_best_baseline": -0.0029077227901617153,
+    "delta_vs_classwise_max": -0.0029077227901617153,
+    "delta_vs_mean_of_baselines": 0.02093234269712002
+   },
+   {
+    "label": "Sepsis",
+    "support": 69,
+    "evaluable": true,
+    "delta_vs_best_baseline": -0.007971089345063298,
+    "delta_vs_classwise_max": -0.007971089345063298,
+    "delta_vs_mean_of_baselines": -0.00032246814059527784
+   },
+   {
+    "label": "Unspecified atrial fibrillation",
+    "support": 145,
+    "evaluable": true,
+    "delta_vs_best_baseline": -0.014539888954687052,
+    "delta_vs_classwise_max": -0.01987440473801816,
+    "delta_vs_mean_of_baselines": -0.014977220245114387
+   },
+   {
+    "label": "Acute pharyngitis",
+    "support": 74,
+    "evaluable": true,
+    "delta_vs_best_baseline": -0.03232328773686444,
+    "delta_vs_classwise_max": -0.03232328773686444,
+    "delta_vs_mean_of_baselines": -0.017396442423106673
    }
   ]
  },
@@ -1299,8 +953,10 @@
    2025,
    7
   ],
-  "use": "test fold: reported only, not used for decisions",
+  "use": "reported result",
   "best_baseline_by_validation": "protgnn",
+  "strongest_baseline_in_fold": "gsat",
+  "macro_gap_cei_minus_strongest_in_fold": 0.02116068350582978,
   "validation_macro_f1_mean_of_baselines": {
    "graphcare": 0.5491296562483683,
    "gsat": 0.5547554533352094,
@@ -1640,6 +1296,362 @@
     "delta_vs_best_baseline": -0.026469947341090705,
     "delta_vs_classwise_max": -0.026469947341090705,
     "delta_vs_mean_of_baselines": 0.05402128003142265
+   }
+  ]
+ },
+ "validation_K30": {
+  "K": 30,
+  "fold": "validation",
+  "rows": 4534,
+  "patients": 3388,
+  "seeds": [
+   1234,
+   2025,
+   7
+  ],
+  "use": "validation: decision fold",
+  "best_baseline_by_validation": "protgnn",
+  "strongest_baseline_in_fold": "protgnn",
+  "macro_gap_cei_minus_strongest_in_fold": 0.007620618527304113,
+  "validation_macro_f1_mean_of_baselines": {
+   "graphcare": 0.5491296562483683,
+   "gsat": 0.5547554533352094,
+   "protgnn": 0.5631723120328487
+  },
+  "baseline_macro_means_in_fold": {
+   "graphcare": 0.5491296562483683,
+   "gsat": 0.5547554533352094,
+   "protgnn": 0.5631723120328487
+  },
+  "cei_macro_mean": 0.5707929305601528,
+  "macro_gap_cei_minus_best": 0.007620618527304035,
+  "macro_gap_cei_minus_mean_of_baselines": 0.01510712335467728,
+  "n_classes": 30,
+  "n_classes_evaluable": 27,
+  "n_classes_not_evaluable": 3,
+  "n_classes_cei_beats_best_baseline": 18,
+  "n_classes_cei_below_best_baseline": 11,
+  "n_classes_cei_beats_every_baseline": 11,
+  "n_classes_cei_below_some_baseline": 18,
+  "evaluable_n_classes_cei_beats_best_baseline": 18,
+  "evaluable_n_classes_cei_beats_every_baseline": 11,
+  "top3_classes": [
+   {
+    "label": "Acute upper respiratory infection",
+    "support": 36,
+    "evaluable": true,
+    "cei_f1": 0.3672978407203427,
+    "best_baseline_f1": 0.28455632752767995,
+    "delta": 0.08274151319266276
+   },
+   {
+    "label": "Anemia",
+    "support": 89,
+    "evaluable": true,
+    "cei_f1": 0.6614186453914477,
+    "best_baseline_f1": 0.6131723568438737,
+    "delta": 0.04824628854757396
+   },
+   {
+    "label": "Dehydration",
+    "support": 45,
+    "evaluable": true,
+    "cei_f1": 0.2939244663382594,
+    "best_baseline_f1": 0.24655779564333655,
+    "delta": 0.04736667069492287
+   }
+  ],
+  "top3_share_of_macro_gap": 0.7801399663125791,
+  "top3_share_of_positive_deltas": 0.4319235708964173,
+  "bottom3_classes": [
+   {
+    "label": "Cardiovascular risk factor",
+    "support": 51,
+    "evaluable": true,
+    "delta": -0.03295707512261392
+   },
+   {
+    "label": "Laceration w/o fb of l idx fngr w/o damage to nail",
+    "support": 18,
+    "evaluable": false,
+    "delta": -0.03881680752914948
+   },
+   {
+    "label": "End stage renal disease",
+    "support": 2,
+    "evaluable": false,
+    "delta": -0.050053676865271096
+   }
+  ],
+  "support_terciles": [
+   {
+    "tercile": 1,
+    "support_min": 1,
+    "support_max": 60,
+    "n_classes": 10,
+    "mean_delta_vs_best_baseline": 0.005201713592571886,
+    "cei_mean_f1": 0.3814041571729302,
+    "best_baseline_mean_f1": 0.3762024435803583
+   },
+   {
+    "tercile": 2,
+    "support_min": 69,
+    "support_max": 145,
+    "n_classes": 10,
+    "mean_delta_vs_best_baseline": 0.005757937382239375,
+    "cei_mean_f1": 0.6454280409269688,
+    "best_baseline_mean_f1": 0.6396701035447295
+   },
+   {
+    "tercile": 3,
+    "support_min": 158,
+    "support_max": 481,
+    "n_classes": 10,
+    "mean_delta_vs_best_baseline": 0.011902204607100841,
+    "cei_mean_f1": 0.6855465935805591,
+    "best_baseline_mean_f1": 0.6736443889734581
+   }
+  ],
+  "per_class_delta": [
+   {
+    "label": "Acute upper respiratory infection",
+    "support": 36,
+    "evaluable": true,
+    "delta_vs_best_baseline": 0.08274151319266276,
+    "delta_vs_classwise_max": 0.059788262176281415,
+    "delta_vs_mean_of_baselines": 0.06826094424795004
+   },
+   {
+    "label": "Anemia",
+    "support": 89,
+    "evaluable": true,
+    "delta_vs_best_baseline": 0.04824628854757396,
+    "delta_vs_classwise_max": 0.03833693992168241,
+    "delta_vs_mean_of_baselines": 0.048040972305588014
+   },
+   {
+    "label": "Dehydration",
+    "support": 45,
+    "evaluable": true,
+    "delta_vs_best_baseline": 0.04736667069492287,
+    "delta_vs_classwise_max": -0.001298198121135019,
+    "delta_vs_mean_of_baselines": 0.019508358048907437
+   },
+   {
+    "label": "Unspecified asthma with (acute) exacerbation",
+    "support": 55,
+    "evaluable": true,
+    "delta_vs_best_baseline": 0.035268033082488826,
+    "delta_vs_classwise_max": 0.006512559327552125,
+    "delta_vs_mean_of_baselines": 0.03234899413620629
+   },
+   {
+    "label": "Hypokalemia",
+    "support": 96,
+    "evaluable": true,
+    "delta_vs_best_baseline": 0.030211242774802027,
+    "delta_vs_classwise_max": -0.004943170272238118,
+    "delta_vs_mean_of_baselines": 0.01264943436605015
+   },
+   {
+    "label": "UTI or pyelonephritis",
+    "support": 395,
+    "evaluable": true,
+    "delta_vs_best_baseline": 0.030041696493745107,
+    "delta_vs_classwise_max": 0.023716001330180814,
+    "delta_vs_mean_of_baselines": 0.02777021301122362
+   },
+   {
+    "label": "Lower respiratory disease",
+    "support": 367,
+    "evaluable": true,
+    "delta_vs_best_baseline": 0.026954657058674503,
+    "delta_vs_classwise_max": 0.015252145233449532,
+    "delta_vs_mean_of_baselines": 0.021649018344669035
+   },
+   {
+    "label": "Major depressive disorder",
+    "support": 293,
+    "evaluable": true,
+    "delta_vs_best_baseline": 0.026420963609795622,
+    "delta_vs_classwise_max": 0.005819451747435034,
+    "delta_vs_mean_of_baselines": 0.014736315704602765
+   },
+   {
+    "label": "Multiple fractures of ribs",
+    "support": 60,
+    "evaluable": true,
+    "delta_vs_best_baseline": 0.015343673402402114,
+    "delta_vs_classwise_max": 0.015343673402402114,
+    "delta_vs_mean_of_baselines": 0.03222289098049108
+   },
+   {
+    "label": "Head injury",
+    "support": 245,
+    "evaluable": true,
+    "delta_vs_best_baseline": 0.012159100192650873,
+    "delta_vs_classwise_max": 0.012159100192650873,
+    "delta_vs_mean_of_baselines": 0.016292245261352756
+   },
+   {
+    "label": "GI bleed",
+    "support": 335,
+    "evaluable": true,
+    "delta_vs_best_baseline": 0.011269928444662236,
+    "delta_vs_classwise_max": 0.008885278588749435,
+    "delta_vs_mean_of_baselines": 0.010076236015045925
+   },
+   {
+    "label": "Limb injury or pain",
+    "support": 403,
+    "evaluable": true,
+    "delta_vs_best_baseline": 0.010959045307985749,
+    "delta_vs_classwise_max": -0.0011624786874249171,
+    "delta_vs_mean_of_baselines": 0.010639923804632745
+   },
+   {
+    "label": "Acute pharyngitis",
+    "support": 74,
+    "evaluable": true,
+    "delta_vs_best_baseline": 0.009101091861755783,
+    "delta_vs_classwise_max": 0.009101091861755783,
+    "delta_vs_mean_of_baselines": 0.018248165856644682
+   },
+   {
+    "label": "Sepsis",
+    "support": 69,
+    "evaluable": true,
+    "delta_vs_best_baseline": 0.008492746803305862,
+    "delta_vs_classwise_max": 0.004507349984701092,
+    "delta_vs_mean_of_baselines": 0.012094120212504222
+   },
+   {
+    "label": "Epilepsy",
+    "support": 105,
+    "evaluable": true,
+    "delta_vs_best_baseline": 0.006620992698101014,
+    "delta_vs_classwise_max": -0.011166566316011206,
+    "delta_vs_mean_of_baselines": 0.007007115758648985
+   },
+   {
+    "label": "Diabetes mellitus",
+    "support": 158,
+    "evaluable": true,
+    "delta_vs_best_baseline": 0.00573664420680009,
+    "delta_vs_classwise_max": -0.00949530909709917,
+    "delta_vs_mean_of_baselines": -0.00017660948380171515
+   },
+   {
+    "label": "Back or spine pain",
+    "support": 481,
+    "evaluable": true,
+    "delta_vs_best_baseline": 0.005476900989027644,
+    "delta_vs_classwise_max": -0.005145842437983106,
+    "delta_vs_mean_of_baselines": 0.000648743180310829
+   },
+   {
+    "label": "Anxiety disorder",
+    "support": 47,
+    "evaluable": true,
+    "delta_vs_best_baseline": 0.0005194410856024234,
+    "delta_vs_classwise_max": -0.03287922433553503,
+    "delta_vs_mean_of_baselines": -0.009734592568118483
+   },
+   {
+    "label": "Hypothyroidism",
+    "support": 1,
+    "evaluable": false,
+    "delta_vs_best_baseline": 0.0,
+    "delta_vs_classwise_max": 0.0,
+    "delta_vs_mean_of_baselines": 0.0
+   },
+   {
+    "label": "Alcohol abuse with intoxication",
+    "support": 102,
+    "evaluable": true,
+    "delta_vs_best_baseline": -0.0012222020240431064,
+    "delta_vs_classwise_max": -0.015210790131365282,
+    "delta_vs_mean_of_baselines": -0.009053712930448876
+   },
+   {
+    "label": "Acute kidney failure",
+    "support": 111,
+    "evaluable": true,
+    "delta_vs_best_baseline": -0.003030493559772307,
+    "delta_vs_classwise_max": -0.003030493559772307,
+    "delta_vs_mean_of_baselines": 0.005522033952210792
+   },
+   {
+    "label": "Skin or soft-tissue infection",
+    "support": 325,
+    "evaluable": true,
+    "delta_vs_best_baseline": -0.003677861181074382,
+    "delta_vs_classwise_max": -0.003677861181074382,
+    "delta_vs_mean_of_baselines": 0.008435009288078499
+   },
+   {
+    "label": "Non-ST elevation (NSTEMI) myocardial infarction",
+    "support": 86,
+    "evaluable": true,
+    "delta_vs_best_baseline": -0.004612625424197714,
+    "delta_vs_classwise_max": -0.004612625424197714,
+    "delta_vs_mean_of_baselines": 0.005359598077150696
+   },
+   {
+    "label": "Heart failure",
+    "support": 163,
+    "evaluable": true,
+    "delta_vs_best_baseline": -0.006319029051259029,
+    "delta_vs_classwise_max": -0.006319029051259029,
+    "delta_vs_mean_of_baselines": 0.014217432897861926
+   },
+   {
+    "label": "Hypotension",
+    "support": 36,
+    "evaluable": true,
+    "delta_vs_best_baseline": -0.00739463601532564,
+    "delta_vs_classwise_max": -0.00739463601532564,
+    "delta_vs_mean_of_baselines": 0.0033722690194407656
+   },
+   {
+    "label": "Unsp intestnl obst",
+    "support": 141,
+    "evaluable": true,
+    "delta_vs_best_baseline": -0.007603479544834535,
+    "delta_vs_classwise_max": -0.007603479544834535,
+    "delta_vs_mean_of_baselines": 0.020613584975057497
+   },
+   {
+    "label": "Unspecified atrial fibrillation",
+    "support": 145,
+    "evaluable": true,
+    "delta_vs_best_baseline": -0.028624188310297227,
+    "delta_vs_classwise_max": -0.028624188310297227,
+    "delta_vs_mean_of_baselines": -0.005667135098997411
+   },
+   {
+    "label": "Cardiovascular risk factor",
+    "support": 51,
+    "evaluable": true,
+    "delta_vs_best_baseline": -0.03295707512261392,
+    "delta_vs_classwise_max": -0.03814196831796768,
+    "delta_vs_mean_of_baselines": -0.0248793698942813
+   },
+   {
+    "label": "Laceration w/o fb of l idx fngr w/o damage to nail",
+    "support": 18,
+    "evaluable": false,
+    "delta_vs_best_baseline": -0.03881680752914948,
+    "delta_vs_classwise_max": -0.03881680752914948,
+    "delta_vs_mean_of_baselines": 0.007556653639195249
+   },
+   {
+    "label": "End stage renal disease",
+    "support": 2,
+    "evaluable": false,
+    "delta_vs_best_baseline": -0.050053676865271096,
+    "delta_vs_classwise_max": -0.050053676865271096,
+    "delta_vs_mean_of_baselines": 0.08545484753214219
    }
   ]
  }

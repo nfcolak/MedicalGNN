@@ -1,6 +1,6 @@
-"""Generic analysis of arms vs a reference, fair_v10t runs (taken unchanged from the section-2 analysis, nasim_fixes ed7f97d).
+"""Generic analysis of arms vs a reference, fair_v10t runs (shared by the section-2, ablation and split-replication analyses).
 
-    env -u PYTHONPATH PYTHONDONTWRITEBYTECODE=1 /usr/bin/python3 comparison/nasim/analyze.py \
+    env -u PYTHONPATH PYTHONDONTWRITEBYTECODE=1 /usr/bin/python3 -m comparison.ablation.arms_vs_ref \
         --ref final=<.../clinical_runs_fair_v10t_20261011/top20> --arm x=<dir> [--arm y=<dir>] \
         [--method gsat] --out <new dir>
 
@@ -8,12 +8,12 @@ Every folder holds `<method>_seed<s>/` run dirs (result.json, binding.json, vali
 method key is the run-dir name without `_seed<s>` (so `gsat`, `cei_mp2`, `gchm_pna`); the binding method is
 recorded alongside. Read-only on the runs; `--out` must not exist.
 
-Decisions use the selected VALIDATION fold only. The test fold (scored once per run at the selected
-checkpoint) is shown as "reported only, not used for decisions".
+Decisions (checkpoint, HPO, baseline choice) use VALIDATION; every reported result is on TEST (scored once per run
+at the validation-selected checkpoint). Tables lead with the test fold; validation follows as the decision fold.
 
-Per run: selected validation macro-F1/accuracy (result.json, recomputed from validation.npz with the repo
-definition `f1_score(labels=arange(K), zero_division=0)` and asserted equal to 1e-6), selected epoch, test
-macro-F1/accuracy. Per arm and method: mean +- SD (ddof=1) over seeds. Arm vs reference over the matched
+Per run: test macro-F1/accuracy (result.json, recomputed from test.npz; a run without test.npz is refused), selected
+validation macro-F1/accuracy (recomputed from validation.npz with the repo definition
+`f1_score(labels=arange(K), zero_division=0)` and asserted equal to 1e-6), selected epoch. Per arm and method: mean +- SD (ddof=1) over seeds. Arm vs reference over the matched
 seeds: per-seed deltas and a two-level bootstrap of the macro-F1 difference (arm - reference):
   level 1 resamples the matched seeds with replacement; level 2 resamples patients (npz `subjects`, all their
   rows with multiplicity; rows paired between arm and reference by `sample_ids`); one patient resample per
@@ -21,6 +21,9 @@ seeds: per-seed deltas and a two-level bootstrap of the macro-F1 difference (arm
   Statistic = mean over the drawn seeds of F1(arm) - F1(reference) on the resampled patients. B = 2000,
   fixed rng. With one matched seed level 1 is trivial and this is the plain patient bootstrap against the
   reference run of that seed. A 'patients only' interval (seeds fixed at the matched seeds) is given too.
+Reading rule (same on both folds): drop = reference - arm; 'matters' = drop >= 0.005 and the seeds+patients CI
+excludes 0; 'no measurable effect' = the CI includes 0 (noted when drop >= 0.005); 'small effect, not resolved' =
+the CI excludes 0 and drop < 0.005.
 With 3 seeds the seed level is a weak estimate of seed variance: read it with the per-seed deltas.
 """
 import argparse
@@ -44,11 +47,25 @@ TOL = 1e-6
 RUN_RE = re.compile(r'^(?P<method>.+)_seed(?P<seed>\d+)$')
 SAME_KEYS = ('protocol', 'top_k_labels', 'num_classes', 'split_sample_ids_sha256', 'kept_label_indices',
              'artifact_graphs_sha256', 'targets_sha256')
-TEST_NOTE = 'reported only, not used for decisions'
+MATTERS = 0.005
+PROTOCOL_NOTE = ('Decisions (checkpoint, HPO, baseline choice) use VALIDATION; every reported result is on TEST '
+                 '(scored once per run at the validation-selected checkpoint).')
 
 
 class Refusal(Exception):
     pass
+
+
+def reading(mean_delta, ci):
+    """drop = reference - arm, CI = seeds+patients 95% interval of the delta.
+    Returns (reading, note); the note flags a drop >= MATTERS whose CI still includes 0."""
+    drop = -mean_delta
+    excludes0 = ci[0] > 0 or ci[1] < 0
+    if drop >= MATTERS and excludes0:
+        return 'matters', ''
+    if not excludes0:
+        return 'no measurable effect', 'not resolved at this precision' if drop >= MATTERS else ''
+    return 'small effect, not resolved', ''
 
 
 def macro_f1_from_conf(conf):
@@ -94,7 +111,7 @@ def load_run(path, method, seed):
     for fold in ('validation', 'test'):
         if fold == 'test':
             if not (path / 'test.npz').is_file():
-                continue
+                raise Refusal(f'{path}: no test.npz')
             if result.get('test_evaluations') != 1:
                 raise Refusal(f"{path}: test_evaluations {result.get('test_evaluations')!r}, not 1")
             folds['test'] = load_fold(path, 'test.npz')
@@ -118,13 +135,12 @@ def load_run(path, method, seed):
         if not isinstance(stored.get(name), (int, float)) or abs(got - stored[name]) > TOL:
             raise Refusal(f"{path}: recomputed validation {name} {got:.6f} != result.json {stored.get(name)!r}")
     row.update(val_macro_f1=v_f1, val_accuracy=v_acc)
-    if 'test' in folds:
-        t_f1, t_acc = repo_metrics(folds['test']['proba'], folds['test']['y'])
-        stored_t = result.get('test') or {}
-        for name, got in (('macro_f1', t_f1), ('accuracy', t_acc)):
-            if not isinstance(stored_t.get(name), (int, float)) or abs(got - stored_t[name]) > TOL:
-                raise Refusal(f"{path}: recomputed test {name} {got:.6f} != result.json {stored_t.get(name)!r}")
-        row.update(test_macro_f1=t_f1, test_accuracy=t_acc)
+    t_f1, t_acc = repo_metrics(folds['test']['proba'], folds['test']['y'])
+    stored_t = result.get('test') or {}
+    for name, got in (('macro_f1', t_f1), ('accuracy', t_acc)):
+        if not isinstance(stored_t.get(name), (int, float)) or abs(got - stored_t[name]) > TOL:
+            raise Refusal(f"{path}: recomputed test {name} {got:.6f} != result.json {stored_t.get(name)!r}")
+    row.update(test_macro_f1=t_f1, test_accuracy=t_acc)
     return {'row': row, 'binding': binding, 'folds': folds}
 
 
@@ -211,6 +227,7 @@ def analyze(ref, arms, methods):
         dirs[name] = found
         for (m, s), d in found.items():
             loaded[(name, m, s)] = load_run(d, m, s)
+            loaded[(name, m, s)]['row']['path'] = f'{ref[0] if name == "__ref__" else name}/{d.name}'
     if not dirs['__ref__']:
         raise Refusal('the reference has no runs for this method filter')
     # all runs must be one task: same split, class set, targets, graph
@@ -220,15 +237,7 @@ def analyze(ref, arms, methods):
         for key in SAME_KEYS:
             if loaded[k]['binding'].get(key) != base.get(key):
                 raise Refusal(f'{key} differs between {loaded[keys[0]]["row"]["path"]} and {loaded[k]["row"]["path"]}')
-    results = {}
-    for fold in ('validation', 'test'):
-        have = {k: v for k, v in loaded.items() if fold in v['folds']}
-        if len(have) != len(loaded):
-            if fold == 'validation':
-                raise Refusal('a run lacks validation.npz')
-            notes.append('test: some runs lack test.npz; test statistics skipped')
-            continue
-        results[fold] = bootstrap_f1(have, fold)
+    results = {fold: bootstrap_f1(loaded, fold) for fold in ('validation', 'test')}
     fold_info = {f: results[f][1] for f in results}
 
     doc = {'protocol': PROTOCOL, 'reference': ref[0], 'arms': [n for n, _ in arms],
@@ -240,7 +249,7 @@ def analyze(ref, arms, methods):
                                    'sample_ids; one patient resample per replicate shared by seeds and arms)',
                          'statistic': 'mean over drawn seeds of macro-F1(arm) - macro-F1(reference)',
                          'ci': '95% percentile'},
-           'test_note': TEST_NOTE, 'notes': notes, 'groups': []}
+           'protocol_note': PROTOCOL_NOTE, 'notes': notes, 'groups': []}
     all_methods = sorted({m for (_, m, _) in loaded})
     for arm_name in ['__ref__'] + [n for n, _ in arms]:
         label = ref[0] if arm_name == '__ref__' else arm_name
@@ -252,10 +261,9 @@ def analyze(ref, arms, methods):
             g = {'arm': label, 'is_reference': arm_name == '__ref__', 'method': m, 'seeds': seeds, 'runs': runs,
                  'validation_macro_f1': mean_sd([r['val_macro_f1'] for r in runs]),
                  'validation_accuracy': mean_sd([r['val_accuracy'] for r in runs]),
-                 'selected_epoch': mean_sd([r['selected_epoch'] for r in runs])}
-            if all('test_macro_f1' in r for r in runs):
-                g['test_macro_f1'] = mean_sd([r['test_macro_f1'] for r in runs])
-                g['test_accuracy'] = mean_sd([r['test_accuracy'] for r in runs])
+                 'selected_epoch': mean_sd([r['selected_epoch'] for r in runs]),
+                 'test_macro_f1': mean_sd([r['test_macro_f1'] for r in runs]),
+                 'test_accuracy': mean_sd([r['test_accuracy'] for r in runs])}
             if arm_name != '__ref__':
                 ref_seeds = {s for (a, mm, s) in loaded if a == '__ref__' and mm == m}
                 matched = [s for s in seeds if s in ref_seeds]
@@ -265,7 +273,7 @@ def analyze(ref, arms, methods):
                     notes.append(f'{label} {m}: no seed in common with the reference; no comparison')
                 else:
                     cmp_ = {'n_matched_seeds': len(matched), 'per_seed': []}
-                    for fold in results:
+                    for fold in ('test', 'validation'):
                         boot = results[fold][0]
                         d = np.stack([boot[(arm_name, m, s)] - boot[('__ref__', m, s)] for s in matched])
                         key = 'validation' if fold == 'validation' else 'test'
@@ -279,8 +287,8 @@ def analyze(ref, arms, methods):
                         cmp_[key] = {'per_seed': rows, 'macro_f1_delta': mean_sd(deltas),
                                      'accuracy_delta': mean_sd([x['accuracy_delta'] for x in rows]),
                                      'bootstrap': two_level(d)}
-                        if fold == 'test':
-                            cmp_[key]['note'] = TEST_NOTE
+                        cmp_[key]['reading'], cmp_[key]['reading_note'] = reading(
+                            cmp_[key]['macro_f1_delta']['mean'], cmp_[key]['bootstrap']['seeds_and_patients']['ci95'])
                     g['vs_reference'] = cmp_
             doc['groups'].append(g)
     return doc
@@ -290,64 +298,67 @@ def ci_txt(b):
     return f"[{b['ci95'][0]:+.4f}, {b['ci95'][1]:+.4f}]"
 
 
-def render(doc):
+def stat_cells(c):
+    """reading, d [CI seeds+patients], P(d>0), CI patients only of one fold's comparison."""
+    b = c['bootstrap']
+    return [c['reading'] + (f" ({c['reading_note']})" if c['reading_note'] else ''),
+            f"{c['macro_f1_delta']['mean']:+.4f} {ci_txt(b['seeds_and_patients'])}",
+            f"{b['seeds_and_patients']['p_delta_gt_0']:.3f}", ci_txt(b['patients_only'])]
+
+
+def render(doc, title='Arms vs reference'):
     L = []
     t = doc['task']
-    L += ['# Arms vs reference', '',
-          f"Protocol {doc['protocol']} (validation selection; test scored once, {TEST_NOTE}). "
+    L += [f'# {title}', '',
+          f"Protocol {doc['protocol']}. {doc['protocol_note']} "
           f"K={t['top_k_labels']}; reference `{doc['reference']}`; arms: {', '.join(doc['arms']) or 'none'}; "
           f"methods: {', '.join(doc['method_filter']) if doc['method_filter'] else 'all found'}.",
-          f"Validation {t['folds']['validation']['rows']} rows / {t['folds']['validation']['patients']} patients"
-          + (f"; test {t['folds']['test']['rows']} rows / {t['folds']['test']['patients']} patients"
-             if 'test' in t['folds'] else '') + '.',
+          f"Test {t['folds']['test']['rows']} rows / {t['folds']['test']['patients']} patients; "
+          f"validation (decision fold) {t['folds']['validation']['rows']} rows / {t['folds']['validation']['patients']} patients.",
           f"Bootstrap B={doc['bootstrap']['B']}: {doc['bootstrap']['levels']}; {doc['bootstrap']['statistic']}; "
-          f"{doc['bootstrap']['ci']}.", '']
+          f"{doc['bootstrap']['ci']}.",
+          f"Reading rule (both folds): matters = drop (reference - arm) >= {MATTERS} and the seeds+patients CI excludes 0; "
+          f"no measurable effect = CI includes 0; small effect, not resolved = CI excludes 0 and drop < {MATTERS}.", '']
     for n in doc['notes']:
         L.append(f'NOTE: {n}')
     if doc['notes']:
         L.append('')
     L += ['## Overview (delta = arm - reference, matched seeds)', '',
-          '| arm | method | seeds | val macro-F1 | d val [CI seeds+patients] | P(d>0) | CI patients only | '
-          'test macro-F1 (reported only) | d test [CI] (reported only) |',
-          '|---|---|---|---|---|---|---|---|---|']
+          '| arm | method | seeds | test macro-F1 | test reading | d test [CI seeds+patients] | P(d>0) | CI patients only | '
+          'validation macro-F1 (decision fold) | validation reading | d val [CI seeds+patients] | P(d>0) | CI patients only |',
+          '|---|---|---|---|---|---|---|---|---|---|---|---|---|']
     for g in doc['groups']:
         seeds = ','.join(map(str, g['seeds']))
-        tm = fmt(g.get('test_macro_f1'))
+        tm, vm = fmt(g['test_macro_f1']), fmt(g['validation_macro_f1'])
         if g['is_reference']:
-            L.append(f"| {g['arm']} (ref) | {g['method']} | {seeds} | {fmt(g['validation_macro_f1'])} | - | - | - | {tm} | - |")
+            L.append(f"| {g['arm']} (ref) | {g['method']} | {seeds} | {tm} | - | - | - | - | {vm} | - | - | - | - |")
             continue
         c = g.get('vs_reference')
         if not c:
-            L.append(f"| {g['arm']} | {g['method']} | {seeds} | {fmt(g['validation_macro_f1'])} | no matched seed | - | - | {tm} | - |")
+            L.append(f"| {g['arm']} | {g['method']} | {seeds} | {tm} | no matched seed | - | - | - | {vm} | - | - | - | - |")
             continue
-        v, te = c['validation'], c.get('test')
-        tcol = (f"{te['macro_f1_delta']['mean']:+.4f} {ci_txt(te['bootstrap']['seeds_and_patients'])}" if te else 'n/a')
-        L.append(f"| {g['arm']} | {g['method']} | {seeds} | {fmt(g['validation_macro_f1'])} | "
-                 f"{v['macro_f1_delta']['mean']:+.4f} {ci_txt(v['bootstrap']['seeds_and_patients'])} | "
-                 f"{v['bootstrap']['seeds_and_patients']['p_delta_gt_0']:.3f} | {ci_txt(v['bootstrap']['patients_only'])} | "
-                 f"{tm} | {tcol} |")
+        L.append(f"| {g['arm']} | {g['method']} | {seeds} | {tm} | " + ' | '.join(stat_cells(c['test']))
+                 + f" | {vm} | " + ' | '.join(stat_cells(c['validation'])) + ' |')
     n_matched = sorted({g['vs_reference']['n_matched_seeds'] for g in doc['groups'] if g.get('vs_reference')})
     n_txt = '/'.join(map(str, n_matched)) or '0'
-    L += ['', 'Intervals are conditional on the fixed evaluation fold; the seed level rests on the matched seeds '
+    L += ['', 'Intervals are conditional on the fixed test fold; the seed level rests on the matched seeds '
               f'only ({n_txt} per arm here), so a CI that excludes 0 is not seed-robust proof: check per-seed deltas.', '']
     for g in doc['groups']:
         L += [f"## {g['arm']}{' (reference)' if g['is_reference'] else ''} / {g['method']}", '',
-              '| seed | val macro-F1 | val accuracy | selected epoch | test macro-F1 (reported only) | test accuracy (reported only) |',
+              '| seed | test macro-F1 | test accuracy | validation macro-F1 (decision fold) | validation accuracy | selected epoch |',
               '|---|---|---|---|---|---|']
         for r in g['runs']:
-            L.append(f"| {r['seed']} | {r['val_macro_f1']:.4f} | {r['val_accuracy']:.4f} | {r['selected_epoch']} | "
-                     + (f"{r['test_macro_f1']:.4f} | {r['test_accuracy']:.4f} |" if 'test_macro_f1' in r else 'n/a | n/a |'))
-        L.append(f"| mean ± SD | {fmt(g['validation_macro_f1'])} | {fmt(g['validation_accuracy'])} | "
-                 f"{fmt(g['selected_epoch'], 1)} | {fmt(g.get('test_macro_f1'))} | {fmt(g.get('test_accuracy'))} |")
+            L.append(f"| {r['seed']} | {r['test_macro_f1']:.4f} | {r['test_accuracy']:.4f} | {r['val_macro_f1']:.4f} | "
+                     f"{r['val_accuracy']:.4f} | {r['selected_epoch']} |")
+        L.append(f"| mean ± SD | {fmt(g['test_macro_f1'])} | {fmt(g['test_accuracy'])} | {fmt(g['validation_macro_f1'])} | "
+                 f"{fmt(g['validation_accuracy'])} | {fmt(g['selected_epoch'], 1)} |")
         c = g.get('vs_reference')
         if c:
             L += ['', f"vs reference `{doc['reference']}`, matched seeds {g['matched_seeds']}"
                       + (f", arm-only seeds {g['unmatched_seeds']}" if g['unmatched_seeds'] else '') + ':', '',
                   '| fold | seed | d macro-F1 | d accuracy |', '|---|---|---|---|']
-            for fold in ('validation', 'test'):
-                if fold not in c:
-                    continue
-                tag = fold if fold == 'validation' else f'test ({TEST_NOTE})'
+            for fold in ('test', 'validation'):
+                tag = fold if fold == 'test' else 'validation (decision fold)'
                 for x in c[fold]['per_seed']:
                     L.append(f"| {tag} | {x['seed']} | {x['macro_f1_delta']:+.4f} | {x['accuracy_delta']:+.4f} |")
                 b = c[fold]['bootstrap']
@@ -368,7 +379,7 @@ def parse_named(items, what):
     return out
 
 
-def main(argv=None):
+def main(argv=None, title='Arms vs reference'):
     ap = argparse.ArgumentParser(description=__doc__.split('\n')[0])
     ap.add_argument('--ref', required=True, help='NAME=DIR of the reference runs')
     ap.add_argument('--arm', action='append', default=[], help='NAME=DIR (repeatable)')
@@ -391,7 +402,7 @@ def main(argv=None):
         return 2
     out.mkdir(parents=True)
     (out / 'summary.json').write_text(json.dumps(doc, indent=1))
-    (out / 'summary.md').write_text(render(doc) + '\n')
+    (out / 'summary.md').write_text(render(doc, title) + '\n')
     print(f'wrote {out}/summary.md and summary.json')
     return 0
 

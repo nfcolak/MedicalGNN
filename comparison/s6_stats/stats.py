@@ -10,7 +10,8 @@ Reads `result.json`, `binding.json`, `validation.npz` and `test.npz` of the stor
     matrix) and a two-level seed x patient bootstrap (level 1: seeds resampled per method; level 2: the shared
     patient draw), for CEI-GNN against every baseline and against the mean of the baselines;
   * per-class precision / recall / F1 / support (mean, SD over seeds) and the class spread of the CEI gain.
-Validation decides ("best baseline" = highest mean validation macro-F1); test numbers are reported only.
+Decisions (checkpoint, HPO, baseline choice) use VALIDATION; every reported result is on TEST (scored once per run at the
+validation-selected checkpoint). "Best baseline" = highest mean validation macro-F1 (chosen on validation).
 Outputs hold no sample or subject ids.
 """
 import argparse
@@ -27,7 +28,7 @@ KS = (10, 20, 30)
 SEEDS = (1234, 2025, 7)
 DEFAULT_METHODS = ('cei_mp2', 'gsat', 'graphcare', 'protgnn')
 CEI = 'cei_mp2'
-FOLDS = ('validation', 'test')
+FOLDS = ('test', 'validation')      # reported fold first, decision fold second
 FOLD_FILE = {'validation': 'validation.npz', 'test': 'test.npz'}
 FOLD_RESULT_KEY = {'validation': 'metrics', 'test': 'test'}
 NAME = {'cei_mp2': 'CEI-GNN mp2', 'gsat': 'GSAT', 'graphcare': 'GraphCare-style (adapted)',
@@ -41,7 +42,8 @@ TWO_LEVEL_RNG_BASE = 7777      # nf-s6-son s6a_analysis.py: default_rng(7777 + K
 BONFERRONI_M = 9               # 3 baselines x 3 K
 MIN_SUPPORT = 30               # classes below this are marked "not evaluable"
 TOL = 1e-6
-TEST_NOTE = 'test fold: reported only, not used for decisions'
+RULE_NOTE = ('Decisions (checkpoint, HPO, baseline choice) use VALIDATION; every reported result is on TEST '
+             '(scored once per run at the validation-selected checkpoint)')
 
 
 class Refusal(Exception):
@@ -296,7 +298,7 @@ def json_clean(o):
 
 def identity_line(K, fold, data, seeds):
     fd = data[K]['folds'][fold]
-    note = f' ({TEST_NOTE})' if fold == 'test' else ' (decision fold)'
+    note = ' (reported result)' if fold == 'test' else ' (validation: decision fold)'
     return f'K={K}, {fold} fold{note}: {fd["N"]} rows, {fd["S"]} patients, seeds {", ".join(map(str, seeds))}'
 
 
@@ -338,9 +340,9 @@ def build(args):
             for s in seeds:
                 v, t = met(K, 'validation', m, s), met(K, 'test', m, s)
                 per_seed.append({'K': K, 'method': m, 'seed': s,
-                                 'validation_macro_f1': v['macro_f1'], 'validation_accuracy': v['accuracy'],
                                  'test_macro_f1': t['macro_f1'], 'test_accuracy': t['accuracy'],
                                  'test_balanced_accuracy': t['balanced_accuracy'],
+                                 'validation_macro_f1': v['macro_f1'], 'validation_accuracy': v['accuracy'],
                                  'selected_epoch': data[K]['stored'][(m, s)].get('selected_epoch'),
                                  'validation_rows': data[K]['folds']['validation']['N'],
                                  'test_rows': data[K]['folds']['test']['N']})
@@ -469,6 +471,7 @@ def build(args):
             sup = pc_sup[(K, fold)]
             cei = pc_f1[(K, fold, CEI)]
             base_means = {b: float(pc_f1[(K, fold, b)].mean()) for b in baselines}
+            strongest = max(baselines, key=lambda b: (base_means[b], b))
             delta_best = cei - pc_f1[(K, fold, bb)]
             stack = np.stack([pc_f1[(K, fold, b)] for b in baselines])
             delta_max = cei - stack.max(axis=0)
@@ -490,8 +493,10 @@ def build(args):
             fd = data[K]['folds'][fold]
             spread[f'{fold}_K{K}'] = {
                 'K': K, 'fold': fold, 'rows': fd['N'], 'patients': fd['S'], 'seeds': seeds,
-                'use': TEST_NOTE if fold == 'test' else 'decision fold',
-                'best_baseline_by_validation': bb, 'validation_macro_f1_mean_of_baselines': {b: val_mean[(K, b)] for b in baselines},
+                'use': 'reported result' if fold == 'test' else 'validation: decision fold',
+                'best_baseline_by_validation': bb,
+                'strongest_baseline_in_fold': strongest,
+                'macro_gap_cei_minus_strongest_in_fold': float(cei.mean() - base_means[strongest]), 'validation_macro_f1_mean_of_baselines': {b: val_mean[(K, b)] for b in baselines},
                 'baseline_macro_means_in_fold': base_means, 'cei_macro_mean': float(cei.mean()),
                 'macro_gap_cei_minus_best': gap,
                 'macro_gap_cei_minus_mean_of_baselines': float(delta_mean.sum() / K),
@@ -525,7 +530,7 @@ def render(res, args):
     order, baselines, seeds, ks, data = res['order'], res['baselines'], res['seeds'], res['ks'], res['data']
     files = {}
     ident = ('Final runs, protocol fair_v10t; seeds ' + ', '.join(map(str, seeds)) + '; methods '
-             + ', '.join(pretty(m) for m in order) + '. Validation decides; ' + TEST_NOTE + '.\n')
+             + ', '.join(pretty(m) for m in order) + '. ' + RULE_NOTE + '.\n')
 
     # per-seed
     fields = list(res['per_seed'][0].keys())
@@ -534,10 +539,11 @@ def render(res, args):
     for K in ks:
         md += f'## K={K}\n\n' + ' / '.join(
             f'{fold}: {data[K]["folds"][fold]["N"]} rows, {data[K]["folds"][fold]["S"]} patients' for fold in FOLDS) + '\n\n'
-        md += md_table(['method', 'seed', 'val macro-F1', 'val acc', 'test macro-F1 (reported only)', 'test acc',
-                        'test bal. acc', 'selected epoch'],
-                       [[pretty(r['method']), str(r['seed']), r['validation_macro_f1'], r['validation_accuracy'],
-                         r['test_macro_f1'], r['test_accuracy'], r['test_balanced_accuracy'], str(r['selected_epoch'])]
+        md += md_table(['method', 'seed', 'test macro-F1', 'test acc', 'test bal. acc', 'val macro-F1 (decision fold)',
+                        'val acc (decision fold)', 'selected epoch (validation)'],
+                       [[pretty(r['method']), str(r['seed']), r['test_macro_f1'], r['test_accuracy'],
+                         r['test_balanced_accuracy'], r['validation_macro_f1'], r['validation_accuracy'],
+                         str(r['selected_epoch'])]
                         for r in res['per_seed'] if r['K'] == K])
         md += '\n'
     files['per_seed.md'] = md
@@ -548,7 +554,7 @@ def render(res, args):
     for K in ks:
         for fold in FOLDS:
             md += f'## {identity_line(K, fold, data, seeds)}\n\n'
-            md += md_table(['method', 'macro-F1', 'SD', 'accuracy', 'SD', 'bal. acc', 'SD', 'rank', 'best baseline (validation)'],
+            md += md_table(['method', 'macro-F1', 'SD', 'accuracy', 'SD', 'bal. acc', 'SD', 'rank in fold', 'best baseline (chosen on validation)'],
                            [[pretty(r['method']), r['macro_f1_mean'], r['macro_f1_sd'], r['accuracy_mean'], r['accuracy_sd'],
                              r['balanced_accuracy_mean'], r['balanced_accuracy_sd'], str(r['rank_in_fold']),
                              'yes' if r['best_baseline_by_validation'] else ''] for r in res['summary']
@@ -569,7 +575,7 @@ def render(res, args):
             md += f'## {identity_line(K, fold, data, seeds)}\n\n'
             md += md_table(['baseline', 'delta', 'patient-only 95% CI', 'P(d>0)', 'two-level 95% CI', 'P(d>0)', 'SE ratio',
                             f'Bonferroni CI (1-0.05/{BONFERRONI_M})'],
-                           [[pretty(r['baseline']) + (' (best by validation)' if r['best_baseline_by_validation'] else '')
+                           [[pretty(r['baseline']) + (' (best baseline, chosen on validation)' if r['best_baseline_by_validation'] else '')
                              if r['baseline'] != 'mean_of_baselines' else 'mean of the baselines',
                              r['observed_delta'], f"[{r['patient_only_lo']:+.4f}, {r['patient_only_hi']:+.4f}]",
                              r['patient_only_p_delta_gt_0'], f"[{r['two_level_lo']:+.4f}, {r['two_level_hi']:+.4f}]",
@@ -600,13 +606,13 @@ def render(res, args):
     # per-class
     files['per_class.csv'] = csv_text(list(res['pc'][0].keys()), res['pc'])
     files['per_class_per_run.csv'] = csv_text(list(res['pc_run'][0].keys()), res['pc_run'])
-    if 30 in ks:
-        files['per_class_k30_test.md'] = k30_test_md(res, args)
+    for K in ks:
+        files[f'per_class_k{K}_test.md'] = per_class_test_md(res, args, K)
 
     # spread
     files['class_spread.json'] = json.dumps(json_clean(res['spread']), indent=1) + '\n'
     md = ('# Class spread of the CEI-GNN mp2 gain\n\n' + ident + f'\nBest baseline per K = highest mean VALIDATION macro-F1 '
-          f'(applied to both folds). Classes with support < {MIN_SUPPORT} in the fold are not evaluable. Top-3 share = '
+          f'(a decision, applied to both folds); the strongest baseline within each fold is shown for information. Classes with support < {MIN_SUPPORT} in the fold are not evaluable. Top-3 share = '
           f'share of the macro-F1 gap carried by the 3 classes with the largest CEI minus best-baseline F1 delta.\n\n')
     rows = []
     for key, v in res['spread'].items():
@@ -614,9 +620,12 @@ def render(res, args):
                      v['macro_gap_cei_minus_best'], v['macro_gap_cei_minus_mean_of_baselines'],
                      f"{v['n_classes_cei_beats_best_baseline']} of {v['n_classes']}",
                      f"{v['n_classes_cei_beats_every_baseline']} of {v['n_classes']}",
-                     f"{v['n_classes_not_evaluable']}", v['top3_share_of_macro_gap']])
-    md += md_table(['K', 'fold', 'rows / patients', 'best baseline (validation)', 'macro gap vs best', 'macro gap vs mean of baselines',
-                    'classes CEI > best', 'classes CEI > every baseline', 'not evaluable', 'top-3 share of gap'], rows) + '\n'
+                     f"{v['n_classes_not_evaluable']}", v['top3_share_of_macro_gap'],
+                     pretty(v['strongest_baseline_in_fold']), v['macro_gap_cei_minus_strongest_in_fold']])
+    md += md_table(['K', 'fold', 'rows / patients', 'best baseline (chosen on validation)', 'macro gap vs best',
+                    'macro gap vs mean of baselines', 'classes CEI > best', 'classes CEI > every baseline', 'not evaluable',
+                    'top-3 share of gap', 'strongest baseline in this fold (information)', 'macro gap vs strongest in fold'],
+                   rows) + '\n'
     for key, v in res['spread'].items():
         md += f"## K={v['K']}, {v['fold']} fold ({v['use']}): top-3 classes and support terciles\n\n"
         md += md_table(['class', 'support', 'CEI F1', 'best baseline F1', 'delta'],
@@ -632,18 +641,18 @@ def render(res, args):
     return files
 
 
-def k30_test_md(res, args):
+def per_class_test_md(res, args, K):
     data, seeds, order, baselines = res['data'], res['seeds'], res['order'], res['baselines']
-    K, fold = 30, 'test'
+    fold = 'test'
     bb = res['best_baseline'][K]
     others = [b for b in baselines if b != bb]
     rows_pc = {}
     for r in res['pc']:
         if r['K'] == K and r['fold'] == fold:
             rows_pc.setdefault(r['class_index'], {})[r['method']] = r
-    md = ('# Per-class results, K=30, test fold (reported only, not used for decisions)\n\n'
+    md = (f'# Per-class results, K={K}, test fold (reported result)\n\n'
           + identity_line(K, fold, data, seeds) + f'. F1 mean (SD over seeds); P/R = precision/recall mean. Compared baseline = '
-          f'{pretty(bb)} (highest mean validation macro-F1). Classes with support < {MIN_SUPPORT} are not evaluable.\n\n')
+          f'{pretty(bb)} (best baseline, chosen on validation). Classes with support < {MIN_SUPPORT} are not evaluable.\n\n')
     header = ['class', 'support', 'CEI P/R', 'CEI F1', f'{pretty(bb)} P/R', f'{pretty(bb)} F1'] + \
              [f'{pretty(b)} F1' for b in others] + ['CEI - best']
     cell = lambda r: f"{r['f1_mean']:.4f} ({r['f1_sd']:.4f})"
@@ -664,7 +673,7 @@ def k30_test_md(res, args):
 def summary_doc(res, args):
     data = res['data']
     return {
-        'protocol': 'fair_v10t', 'test_note': TEST_NOTE,
+        'protocol': 'fair_v10t', 'reporting_rule': RULE_NOTE,
         'runs_dir': display_path(res['runs_dir']),
         'methods': res['order'], 'cei': CEI, 'baselines': res['baselines'], 'seeds': res['seeds'], 'ks': res['ks'],
         'task_identity': {f'K{K}': {'n_classes': K, 'class_labels': data[K]['labels'],
@@ -688,8 +697,8 @@ def summary_doc(res, args):
                    'n_checks': res['parity']['n_checks'], 'compare_json': res['parity']['compare_json']},
         'outputs': sorted(['per_seed.csv', 'per_seed.md', 'summary.csv', 'summary.md', 'uncertainty.csv', 'uncertainty.md',
                            'macro_f1_variants.csv', 'macro_f1_variants.md', 'macro_f1_variants_per_run.csv', 'per_class.csv',
-                           'per_class_per_run.csv', 'per_class_k30_test.md', 'class_spread.json', 'class_spread.md',
-                           'parity.json', 'summary.json']),
+                           'per_class_per_run.csv'] + [f'per_class_k{K}_test.md' for K in res['ks']]
+                          + ['class_spread.json', 'class_spread.md', 'parity.json', 'summary.json']),
     }
 
 

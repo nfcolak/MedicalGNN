@@ -22,12 +22,12 @@
   30
  ],
  "folds": [
-  "validation",
-  "test"
+  "test",
+  "validation"
  ],
  "fold_note": {
-  "validation": "decisions (best baseline, choices)",
-  "test": "reported only, not used for decisions"
+  "test": "reported result (scored once per run at the validation-selected checkpoint)",
+  "validation": "decision fold (checkpoint, HPO, best-baseline choice)"
  },
  "bootstrap": {
   "unit": "subjects of the fold (pooled across K for same_classes_across_k)",
@@ -80,6 +80,13 @@
     "gsat": 0.7262,
     "protgnn": 0.7338
    },
+   "macro_f1_fixed_k_by_method": {
+    "cei_mp2": 0.7451,
+    "graphcare": 0.7332,
+    "gsat": 0.7262,
+    "protgnn": 0.7338
+   },
+   "strongest_baseline_in_fold": "protgnn",
    "class_set": "top10",
    "train_support_equal_across_runs": true
   },
@@ -94,6 +101,13 @@
     "gsat": 0.6718,
     "protgnn": 0.6743
    },
+   "macro_f1_fixed_k_by_method": {
+    "cei_mp2": 0.6859,
+    "graphcare": 0.6742,
+    "gsat": 0.6718,
+    "protgnn": 0.6743
+   },
+   "strongest_baseline_in_fold": "protgnn",
    "class_set": "top20",
    "train_support_equal_across_runs": true
   },
@@ -108,6 +122,13 @@
     "gsat": 0.5548,
     "protgnn": 0.5632
    },
+   "macro_f1_fixed_k_by_method": {
+    "cei_mp2": 0.5708,
+    "graphcare": 0.5491,
+    "gsat": 0.5548,
+    "protgnn": 0.5632
+   },
+   "strongest_baseline_in_fold": "protgnn",
    "class_set": "top30",
    "train_support_equal_across_runs": true
   },
@@ -122,6 +143,13 @@
     "gsat": 0.7509,
     "protgnn": 0.751
    },
+   "macro_f1_fixed_k_by_method": {
+    "cei_mp2": 0.7612,
+    "graphcare": 0.7629,
+    "gsat": 0.7509,
+    "protgnn": 0.751
+   },
+   "strongest_baseline_in_fold": "graphcare",
    "class_set": "top10",
    "train_support_equal_across_runs": true
   },
@@ -136,6 +164,13 @@
     "gsat": 0.6692,
     "protgnn": 0.6655
    },
+   "macro_f1_fixed_k_by_method": {
+    "cei_mp2": 0.6894,
+    "graphcare": 0.6714,
+    "gsat": 0.6692,
+    "protgnn": 0.6655
+   },
+   "strongest_baseline_in_fold": "graphcare",
    "class_set": "top20",
    "train_support_equal_across_runs": true
   },
@@ -150,167 +185,18 @@
     "gsat": 0.5762,
     "protgnn": 0.5758
    },
+   "macro_f1_fixed_k_by_method": {
+    "cei_mp2": 0.5781,
+    "graphcare": 0.5467,
+    "gsat": 0.557,
+    "protgnn": 0.5567
+   },
+   "strongest_baseline_in_fold": "gsat",
    "class_set": "top30",
    "train_support_equal_across_runs": true
   }
  },
  "spearman": [
-  {
-   "fold": "validation",
-   "K": 10,
-   "delta": "delta_best",
-   "classes": "all",
-   "n_classes": 10,
-   "rho": -0.6848,
-   "ci_lo": -0.8545,
-   "ci_hi": -0.0424,
-   "B": 1000,
-   "n_subjects": 2473,
-   "n_rows": 3165
-  },
-  {
-   "fold": "validation",
-   "K": 10,
-   "delta": "delta_best",
-   "classes": "ge30",
-   "n_classes": 10,
-   "rho": -0.6848,
-   "ci_lo": -0.8545,
-   "ci_hi": -0.0424,
-   "B": 1000,
-   "n_subjects": 2473,
-   "n_rows": 3165
-  },
-  {
-   "fold": "validation",
-   "K": 10,
-   "delta": "delta_mean",
-   "classes": "all",
-   "n_classes": 10,
-   "rho": -0.6727,
-   "ci_lo": -0.8548,
-   "ci_hi": -0.0785,
-   "B": 1000,
-   "n_subjects": 2473,
-   "n_rows": 3165
-  },
-  {
-   "fold": "validation",
-   "K": 10,
-   "delta": "delta_mean",
-   "classes": "ge30",
-   "n_classes": 10,
-   "rho": -0.6727,
-   "ci_lo": -0.8548,
-   "ci_hi": -0.0785,
-   "B": 1000,
-   "n_subjects": 2473,
-   "n_rows": 3165
-  },
-  {
-   "fold": "validation",
-   "K": 20,
-   "delta": "delta_best",
-   "classes": "all",
-   "n_classes": 20,
-   "rho": 0.0767,
-   "ci_lo": -0.2226,
-   "ci_hi": 0.3895,
-   "B": 1000,
-   "n_subjects": 3142,
-   "n_rows": 4183
-  },
-  {
-   "fold": "validation",
-   "K": 20,
-   "delta": "delta_best",
-   "classes": "ge30",
-   "n_classes": 20,
-   "rho": 0.0767,
-   "ci_lo": -0.2226,
-   "ci_hi": 0.3895,
-   "B": 1000,
-   "n_subjects": 3142,
-   "n_rows": 4183
-  },
-  {
-   "fold": "validation",
-   "K": 20,
-   "delta": "delta_mean",
-   "classes": "all",
-   "n_classes": 20,
-   "rho": -0.0677,
-   "ci_lo": -0.3204,
-   "ci_hi": 0.2947,
-   "B": 1000,
-   "n_subjects": 3142,
-   "n_rows": 4183
-  },
-  {
-   "fold": "validation",
-   "K": 20,
-   "delta": "delta_mean",
-   "classes": "ge30",
-   "n_classes": 20,
-   "rho": -0.0677,
-   "ci_lo": -0.3204,
-   "ci_hi": 0.2947,
-   "B": 1000,
-   "n_subjects": 3142,
-   "n_rows": 4183
-  },
-  {
-   "fold": "validation",
-   "K": 30,
-   "delta": "delta_best",
-   "classes": "all",
-   "n_classes": 30,
-   "rho": 0.1858,
-   "ci_lo": -0.2001,
-   "ci_hi": 0.3212,
-   "B": 1000,
-   "n_subjects": 3388,
-   "n_rows": 4534
-  },
-  {
-   "fold": "validation",
-   "K": 30,
-   "delta": "delta_best",
-   "classes": "ge30",
-   "n_classes": 27,
-   "rho": -0.0336,
-   "ci_lo": -0.3065,
-   "ci_hi": 0.2106,
-   "B": 1000,
-   "n_subjects": 3388,
-   "n_rows": 4534
-  },
-  {
-   "fold": "validation",
-   "K": 30,
-   "delta": "delta_mean",
-   "classes": "all",
-   "n_classes": 30,
-   "rho": -0.0176,
-   "ci_lo": -0.3094,
-   "ci_hi": 0.2091,
-   "B": 1000,
-   "n_subjects": 3388,
-   "n_rows": 4534
-  },
-  {
-   "fold": "validation",
-   "K": 30,
-   "delta": "delta_mean",
-   "classes": "ge30",
-   "n_classes": 27,
-   "rho": -0.0336,
-   "ci_lo": -0.3095,
-   "ci_hi": 0.232,
-   "B": 1000,
-   "n_subjects": 3388,
-   "n_rows": 4534
-  },
   {
    "fold": "test",
    "K": 10,
@@ -466,6 +352,162 @@
    "B": 1000,
    "n_subjects": 3404,
    "n_rows": 4566
+  },
+  {
+   "fold": "validation",
+   "K": 10,
+   "delta": "delta_best",
+   "classes": "all",
+   "n_classes": 10,
+   "rho": -0.6848,
+   "ci_lo": -0.8545,
+   "ci_hi": -0.0424,
+   "B": 1000,
+   "n_subjects": 2473,
+   "n_rows": 3165
+  },
+  {
+   "fold": "validation",
+   "K": 10,
+   "delta": "delta_best",
+   "classes": "ge30",
+   "n_classes": 10,
+   "rho": -0.6848,
+   "ci_lo": -0.8545,
+   "ci_hi": -0.0424,
+   "B": 1000,
+   "n_subjects": 2473,
+   "n_rows": 3165
+  },
+  {
+   "fold": "validation",
+   "K": 10,
+   "delta": "delta_mean",
+   "classes": "all",
+   "n_classes": 10,
+   "rho": -0.6727,
+   "ci_lo": -0.8548,
+   "ci_hi": -0.0785,
+   "B": 1000,
+   "n_subjects": 2473,
+   "n_rows": 3165
+  },
+  {
+   "fold": "validation",
+   "K": 10,
+   "delta": "delta_mean",
+   "classes": "ge30",
+   "n_classes": 10,
+   "rho": -0.6727,
+   "ci_lo": -0.8548,
+   "ci_hi": -0.0785,
+   "B": 1000,
+   "n_subjects": 2473,
+   "n_rows": 3165
+  },
+  {
+   "fold": "validation",
+   "K": 20,
+   "delta": "delta_best",
+   "classes": "all",
+   "n_classes": 20,
+   "rho": 0.0767,
+   "ci_lo": -0.2226,
+   "ci_hi": 0.3895,
+   "B": 1000,
+   "n_subjects": 3142,
+   "n_rows": 4183
+  },
+  {
+   "fold": "validation",
+   "K": 20,
+   "delta": "delta_best",
+   "classes": "ge30",
+   "n_classes": 20,
+   "rho": 0.0767,
+   "ci_lo": -0.2226,
+   "ci_hi": 0.3895,
+   "B": 1000,
+   "n_subjects": 3142,
+   "n_rows": 4183
+  },
+  {
+   "fold": "validation",
+   "K": 20,
+   "delta": "delta_mean",
+   "classes": "all",
+   "n_classes": 20,
+   "rho": -0.0677,
+   "ci_lo": -0.3204,
+   "ci_hi": 0.2947,
+   "B": 1000,
+   "n_subjects": 3142,
+   "n_rows": 4183
+  },
+  {
+   "fold": "validation",
+   "K": 20,
+   "delta": "delta_mean",
+   "classes": "ge30",
+   "n_classes": 20,
+   "rho": -0.0677,
+   "ci_lo": -0.3204,
+   "ci_hi": 0.2947,
+   "B": 1000,
+   "n_subjects": 3142,
+   "n_rows": 4183
+  },
+  {
+   "fold": "validation",
+   "K": 30,
+   "delta": "delta_best",
+   "classes": "all",
+   "n_classes": 30,
+   "rho": 0.1858,
+   "ci_lo": -0.2001,
+   "ci_hi": 0.3212,
+   "B": 1000,
+   "n_subjects": 3388,
+   "n_rows": 4534
+  },
+  {
+   "fold": "validation",
+   "K": 30,
+   "delta": "delta_best",
+   "classes": "ge30",
+   "n_classes": 27,
+   "rho": -0.0336,
+   "ci_lo": -0.3065,
+   "ci_hi": 0.2106,
+   "B": 1000,
+   "n_subjects": 3388,
+   "n_rows": 4534
+  },
+  {
+   "fold": "validation",
+   "K": 30,
+   "delta": "delta_mean",
+   "classes": "all",
+   "n_classes": 30,
+   "rho": -0.0176,
+   "ci_lo": -0.3094,
+   "ci_hi": 0.2091,
+   "B": 1000,
+   "n_subjects": 3388,
+   "n_rows": 4534
+  },
+  {
+   "fold": "validation",
+   "K": 30,
+   "delta": "delta_mean",
+   "classes": "ge30",
+   "n_classes": 27,
+   "rho": -0.0336,
+   "ci_lo": -0.3095,
+   "ci_hi": 0.232,
+   "B": 1000,
+   "n_subjects": 3388,
+   "n_rows": 4534
   }
  ]
 }

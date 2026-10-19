@@ -1,4 +1,4 @@
-"""Validation analysis of the ablation runs: every arm against Full (a1), matched seeds, two-level bootstrap.
+"""Analysis of the ablation runs (reported on test): every arm against Full (a1), matched seeds, two-level bootstrap.
 
     env -u PYTHONPATH PYTHONDONTWRITEBYTECODE=1 /usr/bin/python3 -m comparison.ablation.analyze \
         --runs <clinical_runs_fair_v10t_ablation_<date>/top<K>> \
@@ -6,7 +6,8 @@
 
 Full = the final cei_mp2 runs (seeds 1234/2025/7, read from --final) plus the ablation folder's a1_full runs (new
 seeds). Each arm's `<arm>_seed<S>` runs are staged as `cei_mp2_seed<S>` symlinks so that `arms_vs_ref.py` (the
-section-2 analysis, unchanged) matches arm and Full by seed. Decisions use VALIDATION only; test is reported once.
+shared arms-vs-reference analysis) matches arm and Full by seed. Decisions (checkpoint, HPO, baseline choice) use
+VALIDATION; every reported result is on TEST (scored once per run at the validation-selected checkpoint).
 Completeness: Full and every requested arm (default: all arms of the frozen list) must have a finished run
 (result.json) for every seed of --seeds (default: the runner's 5 seeds); otherwise the analysis is REFUSED and the
 missing runs are listed. `--allow-incomplete` runs it anyway and writes the missing runs to <out>/MISSING.txt.
@@ -119,7 +120,7 @@ def peak_rss_gb(log):
 
 def extra_metrics(groups, logs_dir):
     """Pre-registered secondary numbers per arm (mean ± SD over seeds, from the stored result.json / validation.npz):
-    balanced accuracy, top-3, per-class F1 (validation); test balanced accuracy and top-3 (reported only);
+    test and validation balanced accuracy and top-3, per-class F1 (validation, decision fold);
     seconds per epoch and peak RSS (Nasim section 8; runs shared the Mac, so not contention-free)."""
     import json
     import numpy as np
@@ -157,16 +158,16 @@ def extra_metrics(groups, logs_dir):
 def render_extra(doc):
     def f(m, nd=4):
         return 'n/a' if m is None else f"{m['mean']:.{nd}f}" + (f" ± {m['sd']:.{nd}f}" if m['sd'] is not None else '')
-    L = ['# Secondary metrics per arm (validation; test reported only, not used for decisions)', '',
-         '| arm | seeds | val balanced acc | val top-3 | test balanced acc | test top-3 | s/epoch | peak RSS GB |',
+    L = ['# Secondary metrics per arm (test first; validation is the decision fold)', '',
+         '| arm | seeds | test balanced acc | test top-3 | validation balanced acc | validation top-3 | s/epoch | peak RSS GB |',
          '|---|---|---|---|---|---|---|---|']
     for name, g in doc.items():
-        L.append(f"| {name} | {','.join(map(str, g['seeds']))} | {f(g['val_balanced_acc'])} | {f(g['val_top3_acc'])} | "
-                 f"{f(g['test_balanced_acc'])} | {f(g['test_top3_acc'])} | {f(g['seconds_per_epoch'], 1)} | "
+        L.append(f"| {name} | {','.join(map(str, g['seeds']))} | {f(g['test_balanced_acc'])} | {f(g['test_top3_acc'])} | "
+                 f"{f(g['val_balanced_acc'])} | {f(g['val_top3_acc'])} | {f(g['seconds_per_epoch'], 1)} | "
                  f"{f(g['peak_rss_gb'], 2)} |")
     L += ['', 's/epoch and peak RSS: runs shared the Mac (several jobs at once), so they are not contention-free; the '
           'final Full runs (seeds 1234/2025/7) have no memory record.', '',
-          '## Validation per-class F1 (mean over seeds)', '']
+          '## Validation per-class F1 (mean over seeds; decision fold)', '']
     names = list(doc)
     labels = next((g['class_labels'] for g in doc.values() if g['class_labels']), None) or []
     L += ['| class | ' + ' | '.join(names) + ' |', '|---|' + '---|' * len(names)]

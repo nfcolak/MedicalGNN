@@ -2,6 +2,7 @@
 
 The legacy plus-60 cohort has exactly the same stays as the legacy max-6 cohort, so the intersection of the
 legacy max-6, v5 max-6 and v5 plus-60 cohorts equals the intersection of all 4 cohorts used before.
+Test rows are kept so that every reported result can be stated on test; decisions (checkpoint, HPO, baseline choice) use validation.
 
 Usage: python3 -m comparison.final.common_stays OUT_DIR --legacy-max6 DIR --v5-max6 DIR --v5-plus60 DIR
                                                 [--check-against FILE]

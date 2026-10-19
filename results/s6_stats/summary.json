@@ -1,6 +1,6 @@
 {
  "protocol": "fair_v10t",
- "test_note": "test fold: reported only, not used for decisions",
+ "reporting_rule": "Decisions (checkpoint, HPO, baseline choice) use VALIDATION; every reported result is on TEST (scored once per run at the validation-selected checkpoint)",
  "runs_dir": "comparison/standardized/clinical_runs_fair_v10t_20261011",
  "methods": [
   "cei_mp2",
@@ -39,13 +39,13 @@
     "Skin or soft-tissue infection",
     "UTI or pyelonephritis"
    ],
-   "validation": {
-    "rows": 3165,
-    "patients": 2473
-   },
    "test": {
     "rows": 3175,
     "patients": 2497
+   },
+   "validation": {
+    "rows": 3165,
+    "patients": 2473
    }
   },
   "K20": {
@@ -72,13 +72,13 @@
     "Unsp intestnl obst",
     "Unspecified atrial fibrillation"
    ],
-   "validation": {
-    "rows": 4183,
-    "patients": 3142
-   },
    "test": {
     "rows": 4174,
     "patients": 3151
+   },
+   "validation": {
+    "rows": 4183,
+    "patients": 3142
    }
   },
   "K30": {
@@ -115,13 +115,13 @@
     "Unspecified asthma with (acute) exacerbation",
     "Unspecified atrial fibrillation"
    ],
-   "validation": {
-    "rows": 4534,
-    "patients": 3388
-   },
    "test": {
     "rows": 4566,
     "patients": 3404
+   },
+   "validation": {
+    "rows": 4534,
+    "patients": 3388
    }
   }
  },
@@ -174,7 +174,23 @@
   "all_ok": true,
   "max_abs_diff": 4.994811032554836e-07,
   "n_checks": 72,
-  "compare_json": {}
+  "compare_json": {
+   "K10": {
+    "n_pairs_compared": 6,
+    "n_pairs_stored": 10,
+    "max_abs_diff": 0.0
+   },
+   "K20": {
+    "n_pairs_compared": 6,
+    "n_pairs_stored": 10,
+    "max_abs_diff": 0.0
+   },
+   "K30": {
+    "n_pairs_compared": 6,
+    "n_pairs_stored": 10,
+    "max_abs_diff": 0.0
+   }
+  }
  },
  "outputs": [
   "class_spread.json",
@@ -184,6 +200,8 @@
   "macro_f1_variants_per_run.csv",
   "parity.json",
   "per_class.csv",
+  "per_class_k10_test.md",
+  "per_class_k20_test.md",
   "per_class_k30_test.md",
   "per_class_per_run.csv",
   "per_seed.csv",

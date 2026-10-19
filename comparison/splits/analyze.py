@@ -11,12 +11,14 @@ seeds are read from the ablation runs DIR. Read-only on the runs; `--out` must n
 
 Per split: exactly the two-level paired bootstrap of comparison/ablation/arms_vs_ref.py (its functions are
 imported, not copied; arm - Full on matched seeds, B=2000, same rng seeds), so a split alone reproduces the
-ablation analysis to the digit. Decisions use VALIDATION only; test is reported, never used.
+ablation analysis to the digit. Decisions (checkpoint, HPO, baseline choice) use VALIDATION; every reported result
+is on TEST (scored once per run at the validation-selected checkpoint); the tables lead with test and show
+validation as the decision fold. A run without test.npz is refused.
 Combined over splits (mean of the per-split mean deltas): a stratified bootstrap (inside each split the seeds and
 the patients are resampled as above, independently per split, then averaged over the splits) and a split-level
 line (between-split SD of the per-split deltas, t interval over splits, df = n_splits - 1).
 Groups: primary r1+r2 (splits not seen when the rule was fixed), secondary every split given (r0+r1+r2); each
-split alone is always reported. The reading rule is applied to each group and to each split alone.
+split alone is always reported. The reading rule is applied, on both folds, to each group and to each split alone.
 
 Refused: unfinished or missing runs (Full and every arm need every seed), a run that is not fair_v10t, a run
 whose recipe is not its arm's (comparison.ablation.analyze.parity_errors), runs of one split that disagree on
@@ -52,7 +54,8 @@ SIDECAR_RUN_KEYS = {'seed', 'arm', 'run', 'run_dir', 'run_path', 'out', 'output'
 SEED_COMBINED = 20261015
 # sidecar fields (comparison/splits/run.py) that must be present and equal across the runs of a split
 SIDECAR_REQUIRED = ('split_file_sha256', 'graph_manifest_sha256', 'targets_sha256', 'v3_state_sha256')
-MATTERS = 0.005
+MATTERS = AR.MATTERS
+reading = AR.reading
 Refusal = AR.Refusal
 
 
@@ -151,13 +154,8 @@ def load_split(split_id, runs, final, arms, seeds, k):
 def split_boot(sp, arms):
     """Per fold: bootstrap F1 of every run on shared patient resamples (one call, as arms_vs_ref.analyze)."""
     boots, info = {}, {}
-    for fold in ('validation', 'test'):
-        have = {k: v for k, v in sp['loaded'].items() if fold in v['folds']}
-        if len(have) != len(sp['loaded']):
-            if fold == 'validation':
-                raise Refusal(f"{sp['id']}: a run lacks validation.npz")
-            continue
-        boots[fold], info[fold] = AR.bootstrap_f1(have, fold)
+    for fold in ('test', 'validation'):
+        boots[fold], info[fold] = AR.bootstrap_f1(sp['loaded'], fold)
     # delta[fold][arm]: array [n_seeds, B] of F1(arm) - F1(Full) per matched seed and resample
     delta = {fold: {arm: np.stack([boots[fold][(arm, s)] - boots[fold][(REF, s)] for s in sp['seeds']])
                     for arm in arms} for fold in boots}
@@ -168,9 +166,8 @@ def per_split_result(sp, arms, delta, info):
     """Same numbers as arms_vs_ref.analyze for this split (macro-F1 and accuracy deltas, two-level bootstrap)."""
     out = {'seeds': sp['seeds'], 'canonical': sp['canonical'], 'folds': info,
            'kept_label_indices': sp['binding'].get('kept_label_indices'),
-           'reference': {'validation_macro_f1': AR.mean_sd([sp['loaded'][(REF, s)]['row']['val_macro_f1'] for s in sp['seeds']]),
-                         'test_macro_f1': AR.mean_sd([sp['loaded'][(REF, s)]['row']['test_macro_f1'] for s in sp['seeds']])
-                         if all('test_macro_f1' in sp['loaded'][(REF, s)]['row'] for s in sp['seeds']) else None},
+           'reference': {'test_macro_f1': AR.mean_sd([sp['loaded'][(REF, s)]['row']['test_macro_f1'] for s in sp['seeds']]),
+                         'validation_macro_f1': AR.mean_sd([sp['loaded'][(REF, s)]['row']['val_macro_f1'] for s in sp['seeds']])},
            'arms': {}}
     for arm in arms:
         res = {}
@@ -184,8 +181,6 @@ def per_split_result(sp, arms, delta, info):
             res[fold] = {'per_seed': rows, 'macro_f1_delta': AR.mean_sd([x['macro_f1_delta'] for x in rows]),
                          'accuracy_delta': AR.mean_sd([x['accuracy_delta'] for x in rows]),
                          'bootstrap': AR.two_level(delta[fold][arm])}
-            if fold == 'test':
-                res[fold]['note'] = AR.TEST_NOTE
         out['arms'][arm] = res
     return out
 
@@ -224,18 +219,6 @@ def combine(ids, per_split, deltas, arm, fold):
         lo, hi = np.percentile(d, [2.5, 97.5])
         out['bootstrap'][name] = {'ci95': [float(lo), float(hi)], 'p_delta_gt_0': float((d > 0).mean())}
     return out
-
-
-def reading(mean_delta, ci):
-    """PREREGISTRATION.md rule: drop = Full - arm, CI = seeds+patients 95% interval of the delta.
-    Returns (reading, note); the note flags a drop >= MATTERS whose CI still includes 0."""
-    drop = -mean_delta
-    excludes0 = ci[0] > 0 or ci[1] < 0
-    if drop >= MATTERS and excludes0:
-        return 'matters', ''
-    if not excludes0:
-        return 'no measurable effect', 'not resolved at this precision' if drop >= MATTERS else ''
-    return 'small effect, not resolved', ''
 
 
 def groups_for(ids):
@@ -291,13 +274,12 @@ def analyze(splits, arms, seeds, k, allow_duplicate_splits):
                            for arm in arms}
     for g in combined.values():
         for arm, folds in g.items():
-            for fold, c in folds.items():
-                if fold == 'validation':
-                    c['reading'], c['reading_note'] = reading(c['macro_f1_delta_mean'], c['bootstrap']['seeds_and_patients']['ci95'])
+            for c in folds.values():
+                c['reading'], c['reading_note'] = reading(c['macro_f1_delta_mean'], c['bootstrap']['seeds_and_patients']['ci95'])
     for i in ids:
         for arm in arms:
-            v = per_split[i]['arms'][arm]['validation']
-            v['reading'], v['reading_note'] = reading(v['macro_f1_delta']['mean'], v['bootstrap']['seeds_and_patients']['ci95'])
+            for v in per_split[i]['arms'][arm].values():
+                v['reading'], v['reading_note'] = reading(v['macro_f1_delta']['mean'], v['bootstrap']['seeds_and_patients']['ci95'])
     return {'protocol': AR.PROTOCOL, 'reference': REF, 'arms': list(arms), 'seeds': list(seeds), 'top_k_labels': k,
             'splits': ids, 'canonical_split': [sp['id'] for sp in loaded if sp['canonical']] or None,
             'bootstrap': {'B': AR.B, 'rng_patients': AR.SEED_PATIENTS, 'rng_seeds': AR.SEED_SEEDS,
@@ -306,14 +288,18 @@ def analyze(splits, arms, seeds, k, allow_duplicate_splits):
                           'combined': 'per split independent seed picks and decoupled patient resamples, then the '
                                       'mean over splits; 95% percentile',
                           'split_level': 'SD of the per-split mean deltas (ddof=1) and t interval, df = n_splits - 1'},
-            'reading_rule': f'matters: drop (Full - arm) >= {MATTERS} and CI excludes 0; no measurable effect: CI '
-                            f'includes 0 (note when drop >= {MATTERS}); small effect, not resolved: CI excludes 0 and '
-                            f'drop < {MATTERS} (PREREGISTRATION.md)',
-            'test_note': AR.TEST_NOTE, 'notes': notes, 'per_split': per_split, 'combined': combined}
+            'reading_rule': f'applied on the test fold and, as the decision column, on validation. matters: drop '
+                            f'(Full - arm) >= {MATTERS} and CI excludes 0; no measurable effect: CI includes 0 (note '
+                            f'when drop >= {MATTERS}); small effect, not resolved: CI excludes 0 and drop < {MATTERS}',
+            'protocol_note': AR.PROTOCOL_NOTE, 'notes': notes, 'per_split': per_split, 'combined': combined}
 
 
 def ci_txt(c):
     return f"[{c[0]:+.4f}, {c[1]:+.4f}]"
+
+
+FOLD_TITLE = {'test': 'test', 'validation': 'validation (decision fold)'}
+FOLD_SHORT = {'test': 'test', 'validation': 'val'}
 
 
 def render(doc):
@@ -321,7 +307,7 @@ def render(doc):
          f"Protocol {doc['protocol']}, K={doc['top_k_labels']}, reference `{doc['reference']}`, arms "
          f"{', '.join(doc['arms'])}, seeds {','.join(map(str, doc['seeds']))}, splits {', '.join(doc['splits'])}"
          + (f" (canonical layout, no sidecar: {', '.join(doc['canonical_split'])})" if doc['canonical_split'] else '')
-         + f". Decisions use VALIDATION; test {doc['test_note']}.",
+         + f". {doc['protocol_note']}",
          f"Bootstrap B={doc['bootstrap']['B']}. Per split: {doc['bootstrap']['per_split']}. Combined: "
          f"{doc['bootstrap']['combined']}. Split level: {doc['bootstrap']['split_level']}.",
          f"Reading rule: {doc['reading_rule']}.", '']
@@ -330,31 +316,37 @@ def render(doc):
     L += ['', '## Kept classes per split (top-K by TRAIN counts)', '']
     for i, s in doc['per_split'].items():
         L.append(f"- {i}: {s['kept_label_indices']}")
-    L += ['', '## Per split (delta = arm - Full, matched seeds)', '',
-          '| split | arm | d val macro-F1 [CI seeds+patients] | P(d>0) | CI patients only | reading | note | '
-          'd test [CI] (reported only) |', '|---|---|---|---|---|---|---|---|']
+    L += ['', '## Full macro-F1 per split (mean ± SD over seeds)', '',
+          '| split | test | validation (decision fold) |', '|---|---|---|']
     for i, s in doc['per_split'].items():
-        for arm, r in s['arms'].items():
-            v, t = r['validation'], r.get('test')
-            b = v['bootstrap']
-            L.append(f"| {i} | {arm} | {v['macro_f1_delta']['mean']:+.4f} {ci_txt(b['seeds_and_patients']['ci95'])} | "
-                     f"{b['seeds_and_patients']['p_delta_gt_0']:.3f} | {ci_txt(b['patients_only']['ci95'])} | {v['reading']} | {v['reading_note']} | "
-                     + (f"{t['macro_f1_delta']['mean']:+.4f} {ci_txt(t['bootstrap']['seeds_and_patients']['ci95'])} |" if t else 'n/a |'))
+        L.append(f"| {i} | {AR.fmt(s['reference']['test_macro_f1'])} | {AR.fmt(s['reference']['validation_macro_f1'])} |")
+    for fold in ('test', 'validation'):
+        L += ['', f'## Per split, {FOLD_TITLE[fold]}; delta = arm - Full, matched seeds', '',
+              f'| split | arm | reading | note | d {FOLD_SHORT[fold]} macro-F1 [CI seeds+patients] | P(d>0) | CI patients only |',
+              '|---|---|---|---|---|---|---|']
+        for i, s in doc['per_split'].items():
+            for arm, r in s['arms'].items():
+                v = r[fold]
+                b = v['bootstrap']
+                L.append(f"| {i} | {arm} | {v['reading']} | {v['reading_note']} | "
+                         f"{v['macro_f1_delta']['mean']:+.4f} {ci_txt(b['seeds_and_patients']['ci95'])} | "
+                         f"{b['seeds_and_patients']['p_delta_gt_0']:.3f} | {ci_txt(b['patients_only']['ci95'])} |")
     for gname, g in doc['combined'].items():
-        L += ['', f'## Combined: {gname}', '',
-              '| arm | mean d val | CI seeds+patients (stratified) | P(d>0) | CI patients only | between-split SD | '
-              't interval over splits | reading | note | mean d test (reported only) |', '|---|---|---|---|---|---|---|---|---|---|']
-        for arm, folds in g.items():
-            c, t = folds['validation'], folds.get('test')
-            b = c['bootstrap']
-            sd = f"{c['between_split_sd']:.4f}" if c['between_split_sd'] is not None else 'n/a'
-            ti = ci_txt(c['split_t_interval']['ci95']) + f" (df {c['split_t_interval']['df']})" if c['split_t_interval'] else 'n/a'
-            L.append(f"| {arm} | {c['macro_f1_delta_mean']:+.4f} | {ci_txt(b['seeds_and_patients']['ci95'])} | "
-                     f"{b['seeds_and_patients']['p_delta_gt_0']:.3f} | {ci_txt(b['patients_only']['ci95'])} | {sd} | {ti} | "
-                     f"{c['reading']} | {c['reading_note']} | " + (f"{t['macro_f1_delta_mean']:+.4f}" if t else 'n/a') + ' |')
-        L += ['', 'Per-split mean d val: ' + '; '.join(
-            f"{arm}: " + ', '.join(f'{i} {x:+.4f}' for i, x in folds['validation']['per_split_mean_delta'].items())
-            for arm, folds in g.items())]
+        for fold in ('test', 'validation'):
+            L += ['', f'## Combined: {gname}, {FOLD_TITLE[fold]}', '',
+                  f'| arm | reading | note | mean d {FOLD_SHORT[fold]} | CI seeds+patients (stratified) | P(d>0) | CI patients only | '
+                  'between-split SD | t interval over splits |', '|---|---|---|---|---|---|---|---|---|']
+            for arm, folds in g.items():
+                c = folds[fold]
+                b = c['bootstrap']
+                sd = f"{c['between_split_sd']:.4f}" if c['between_split_sd'] is not None else 'n/a'
+                ti = ci_txt(c['split_t_interval']['ci95']) + f" (df {c['split_t_interval']['df']})" if c['split_t_interval'] else 'n/a'
+                L.append(f"| {arm} | {c['reading']} | {c['reading_note']} | {c['macro_f1_delta_mean']:+.4f} | "
+                         f"{ci_txt(b['seeds_and_patients']['ci95'])} | {b['seeds_and_patients']['p_delta_gt_0']:.3f} | "
+                         f"{ci_txt(b['patients_only']['ci95'])} | {sd} | {ti} |")
+            L += ['', f'Per-split mean d {FOLD_SHORT[fold]}: ' + '; '.join(
+                f"{arm}: " + ', '.join(f'{i} {x:+.4f}' for i, x in folds[fold]['per_split_mean_delta'].items())
+                for arm, folds in g.items())]
     L.append('')
     return '\n'.join(L)
 
