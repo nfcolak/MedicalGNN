@@ -156,7 +156,7 @@ Further analyses read the stored predictions of the final runs (no training). Ea
 | `comparison/s8_cost` | section 8: parameter counts, inference benchmark, inference memory, training cost | `results/s8_cost/` |
 | `comparison/s9_repro` | section 9: graph scan for the reproduction check | `results/s9_repro/` |
 
-Source masking (`results/s7_why/masking/`) is still validation-only; a test pass is pending.
+Source masking (`results/s7_why/masking/`) scores the test fold with the stored final checkpoints (inference only; baselines chosen on validation; unmasked predictions match the stored test predictions in all 27 runs). `--fold validation` reproduces the earlier validation tables.
 
 # Folder guide
 

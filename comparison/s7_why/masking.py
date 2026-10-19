@@ -1,16 +1,18 @@
 """Source masking: how much does each stored final model lean on history, labs or triage?
 
-Inference only. Stored final runs (best.pt) of CEI-GNN mp2 and the two strongest validation baselines
-(among GSAT, GraphCare-style (adapted), ProtGNN) score VALIDATION graphs whose history, laboratory or
-triage information was removed from an in-memory copy of each raw graph record BEFORE encoding. Nothing is
-refitted (the run's stored preprocessing.json is loaded), nothing is trained, no file of the inputs is
-written, and the test fold is never opened. Decisions (which baselines) use VALIDATION only.
+Inference only. Stored final runs (best.pt) of CEI-GNN mp2 and the two strongest baselines (among GSAT,
+GraphCare-style (adapted), ProtGNN; chosen on VALIDATION macro-F1) score the graphs of one fold (`--fold`,
+default test, the reporting fold) whose history, laboratory or triage information was removed from an
+in-memory copy of each raw graph record BEFORE encoding. Nothing is refitted (the run's stored
+preprocessing.json is loaded), nothing is trained and no file of the inputs is written. Decisions (which
+baselines) use VALIDATION; every reported result is on the scored fold (test for the reported tables;
+`--fold validation` reproduces the earlier validation tables).
 
     python -m comparison.s7_why.masking --runs <runs root> --artifact <graph dir> --targets <targets.csv> \
-        --out <new dir> [--ks 10,20,30] [--seeds 1234,2025,7] [--masks none,history,labs,triage] \
-        [--limit N] [--execute] [--threads 2]
+        --out <new dir> [--fold test|validation] [--ks 10,20,30] [--seeds 1234,2025,7] \
+        [--masks none,history,labs,triage] [--limit N] [--execute] [--threads 2]
 
-Without --execute the plan is printed (methods per K with their validation means, rows, masks, forward
+Without --execute the plan is printed (methods per K with their validation means, rows of the scored fold, masks, forward
 passes) and nothing is loaded or written. With --execute --out must not exist.
 
 Record format (read from core/tensorize.py, core/contracts.py, data/s4_graph/graph.py)
@@ -55,7 +57,7 @@ Metrics: macro-F1 over the K classes of the run (repo definition, core.train.met
 run x mask; drop = metric(none) - metric(mask). The CEI-minus-baseline difference of seed-mean drops gets a
 patient bootstrap 95% CI (B=1000, rng 20261017, one shared draw of patients for every method/seed/mask of a
 K; negative = CEI drops less). Parity gate: unmasked probabilities must equal the stored validation.npz
-rows (aligned by sample_id) within 1e-4 with 100% argmax agreement, otherwise that run is not scored and
+rows of the scored fold (`<fold>.npz`, aligned by sample_id) within 1e-4 with 100% argmax agreement, otherwise that run is not scored and
 the failure is written to parity.json.
 """
 import argparse
@@ -71,7 +73,8 @@ REPO = Path(__file__).resolve().parents[2]
 SEED_RNG = 20261017
 BOOTSTRAP_B = 1000
 PARITY_TOL = 1e-4
-FOLD = 'validation'
+SELECTION_FOLD = 'validation'   # baseline choice and the run's checkpoint selection fold (a decision)
+FOLDS = ('test', 'validation')  # scored fold: test = reported result; validation reproduces the earlier tables
 ALL_SEEDS = (1234, 2025, 7)
 BASELINES = ('gsat', 'graphcare', 'protgnn')
 MASKS = ('none', 'history', 'labs', 'triage')
@@ -202,7 +205,7 @@ def subsample_rows(sample_ids, subjects, limit):
 
 
 def build_plan(a):
-    plan = {'fold': FOLD, 'masks': list(a.masks), 'seeds': list(a.seeds), 'limit': a.limit,
+    plan = {'fold': a.fold, 'masks': list(a.masks), 'seeds': list(a.seeds), 'limit': a.limit,
             'threads': a.threads, 'bootstrap': {'B': BOOTSTRAP_B, 'rng': SEED_RNG, 'unit': 'patient'},
             'baseline_selection': f'highest mean validation macro-F1 over seeds {list(ALL_SEEDS)} among '
                                   f'{list(BASELINES)} (result.json, selection fold validation)',
@@ -213,7 +216,7 @@ def build_plan(a):
             vals = []
             for s in ALL_SEEDS:
                 r = read_json(run_dir(a.runs, k, method, s) / 'result.json')
-                if r.get('status') != 'completed' or r.get('selection_fold') != FOLD:
+                if r.get('status') != 'completed' or r.get('selection_fold') != SELECTION_FOLD:
                     raise ValueError(f'top{k}/{method}_seed{s}: run is not a completed validation-selected run')
                 vals.append(float(r['metrics']['macro_f1']))
             stats[method] = float(np.mean(vals))
@@ -226,12 +229,12 @@ def build_plan(a):
         rows = {}
         for method in methods:
             for s in a.seeds:
-                z = np.load(run_dir(a.runs, k, method, s) / 'validation.npz', allow_pickle=True)
+                z = np.load(run_dir(a.runs, k, method, s) / f'{a.fold}.npz', allow_pickle=True)
                 ids = [str(x) for x in z['sample_ids']]
                 if ref is None:
                     ref = (ids, np.asarray(z['subjects']).astype(str), np.asarray(z['y']))
                 elif sorted(ids) != sorted(ref[0]):
-                    raise ValueError(f'top{k}: validation rows differ between runs')
+                    raise ValueError(f'top{k}: {a.fold} rows differ between runs')
         sel = subsample_rows(ref[0], ref[1], a.limit)
         rows['sample_ids'] = [ref[0][i] for i in sel]
         rows['subjects'] = ref[1][sel]
@@ -241,7 +244,7 @@ def build_plan(a):
         if len(names) != k:
             names = [names[i] for i in binding['kept_label_indices']]
         plan['per_k'][k] = {
-            'task': {'K': k, 'class_set': list(names), 'fold': FOLD,
+            'task': {'K': k, 'class_set': list(names), 'fold': a.fold,
                      'rows': len(sel), 'rows_full_fold': len(ref[0]),
                      'patients': int(len(np.unique(rows['subjects']))), 'seeds': list(a.seeds)},
             'methods': methods,
@@ -262,7 +265,7 @@ def public_plan(plan):
 def print_plan(plan):
     print(f"plan: fold {plan['fold']}, masks {plan['masks']}, seeds {plan['seeds']}, limit {plan['limit']}, "
           f"threads {plan['threads']}")
-    print(f"baseline choice: {plan['baseline_selection']}")
+    print(f"baseline choice (decision, validation): {plan['baseline_selection']}")
     for k, v in plan['per_k'].items():
         t = v['task']
         means = ', '.join(f'{m} {x:.4f}' for m, x in v['validation_mean_macro_f1'].items())
@@ -274,16 +277,16 @@ def print_plan(plan):
 
 
 # ------------------------------------------------------------------------------------------------ execute
-def check_targets(targets, rows):
-    """Aggregate check: every scored row is a validation row of the targets file with the same subject."""
+def check_targets(targets, rows, fold):
+    """Aggregate check: every scored row is a row of the scored fold in the targets file with the same subject."""
     want = dict(zip(rows['sample_ids'], rows['subjects']))
     seen = 0
     with open(targets, newline='') as stream:
         for rec in csv.DictReader(stream):
             sid = rec['sample_id']
             if sid in want:
-                if rec['split'] != FOLD or str(rec['subject_id']) != str(want[sid]):
-                    raise ValueError('scored row is not a validation row of the targets file')
+                if rec['split'] != fold or str(rec['subject_id']) != str(want[sid]):
+                    raise ValueError(f'scored row is not a {fold} row of the targets file')
                 seen += 1
     if seen != len(want):
         raise ValueError('scored rows missing from the targets file')
@@ -358,14 +361,14 @@ def execute(a, plan):
     shim = Shim(Path(a.artifact).resolve().parent)
 
     parity_rows, csv_rows, mask_stats, metric_check = [], [], {}, []
-    summary = {'fold': FOLD, 'test_fold_touched': False, 'ks': {}, 'note': ABSENCE_NOTE,
+    summary = {'fold': a.fold, 'selection_fold': SELECTION_FOLD, 'ks': {}, 'note': ABSENCE_NOTE,
                'drop_definition': 'metric(none) - metric(mask); difference = CEI drop - baseline drop '
                                   '(negative = CEI drops less)',
                'bootstrap': plan['bootstrap'], 'seeds': list(a.seeds), 'limit': a.limit, 'threads': a.threads}
     for k, kplan in plan['per_k'].items():
         rows = kplan['_rows']
         ids, y = rows['sample_ids'], np.asarray(rows['y'], dtype=np.int64)
-        check_targets(a.targets, rows)
+        check_targets(a.targets, rows, a.fold)
         binding0 = read_json(run_dir(a.runs, k, kplan['methods'][0], a.seeds[0]) / 'binding.json')
         membership_name = binding0['artifact_visit_membership_file']
         raw = load_graphs(a.artifact, membership_name, ids)
@@ -388,11 +391,11 @@ def execute(a, plan):
                 roundtrip = preprocessing_state(prep) == prep_state
                 for method in methods:
                     d = run_dir(a.runs, k, method, seed)
-                    z = np.load(d / 'validation.npz', allow_pickle=True)
+                    z = np.load(d / f'{a.fold}.npz', allow_pickle=True)
                     pos = {str(s): i for i, s in enumerate(z['sample_ids'])}
                     ix = np.array([pos[s] for s in ids])
                     if not np.array_equal(np.asarray(z['y'])[ix], y):
-                        raise ValueError('stored validation labels differ from the scored rows')
+                        raise ValueError(f'stored {a.fold} labels differ from the scored rows')
                     refs[method] = np.asarray(z['proba'])[ix]
                     margs[method] = make_args(T, final_args, shim, a, method, k, seed)
                 for mask in a.masks:
@@ -438,7 +441,7 @@ def execute(a, plan):
                             ours = fast_metrics(y, proba.argmax(1), k)
                             metric_check.append(max(abs(ours[0] - metr['macro_f1']), abs(ours[1] - metr['accuracy'])))
                             parity_rows.append({'K': k, 'method': method, 'seed': seed, 'rows': len(ids),
-                                                'fold': FOLD, 'threads': a.threads, 'max_abs_diff': diff,
+                                                'fold': a.fold, 'threads': a.threads, 'max_abs_diff': diff,
                                                 'argmax_agreement': agree, 'tolerance': PARITY_TOL,
                                                 'preprocessing_roundtrip_equal': roundtrip,
                                                 'passed': ok, 'message': msg})
@@ -498,7 +501,7 @@ def analyse(k, kplan, y, pat, preds, alive, a, csv_rows):
                 boot[(m, s, mask)] = np.array([fast_metrics(y, p, k, w) for w in weights])
     for (m, s, mask), (f1, acc) in point.items():
         f1_0, acc_0 = point[(m, s, 'none')]
-        csv_rows.append({'K': k, 'fold': FOLD, 'method': m, 'seed': s, 'mask': mask, 'rows': len(y),
+        csv_rows.append({'K': k, 'fold': a.fold, 'method': m, 'seed': s, 'mask': mask, 'rows': len(y),
                          'patients': n_pat, 'macro_f1': round(f1, 6), 'accuracy': round(acc, 6),
                          'macro_f1_drop': round(f1_0 - f1, 6), 'accuracy_drop': round(acc_0 - acc, 6)})
     res = {'task': kplan['task'], 'methods': methods, 'seeds_scored': {m: seeds_ok[m] for m in methods},
@@ -541,14 +544,16 @@ def analyse(k, kplan, y, pat, preds, alive, a, csv_rows):
 
 
 def render_md(plan, summary):
-    L = ['# Source masking (fold: validation; test never touched)', '',
+    fold = summary['fold']
+    L = [f'# Source masking (scored fold: {fold}; baselines chosen on validation)', '',
          f"Seeds {summary['seeds']}, limit {summary['limit']}, threads {summary['threads']}. "
          f"Drop = metric(none) - metric(mask). Difference = CEI drop - baseline drop (negative: CEI drops "
          f"less); 95% CI from a patient bootstrap (B={BOOTSTRAP_B}, rng {SEED_RNG}, shared draw, seed-mean "
-         "statistic). Baselines chosen on validation macro-F1.", '', summary['note'], '']
+         "statistic). Baselines chosen on validation macro-F1 (decision); every number below is on the "
+         f"{fold} fold.", '', summary['note'], '']
     for k, r in summary['ks'].items():
         t = r['task']
-        L += [f"## K={k} ({len(t['class_set'])} classes, {t['rows']} validation rows, {t['patients']} patients, "
+        L += [f"## K={k} ({len(t['class_set'])} classes, {t['rows']} {fold} rows, {t['patients']} patients, "
               f"seeds {t['seeds']})", '',
               f"Classes: {', '.join(t['class_set'])}", '',
               '| method | mask | macro-F1 | accuracy | macro-F1 drop | accuracy drop | seeds |',
@@ -567,7 +572,7 @@ def render_md(plan, summary):
                          f"[{c['ci95'][0]:+.4f}, {c['ci95'][1]:+.4f}] |")
         L.append('')
     p = summary['parity']
-    L += [f"Parity gate (unmasked vs stored validation probabilities, tolerance {p['tolerance']}): "
+    L += [f"Parity gate (unmasked vs stored {fold} probabilities, tolerance {p['tolerance']}): "
           f"{p['runs_passed']}/{p['runs_checked']} runs passed, max abs diff {p['max_abs_diff_over_runs']}.", '']
     return '\n'.join(L)
 
@@ -585,6 +590,8 @@ def main(argv=None):
     ap.add_argument('--artifact', required=True, help='graph artifact directory (graphs.jsonl, manifest.json)')
     ap.add_argument('--targets', required=True, help='targets.csv')
     ap.add_argument('--out', required=True, help='new output directory (must not exist; execute mode)')
+    ap.add_argument('--fold', default='test', choices=FOLDS,
+                    help='fold to score (default test = reported result; validation reproduces the earlier tables)')
     ap.add_argument('--ks', default='10,20,30')
     ap.add_argument('--seeds', default=','.join(map(str, ALL_SEEDS)))
     ap.add_argument('--masks', default=','.join(MASKS))
