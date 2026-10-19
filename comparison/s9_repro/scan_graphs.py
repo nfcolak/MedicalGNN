@@ -248,8 +248,7 @@ def render_md(rep):
     fo = list(ti['graphs_by_fold'])
     L = ['# Limitation counts of the final graphs', '',
          f"Artifact `{ti['artifact']}`: {ti['graphs']:,} graphs, {ti['edges']:,} edges; folds = graph `split` field "
-         f"({', '.join(f'{f} {n:,}' for f, n in ti['graphs_by_fold'].items())}). Counts only, reported only, "
-         'not used for decisions.', '', '## Duplicate edges', '',
+         f"({', '.join(f'{f} {n:,}' for f, n in ti['graphs_by_fold'].items())}). Counts only, shown per fold.", '', '## Duplicate edges', '',
          '| scope | extra copies | graphs | ' + ' | '.join(f'graphs {f}' for f in fo) + ' |',
          '|---|---|---|' + '---|' * len(fo)]
     a = d['any_duplicate_edge']

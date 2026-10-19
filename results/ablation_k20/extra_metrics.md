@@ -13,6 +13,43 @@
 
 s/epoch and peak RSS: runs shared the Mac (several jobs at once), so they are not contention-free; the final Full runs (seeds 1234/2025/7) have no memory record.
 
+## Test per-class F1 (mean ± SD over the arm's seeds; reported fold)
+
+| class | a1_full | a2_mlp | a3_noabsence | a4_nopair | a4b_nopair_noedge | a5_nomp | a5b_nomp_matched | a6_pool |
+|---|---|---|---|---|---|---|---|---|
+| Acute kidney failure | 0.450 ± 0.016 | 0.469 ± 0.005 | 0.445 ± 0.014 | 0.468 ± 0.021 | 0.465 ± 0.017 | 0.482 ± 0.018 | 0.461 ± 0.025 | 0.452 ± 0.021 |
+| Acute pharyngitis | 0.744 ± 0.021 | 0.730 ± 0.016 | 0.748 ± 0.014 | 0.753 ± 0.012 | 0.740 ± 0.020 | 0.748 ± 0.023 | 0.741 ± 0.018 | 0.732 ± 0.015 |
+| Alcohol abuse with intoxication | 0.733 ± 0.007 | 0.731 ± 0.016 | 0.728 ± 0.011 | 0.737 ± 0.013 | 0.717 ± 0.018 | 0.724 ± 0.018 | 0.733 ± 0.013 | 0.724 ± 0.019 |
+| Anemia | 0.675 ± 0.008 | 0.677 ± 0.006 | 0.670 ± 0.013 | 0.678 ± 0.014 | 0.677 ± 0.018 | 0.691 ± 0.016 | 0.689 ± 0.008 | 0.690 ± 0.024 |
+| Back or spine pain | 0.743 ± 0.002 | 0.739 ± 0.004 | 0.742 ± 0.005 | 0.740 ± 0.010 | 0.738 ± 0.005 | 0.737 ± 0.007 | 0.741 ± 0.003 | 0.744 ± 0.007 |
+| Diabetes mellitus | 0.711 ± 0.013 | 0.714 ± 0.024 | 0.711 ± 0.012 | 0.712 ± 0.011 | 0.722 ± 0.010 | 0.704 ± 0.012 | 0.696 ± 0.012 | 0.707 ± 0.028 |
+| Epilepsy | 0.843 ± 0.009 | 0.838 ± 0.007 | 0.847 ± 0.014 | 0.855 ± 0.011 | 0.846 ± 0.016 | 0.843 ± 0.011 | 0.840 ± 0.008 | 0.843 ± 0.016 |
+| GI bleed | 0.809 ± 0.006 | 0.813 ± 0.004 | 0.807 ± 0.006 | 0.810 ± 0.009 | 0.805 ± 0.005 | 0.816 ± 0.006 | 0.807 ± 0.004 | 0.815 ± 0.010 |
+| Head injury | 0.770 ± 0.003 | 0.756 ± 0.004 | 0.772 ± 0.006 | 0.771 ± 0.008 | 0.760 ± 0.007 | 0.756 ± 0.003 | 0.761 ± 0.005 | 0.754 ± 0.004 |
+| Heart failure | 0.630 ± 0.015 | 0.614 ± 0.013 | 0.624 ± 0.011 | 0.638 ± 0.021 | 0.627 ± 0.005 | 0.626 ± 0.006 | 0.614 ± 0.022 | 0.624 ± 0.031 |
+| Hypokalemia | 0.580 ± 0.024 | 0.599 ± 0.018 | 0.558 ± 0.012 | 0.601 ± 0.016 | 0.586 ± 0.017 | 0.593 ± 0.016 | 0.576 ± 0.016 | 0.583 ± 0.027 |
+| Limb injury or pain | 0.616 ± 0.004 | 0.608 ± 0.008 | 0.610 ± 0.004 | 0.612 ± 0.010 | 0.627 ± 0.011 | 0.611 ± 0.019 | 0.606 ± 0.008 | 0.599 ± 0.017 |
+| Lower respiratory disease | 0.678 ± 0.009 | 0.665 ± 0.009 | 0.683 ± 0.006 | 0.683 ± 0.010 | 0.669 ± 0.019 | 0.676 ± 0.011 | 0.664 ± 0.011 | 0.658 ± 0.016 |
+| Major depressive disorder | 0.903 ± 0.006 | 0.907 ± 0.003 | 0.906 ± 0.006 | 0.906 ± 0.002 | 0.903 ± 0.007 | 0.907 ± 0.005 | 0.910 ± 0.004 | 0.907 ± 0.011 |
+| Non-ST elevation (NSTEMI) myocardial infarction | 0.746 ± 0.011 | 0.741 ± 0.014 | 0.741 ± 0.014 | 0.732 ± 0.018 | 0.713 ± 0.010 | 0.743 ± 0.008 | 0.746 ± 0.010 | 0.717 ± 0.018 |
+| Sepsis | 0.406 ± 0.016 | 0.402 ± 0.034 | 0.404 ± 0.031 | 0.414 ± 0.024 | 0.418 ± 0.041 | 0.407 ± 0.021 | 0.399 ± 0.020 | 0.394 ± 0.043 |
+| Skin or soft-tissue infection | 0.667 ± 0.008 | 0.663 ± 0.013 | 0.670 ± 0.004 | 0.669 ± 0.006 | 0.674 ± 0.009 | 0.673 ± 0.008 | 0.662 ± 0.006 | 0.655 ± 0.016 |
+| UTI or pyelonephritis | 0.719 ± 0.004 | 0.713 ± 0.005 | 0.713 ± 0.004 | 0.713 ± 0.004 | 0.710 ± 0.005 | 0.704 ± 0.008 | 0.700 ± 0.002 | 0.703 ± 0.008 |
+| Unsp intestnl obst | 0.673 ± 0.010 | 0.697 ± 0.009 | 0.675 ± 0.009 | 0.680 ± 0.010 | 0.673 ± 0.005 | 0.685 ± 0.014 | 0.687 ± 0.015 | 0.690 ± 0.047 |
+| Unspecified atrial fibrillation | 0.685 ± 0.025 | 0.689 ± 0.011 | 0.675 ± 0.030 | 0.672 ± 0.019 | 0.654 ± 0.022 | 0.654 ± 0.012 | 0.650 ± 0.019 | 0.673 ± 0.020 |
+
+## Largest test per-class F1 drops against a1_full (arm mean minus Full mean; five most negative per arm)
+
+| arm | class: change (Full → arm) |
+|---|---|
+| a2_mlp | Heart failure: -0.016 (0.630 → 0.614); Acute pharyngitis: -0.014 (0.744 → 0.730); Head injury: -0.014 (0.770 → 0.756); Lower respiratory disease: -0.013 (0.678 → 0.665); Limb injury or pain: -0.007 (0.616 → 0.608) |
+| a3_noabsence | Hypokalemia: -0.022 (0.580 → 0.558); Unspecified atrial fibrillation: -0.010 (0.685 → 0.675); UTI or pyelonephritis: -0.006 (0.719 → 0.713); Heart failure: -0.006 (0.630 → 0.624); Limb injury or pain: -0.006 (0.616 → 0.610) |
+| a4_nopair | Non-ST elevation (NSTEMI) myocardial infarction: -0.014 (0.746 → 0.732); Unspecified atrial fibrillation: -0.013 (0.685 → 0.672); UTI or pyelonephritis: -0.006 (0.719 → 0.713); Limb injury or pain: -0.003 (0.616 → 0.612); Back or spine pain: -0.003 (0.743 → 0.740) |
+| a4b_nopair_noedge | Non-ST elevation (NSTEMI) myocardial infarction: -0.033 (0.746 → 0.713); Unspecified atrial fibrillation: -0.031 (0.685 → 0.654); Alcohol abuse with intoxication: -0.016 (0.733 → 0.717); Head injury: -0.010 (0.770 → 0.760); Lower respiratory disease: -0.010 (0.678 → 0.669) |
+| a5_nomp | Unspecified atrial fibrillation: -0.031 (0.685 → 0.654); UTI or pyelonephritis: -0.015 (0.719 → 0.704); Head injury: -0.014 (0.770 → 0.756); Alcohol abuse with intoxication: -0.009 (0.733 → 0.724); Diabetes mellitus: -0.007 (0.711 → 0.704) |
+| a5b_nomp_matched | Unspecified atrial fibrillation: -0.035 (0.685 → 0.650); UTI or pyelonephritis: -0.019 (0.719 → 0.700); Heart failure: -0.016 (0.630 → 0.614); Diabetes mellitus: -0.016 (0.711 → 0.696); Lower respiratory disease: -0.014 (0.678 → 0.664) |
+| a6_pool | Non-ST elevation (NSTEMI) myocardial infarction: -0.029 (0.746 → 0.717); Lower respiratory disease: -0.020 (0.678 → 0.658); Head injury: -0.016 (0.770 → 0.754); Limb injury or pain: -0.016 (0.616 → 0.599); UTI or pyelonephritis: -0.016 (0.719 → 0.703) |
+
 ## Validation per-class F1 (mean over seeds; decision fold)
 
 | class | a1_full | a2_mlp | a3_noabsence | a4_nopair | a4b_nopair_noedge | a5_nomp | a5b_nomp_matched | a6_pool |

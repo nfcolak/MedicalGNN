@@ -6,8 +6,8 @@ Usage (from the repo root):
 Reads only the summary.json of each input directory (no checkpoint, graph or training file is touched). Writes
 top<K>.md, top<K>.csv per K and summary.json into NEW_DIR (must not exist). Outputs are aggregated: no sample ids,
 subject ids, per-row values or absolute paths; input directories are recorded by name only. Caveat lines are derived
-from the inputs (load average, parity, contended epochs, batch sizes, missing ablation memory). Validation fold for
-timings; test numbers are not used anywhere.
+from the inputs (load average, parity, contended epochs, batch sizes, missing ablation memory). The timings, memory and
+parameter counts do not depend on the fold: their inputs are 500 validation graphs.
 """
 import argparse, csv, json, sys
 from pathlib import Path
@@ -168,7 +168,7 @@ def caveats(methods, ks, params, bench, train, ablation_status):
                       if (r['K'], r['method']) in sel and r.get('explanation_params') == 0})
     out.append('Explanation columns: n/a means no built-in explanation head; explanation parameters are 0 for '
                f"{', '.join(no_head) or 'none'} (CEI-GNN mp2: its evidence heads are the prediction path).")
-    out.append('Test fold: not used in any number of this table.')
+    out.append('The timings, memory and parameter counts do not depend on the fold: their inputs are 500 validation graphs.')
     return out
 
 

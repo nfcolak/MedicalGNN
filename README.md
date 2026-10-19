@@ -148,10 +148,11 @@ Further analyses read the stored predictions of the final runs (no training). Ea
 
 | Package | What it analyses | Tables |
 |---|---|---|
-| `comparison/nasim` | section 2: CEI-GNN with the baselines' training recipe, GSAT grid, ProtGNN projection, GCHM-PNA cosine schedule (the paired analysis `analyze.py`) | printed to a new output folder, no tracked table |
+| `comparison/nasim` | section 2: CEI-GNN with the baselines' training recipe, GSAT grid, ProtGNN projection, GCHM-PNA cosine schedule (`analyze.py` arm vs its reference, `cross_method.py` arm vs every baseline, `edge_pilot.py` bidirectional-edge pilot on a 10k training sample) | `results/baseline_fidelity_k20/` |
+| `comparison/s3_ledger` | section 3: evidence-ledger probes of CEI-GNN (block shares, ledger exactness, node-removal gap, pair additivity) | `results/s3_ledger/` |
 | `comparison/ablation` | section 4: CEI-GNN component ablation at K = 20 | `results/ablation_k20/` |
 | `comparison/splits` | section 4/6: replication of the ablation on two further patient splits | `results/split_replication_k20/` |
-| `comparison/s6_stats` | section 6: per-seed results, patient-only and two-level seed and patient intervals, macro-F1 variants, per-class tables | `results/s6_stats/` |
+| `comparison/s6_stats` | section 6: per-seed results, patient-only and two-level seed and patient intervals, macro-F1 variants, per-class tables, the cut-off = ED discharge subset (`cutoff_subset.py`) | `results/s6_stats/` |
 | `comparison/s7_why` | section 7: class-support analysis, same classes across K (`support.py`), inference-time source masking (`masking.py`) | `results/s7_why/support/`, `results/s7_why/masking/` |
 | `comparison/s8_cost` | section 8: parameter counts, inference benchmark, inference memory, training cost | `results/s8_cost/` |
 | `comparison/s9_repro` | section 9: graph scan for the reproduction check | `results/s9_repro/` |
@@ -173,7 +174,7 @@ MedicalGNN/
 ├── data/           data pipeline, raw CSVs -> patient graphs (5 stages)
 ├── comparison/     final runner, comparison, split, inputs and results
 ├── tests/          unit tests for the kept code (run only in a testing phase)
-├── results/        result tables (aggregates only): test_top{10,20,30}.md and one folder per analysis package (ablation_k20, split_replication_k20, s6_stats, s7_why, s8_cost, s9_repro)
+├── results/        result tables (aggregates only): test_top{10,20,30}.md and one folder per analysis package (baseline_fidelity_k20, s3_ledger, ablation_k20, split_replication_k20, s6_stats, s7_why, s8_cost, s9_repro)
 ├── README.md       public front page
 ├── environment.yml / LICENSE / .gitignore
 ```
@@ -251,6 +252,7 @@ comparison/
 ├── top3/
 │   └── compare.py            compares runs of one K: ranking (test), validation ranking as the selection column, mean +- SD, paired bootstrap
 ├── nasim/ ablation/ splits/  analysis packages of sections 2 and 4 (see "Analysis packages and their results")
+├── s3_ledger/                evidence-ledger probes (section 3)
 ├── s6_stats/ s7_why/         statistics (section 6), class support and source masking (section 7)
 ├── s8_cost/ s9_repro/        model cost (section 8), reproduction scan (section 9)
 └── standardized/             DATA AND RESULTS (git-ignored; disk-free APFS clones of the originals)

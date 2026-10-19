@@ -120,20 +120,22 @@ def peak_rss_gb(log):
 
 def extra_metrics(groups, logs_dir):
     """Pre-registered secondary numbers per arm (mean ± SD over seeds, from the stored result.json / validation.npz):
-    test and validation balanced accuracy and top-3, per-class F1 (validation, decision fold);
+    test and validation balanced accuracy and top-3, per-class F1 (test, reported; validation, decision fold);
     seconds per epoch and peak RSS (Nasim section 8; runs shared the Mac, so not contention-free)."""
     import json
     import numpy as np
     from sklearn.metrics import f1_score
     doc = {}
     for name, dirs in groups.items():
-        rows, per_class, labels = [], [], None
+        rows, per_class, test_per_class, labels = [], [], [], None
         for seed, d in sorted(dirs.items()):
             d = Path(d)
             r = json.loads((d / 'result.json').read_text())
             z = np.load(d / 'validation.npz')
             K = z['proba'].shape[1]
             per_class.append(f1_score(z['y'], z['proba'].argmax(1), labels=np.arange(K), average=None, zero_division=0))
+            zt = np.load(d / 'test.npz')
+            test_per_class.append(f1_score(zt['y'], zt['proba'].argmax(1), labels=np.arange(K), average=None, zero_division=0))
             labels = labels or [c.get('label') for c in sorted(r.get('per_class') or [], key=lambda c: c['index'])]
             arm_name = d.name.rsplit('_seed', 1)[0]
             rows.append({'seed': seed, 'val_balanced_acc': r['metrics']['balanced_acc'], 'val_top3_acc': r['metrics']['top3_acc'],
@@ -141,7 +143,7 @@ def extra_metrics(groups, logs_dir):
                          'test_top3_acc': (r.get('test') or {}).get('top3_acc'),
                          'seconds_per_epoch': round(r['total_seconds'] / max(len(r['history']), 1), 1),
                          'peak_rss_gb': peak_rss_gb(Path(logs_dir) / f"top{K}_{arm_name}_seed{seed}.log")})
-        pcf = np.vstack(per_class)
+        pcf, tpcf = np.vstack(per_class), np.vstack(test_per_class)
 
         def ms(key):
             v = [x[key] for x in rows if x[key] is not None]
@@ -149,6 +151,8 @@ def extra_metrics(groups, logs_dir):
         doc[name] = {'seeds': sorted(dirs), 'runs': rows,
                      **{k: ms(k) for k in ('val_balanced_acc', 'val_top3_acc', 'test_balanced_acc', 'test_top3_acc',
                                            'seconds_per_epoch', 'peak_rss_gb')},
+                     'test_per_class_f1_mean': tpcf.mean(0).round(4).tolist(),
+                     'test_per_class_f1_sd': (tpcf.std(0, ddof=1).round(4).tolist() if len(tpcf) > 1 else None),
                      'val_per_class_f1_mean': pcf.mean(0).round(4).tolist(),
                      'val_per_class_f1_sd': (pcf.std(0, ddof=1).round(4).tolist() if len(pcf) > 1 else None),
                      'class_labels': labels}
@@ -166,14 +170,35 @@ def render_extra(doc):
                  f"{f(g['val_balanced_acc'])} | {f(g['val_top3_acc'])} | {f(g['seconds_per_epoch'], 1)} | "
                  f"{f(g['peak_rss_gb'], 2)} |")
     L += ['', 's/epoch and peak RSS: runs shared the Mac (several jobs at once), so they are not contention-free; the '
-          'final Full runs (seeds 1234/2025/7) have no memory record.', '',
-          '## Validation per-class F1 (mean over seeds; decision fold)', '']
+          'final Full runs (seeds 1234/2025/7) have no memory record.', '']
     names = list(doc)
+    full = names[0]
     labels = next((g['class_labels'] for g in doc.values() if g['class_labels']), None) or []
+
+    def label(i):
+        return labels[i] if i < len(labels) else str(i)
+
+    n_classes = len(doc[full]['test_per_class_f1_mean'])
+    L += ['## Test per-class F1 (mean ± SD over the arm\'s seeds; reported fold)', '',
+          '| class | ' + ' | '.join(names) + ' |', '|---|' + '---|' * len(names)]
+    for i in range(n_classes):
+        cells = []
+        for n in names:
+            sd = doc[n]['test_per_class_f1_sd']
+            cells.append(f"{doc[n]['test_per_class_f1_mean'][i]:.3f}" + (f" ± {sd[i]:.3f}" if sd else ''))
+        L.append(f'| {label(i)} | ' + ' | '.join(cells) + ' |')
+    L += ['', f'## Largest test per-class F1 drops against {full} (arm mean minus Full mean; five most negative per arm)', '',
+          '| arm | class: change (Full → arm) |', '|---|---|']
+    for n in names[1:]:
+        diff = [doc[n]['test_per_class_f1_mean'][i] - doc[full]['test_per_class_f1_mean'][i] for i in range(n_classes)]
+        worst = sorted(range(n_classes), key=lambda i: diff[i])[:5]
+        L.append(f'| {n} | ' + '; '.join(
+            f"{label(i)}: {diff[i]:+.3f} ({doc[full]['test_per_class_f1_mean'][i]:.3f} → {doc[n]['test_per_class_f1_mean'][i]:.3f})"
+            for i in worst) + ' |')
+    L += ['', '## Validation per-class F1 (mean over seeds; decision fold)', '']
     L += ['| class | ' + ' | '.join(names) + ' |', '|---|' + '---|' * len(names)]
     for i in range(len(doc[names[0]]['val_per_class_f1_mean'])):
-        label = labels[i] if i < len(labels) else str(i)
-        L.append(f'| {label} | ' + ' | '.join(f"{doc[n]['val_per_class_f1_mean'][i]:.3f}" for n in names) + ' |')
+        L.append(f'| {label(i)} | ' + ' | '.join(f"{doc[n]['val_per_class_f1_mean'][i]:.3f}" for n in names) + ' |')
     return '\n'.join(L) + '\n'
 
 

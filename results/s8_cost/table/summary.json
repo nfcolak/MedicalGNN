@@ -52,7 +52,7 @@
   "Training memory was not recorded in the final runs; the memory column is inference memory only.",
   "Parameter counts: seed-1234 models rebuilt and strict-loaded; recount matches the bindings for every row.",
   "Explanation columns: n/a means no built-in explanation head; explanation parameters are 0 for CEI-GNN mp2, GraphCare-style (adapted) (CEI-GNN mp2: its evidence heads are the prediction path).",
-  "Test fold: not used in any number of this table."
+  "The timings, memory and parameter counts do not depend on the fold: their inputs are 500 validation graphs."
  ],
  "per_k": {
   "10": {

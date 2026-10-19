@@ -14,7 +14,7 @@ Graphs: --graphs ids drawn with random.Random(--sample-seed) from the K=10 valid
 directory for the run and deleted at the end; the output holds aggregates only (no sample or subject ids).
 Timings: one warm-up pass, then --rounds rounds of --passes timed passes; reported per graph as median/min/max over
 rounds. Load average is recorded before and after each subprocess; above 2 the record is flagged contended.
-Test numbers are not used here.
+The timings and memory numbers do not depend on the fold: their inputs are 500 validation graphs (--graphs default).
 """
 import argparse
 import json
