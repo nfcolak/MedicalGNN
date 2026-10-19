@@ -248,6 +248,29 @@ class EvidenceAdapterV3(ClinicalMethodAdapter):
     known_options = KNOWN_OPTIONS
     network_class = EvidenceNetworkV3
 
+    @classmethod
+    def validate_method_options(cls, args) -> None:
+        """Plan-mode check of the method options (no data, no network): names, arm, v3_state file, k, depth."""
+        reject_unknown_options(args, cls.known_options)
+        arm = method_option(args, "arm", None, str)
+        if arm not in ARMS:
+            raise ValueError(f"method option arm must be one of {list(ARMS)} (got {arm!r})")
+        state_path = method_option(args, "v3_state", None, str)
+        if not state_path:
+            raise ValueError("method option v3_state=<path> is required (v3 §12 F18)")
+        state = load_v3_state(state_path)
+        k = method_option(args, "k", None, int)
+        if k is None:
+            raise ValueError("method option k=<int> is required and must equal the v3_state K")
+        if k != state.K:
+            raise ValueError(f"method option k={k} differs from the v3_state K={state.K}")
+        run_top_k = _arg(args, 'top_k_labels')
+        if state.top_k_labels is not None and run_top_k is not None and state.top_k_labels != int(run_top_k):
+            raise ValueError(f"v3_state {state.path} was fitted for top_k_labels={state.top_k_labels}, "
+                             f"this run uses top_k_labels={int(run_top_k)}")
+        method_option(args, "encoder_depth", 1, int, minimum=1)
+        method_option(args, "comorbid_block", 0, int, minimum=0, maximum=1)
+
     def __init__(self, *, num_tokens, node_dim, edge_dim, num_classes, hidden,
                  layers, dropout, token_dim, num_triples, args):
         super().__init__()

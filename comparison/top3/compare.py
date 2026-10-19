@@ -9,6 +9,12 @@ Accepted runs (no protocol overrides, one protocol and one top_k_labels per comp
     selected DEV macro-F1, validation fold (single evaluation) reported, test never evaluated.
 Runs of one comparison must share (protocol, top_k_labels, kept_label_indices, split hashes); the class
 count K is taken from the data.
+
+Ablation arms: several arms of one method (cei_gnn_mp2) can be compared. A run's arm label is its method name plus
+the ablation options that differ from the final CEI recipe (ARM_DEFAULTS), read from binding['method_config']:
+`cei_gnn_mp2` is the Full model, `cei_gnn_mp2[ev_pair=0]` an arm. `--label NAME` (once per `--run`, same order)
+overrides the derived label. Arms of one method must agree on everything else (the other method options, lr,
+dropout, weight decay, hidden size, optimizer, batch size); a run that differs there is refused.
 """
 import argparse
 import itertools
@@ -40,8 +46,49 @@ CAVEAT = ('Fair protocol fair_v3: one fixed 10k train sample and 5k dev draw; ra
           'validation fold only (single evaluation per run); test fold never evaluated.')
 
 
+# Ablation options of cei_gnn_mp2 and their value in the final (Full) recipe; a run is an arm of Full iff
+# some of them differ. A key missing from a binding (runs made before the switch existed) has the Full value.
+ARM_DEFAULTS = {'arm': 'C', 'mp_feed': 'dual', 'ev_combine': 'sum', 'ev_pair': 1, 'ev_edge': 1,
+                'readout': 'evidence', 'pool_hidden': 0, 'encoder_depth': 1, 'comorbid_block': 0}
+# binding keys that must agree between arms of one method
+ARM_SAME_KEYS = ('lr', 'dropout', 'weight_decay', 'hidden', 'optimizer', 'batch_size', 'layers', 'epochs',
+                 'patience', 'weights')
+
+
 class Refusal(Exception):
     pass
+
+
+def arm_options(binding):
+    """{ablation option: value} of one run (Full values for anything the binding does not record)."""
+    config = binding.get('method_config') or {}
+    options = dict(config.get('mp2_options') or {})
+    values = dict(ARM_DEFAULTS)
+    for key in values:
+        if key in options:
+            values[key] = options[key]
+        elif key in config:
+            values[key] = config[key]
+    return values
+
+
+def arm_label(binding, method):
+    """`method` for the Full recipe, else `method[opt=value,...]` listing the differing ablation options."""
+    if binding.get('method') != 'cei_gnn_mp2':
+        return method
+    values = arm_options(binding)
+    diff = [f'{k}={values[k]}' for k in ARM_DEFAULTS if values[k] != ARM_DEFAULTS[k]
+            and not (k == 'pool_hidden' and values['readout'] != 'pool')]
+    if values['readout'] == 'pool':   # always show the pooled head width
+        diff = [d for d in diff if not d.startswith('pool_hidden=')] + [f"pool_hidden={values['pool_hidden']}"]
+    return method + (f"[{','.join(diff)}]" if diff else '')
+
+
+def arm_rest(binding):
+    """Everything an arm of one method must share: the non-ablation method options and the common settings."""
+    config = binding.get('method_config') or {}
+    options = {k: v for k, v in (config.get('mp2_options') or {}).items() if k not in ARM_DEFAULTS}
+    return {'options': options, **{k: binding.get(k) for k in ARM_SAME_KEYS}}
 
 
 def caveat_for(protocol):
@@ -118,7 +165,7 @@ def _load_npz(path, name, binding, fold, check_hash=True):
     return proba, y, z['subjects'], ids
 
 
-def load_run(path):
+def load_run(path, label=None):
     path = Path(path)
     for name in ('result.json', 'binding.json', 'validation.npz'):
         if not (path / name).is_file():
@@ -185,7 +232,10 @@ def load_run(path):
         raise Refusal(f'{path}: len(kept_label_indices) {len(kept)} != proba.shape[1] {K}')
     if binding.get('protocol') != LEGACY_PROTOCOL and K != binding['top_k_labels']:
         raise Refusal(f"{path}: proba.shape[1] {K} != top_k_labels {binding['top_k_labels']}")
-    return {'path': str(path), 'method': method, 'seed': binding['seed'], 'binding': binding,
+    base_method = method
+    method = label or arm_label(binding, method)
+    return {'path': str(path), 'method': method, 'base_method': base_method, 'seed': binding['seed'],
+            'binding': binding,
             'select_macro_f1': float(select), 'test_protocol': test_protocol,
             'result': result, 'proba': proba, 'y': y,
             'subjects': subjects, 'sample_ids': sample_ids}
@@ -204,6 +254,13 @@ def check_and_align(runs):
     for r in runs:
         if len(set(r['sample_ids'])) != len(r['sample_ids']):
             raise Refusal(f"{r['path']}: duplicate evaluation sample_ids")
+    first_of = {}
+    for r in runs:   # arms of one method differ only in their ablation options
+        rest = first_of.setdefault(r['base_method'], r)
+        if arm_rest(r['binding']) != arm_rest(rest['binding']):
+            diff = sorted(k for k, v in arm_rest(r['binding']).items() if v != arm_rest(rest['binding'])[k])
+            raise Refusal(f"{r['base_method']}: {r['path']} differs from {rest['path']} in more than the ablation "
+                          f'options ({diff})')
     seen = set()
     for r in runs:
         ident = (r['method'], r['seed'])
@@ -255,13 +312,17 @@ def bootstrap(runs, methods, ref):
 def main(argv=None):
     ap = argparse.ArgumentParser(prog='comparison.top3.compare')
     ap.add_argument('--run', action='append', required=True)
+    ap.add_argument('--label', action='append', default=None,
+                    help='arm label of the matching --run (give one per --run, in order); default: derived from the run')
     ap.add_argument('--out', required=True)
     args = ap.parse_args(argv)
     try:
         out = Path(args.out)
         if out.exists():
             raise Refusal(f'--out already exists: {out}')
-        runs = [load_run(p) for p in args.run]
+        if args.label is not None and len(args.label) != len(args.run):
+            raise Refusal(f'--label given {len(args.label)} times for {len(args.run)} --run')
+        runs = [load_run(p, (args.label or [None] * len(args.run))[i]) for i, p in enumerate(args.run)]
         check_and_align(runs)
         for r in runs:
             r['metrics'] = point_metrics(r['proba'], r['y'])

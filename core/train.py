@@ -1358,6 +1358,11 @@ def main():
     if args.execute:
         run(args)
     else:
+        if is_plugin(args.method):   # plan mode must not accept an option the real run would refuse
+            try:
+                METHOD_REGISTRY[args.method].validate_method_options(args)
+            except ValueError as error:
+                p.error(f'invalid --method-option for {args.method}: {error}')
         plan = {
             'status': 'not_executed',
             'requires': '--execute',

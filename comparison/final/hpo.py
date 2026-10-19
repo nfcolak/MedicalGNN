@@ -5,7 +5,9 @@ Setup of the recorded HPO: K=17, the old 10k TRAIN sample (seed 1234), 20 epochs
 previous setting. Objective = mean dev macro-F1 over epochs 16-20. hidden/layers fixed. The tuned values are the
 `args()` of comparison/final/run.py. K=17 and the 10k sample are protocol overrides here (allowed: tuning runs only).
 Output: comparison/standardized/hpo_<name>/<method>/ (study.db, trial logs, trials.json, best.json).
-Usage: python3 -m comparison.final.hpo gsat|graphcare|protgnn|gchm_pna|cei_mp2 N_TRIALS [--name fv10_k17_20261011]
+Usage: python3 -m comparison.final.hpo gsat|graphcare|protgnn|gchm_pna|cei_mp2|cei_a6_pool N_TRIALS [--name fv10_k17_20261011]
+`cei_a6_pool` = ablation arm a6 (pooled head, mp_feed=all, pool width matched to Full's live parameters at K=17),
+tuned with the cei_mp2 search space; trial 0 = the final CEI values. Use a new --name (e.g. ablation_a6_k17_<date>).
 Real-data training: only with the user's approval.
 """
 import argparse
@@ -33,6 +35,9 @@ BASE = {
     'cei_mp2': ['--method', 'cei_gnn_mp2'] + sum((['--method-option', o] for o in [
         'arm=C', 'k=4', f'v3_state={K4}', 'mp_feed=dual', 'mp_hub_max=1', 'mp_dedup=1', 'mp_ctx=table',
         'mp_root=bias']), []),
+    'cei_a6_pool': ['--method', 'cei_gnn_mp2'] + sum((['--method-option', o] for o in [
+        'arm=C', 'k=4', f'v3_state={K4}', 'mp_feed=all', 'mp_hub_max=1', 'mp_dedup=1', 'mp_ctx=table',
+        'mp_root=bias', 'readout=pool', 'pool_hidden=236']), []),
 }
 # previous settings (trial 0); gsat weight_decay 0.0 -> 1e-6 (log-space floor)
 # cei_mp2 trial 0 is the AdamW+cosine recipe of the mp2 study, not the old v3 Adam setting; with optimizer=adamw_cosine the sampled weight_decay is ignored (mp_weight_decay 0.01 is applied), only optimizer=adam applies it as coupled L2.
@@ -42,11 +47,13 @@ DEFAULTS = {
     'protgnn': dict(lr=1.79e-3, weight_decay=4.3e-5, dropout=0.51, optimizer='native', prototypes_per_class=3),
     'gchm_pna': dict(lr=1e-3, weight_decay=1e-5, dropout=0.1, optimizer='native', batch_size=64),
     'cei_mp2': dict(lr=1.79e-3, weight_decay=4.3e-5, dropout=0.3, optimizer='adamw_cosine', label_smoothing=0.0),
+    'cei_a6_pool': dict(lr=2.37e-3, weight_decay=1.03e-6, dropout=0.493, optimizer='adamw_cosine', label_smoothing=0.1),
 }
 
 
 def space(model, trial):
-    opts = ['adam', 'adamw_cosine'] if model == 'cei_mp2' else ['native', 'adamw_cosine']
+    cei = model in ('cei_mp2', 'cei_a6_pool')
+    opts = ['adam', 'adamw_cosine'] if cei else ['native', 'adamw_cosine']
     # NOTE cei_mp2: the weight_decay axis only matters for optimizer='adam'; with 'adamw_cosine' (mp_optimizer=adamw) the adapter applies mp_weight_decay 0.01 and ignores it.
     p = dict(lr=trial.suggest_float('lr', 3e-4, 5e-3, log=True),
              weight_decay=trial.suggest_float('weight_decay', 1e-6, 1e-3, log=True),
@@ -73,7 +80,7 @@ def command(model, p, out):
            '--selection-fold', 'dev', '--dev-limit', '5000', '--final-eval', 'none',
            '--cpu-threads', str(THREADS), '--execute',
            '--lr', str(p['lr']), '--weight-decay', str(p['weight_decay']), '--dropout', str(p['dropout'])]
-    if model == 'cei_mp2':
+    if model in ('cei_mp2', 'cei_a6_pool'):
         aw = p['optimizer'] == 'adamw_cosine'
         cmd += ['--method-option', 'mp_optimizer=' + ('adamw' if aw else 'adam'),
                 '--method-option', 'mp_lr_schedule=' + ('cosine' if aw else 'none'),
