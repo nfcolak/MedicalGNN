@@ -167,6 +167,8 @@ def test_the_dev_fold_replay_really_checks_the_dev_hash(tmp_path):
     binding = json.loads(binding_path.read_text())
     binding["selected_dev"]["prediction_sha256"] = "0" * 64
     binding_path.write_text(json.dumps(binding))
+    # Without stored dev predictions the tolerance fallback has nothing to compare with.
+    (run_dir / "dev.npz").unlink(missing_ok=True)
     with pytest.raises(ValueError, match="REPLAY CHECK FAILED"):
         runner.run_explanations(run_dir, tmp_path / "ex_tamper", fold="dev", max_subjects=1,
                                 steps=2, epochs=3)

@@ -97,19 +97,49 @@ def test_graphcare_recency_decay_is_recovered_not_defaulted(tmp_path):
 
 def test_replay_check_refuses_a_tampered_prediction_hash(tmp_path):
     """If binding.json's recorded hash doesn't match what reloading + replaying
-    best.pt actually produces, the runner must refuse outright, before writing
-    any output -- never silently explain a model it can't verify."""
+    best.pt actually produces, and the stored predictions of the fold do not match
+    either, the runner must refuse outright, before writing any output -- never
+    silently explain a model it can't verify."""
+    import numpy as np
+
     run_dir = train_one(tmp_path, "run_tamper", method="gsat", conv=None)
     binding_path = run_dir / "binding.json"
     binding = json.loads(binding_path.read_text())
     tampered = copy.deepcopy(binding)
     tampered["selected_test"]["prediction_sha256"] = "0" * 64
     binding_path.write_text(json.dumps(tampered))
+    stored = dict(np.load(run_dir / "test.npz"))
+    stored["proba"] = stored["proba"][:, ::-1].copy()   # a different model's answers
+    np.savez(run_dir / "test.npz", **stored)
 
     output = tmp_path / "explanations_tampered"
     with pytest.raises(ValueError, match="REPLAY CHECK FAILED"):
         explain.run_explanations(run_dir, output, max_subjects=2, steps=2, epochs=3)
     assert not output.exists() or not any(output.iterdir())
+
+
+def test_replay_falls_back_to_the_stored_predictions_when_the_hash_cannot_reproduce(tmp_path):
+    """On another machine the byte hash differs in the last float bits; the replay then
+    passes only if every row matches the stored <fold>.npz within the tolerance with
+    100% argmax agreement, and the manifest says which rule passed."""
+    run_dir = train_one(tmp_path, "run_fallback", method="gsat", conv=None)
+    binding_path = run_dir / "binding.json"
+    binding = json.loads(binding_path.read_text())
+    binding["selected_test"]["prediction_sha256"] = "0" * 64
+    binding_path.write_text(json.dumps(binding))
+
+    manifest = explain.run_explanations(run_dir, tmp_path / "out_fallback", max_subjects=1,
+                                        steps=2, epochs=3)
+    assert manifest["replay"]["mode"] == "stored_predictions_tolerance"
+    assert manifest["replay"]["max_abs_diff"] <= explain.REPLAY_TOLERANCE
+    assert manifest["replay"]["argmax_agreement"] == 1.0
+
+
+def test_replay_reports_the_exact_hash_mode_when_it_reproduces(tmp_path):
+    run_dir = train_one(tmp_path, "run_exact", method="gsat", conv=None)
+    manifest = explain.run_explanations(run_dir, tmp_path / "out_exact", max_subjects=1,
+                                        steps=2, epochs=3)
+    assert manifest["replay"]["mode"] == "exact_hash"
 
 
 def test_refuses_to_write_into_an_occupied_output_directory(tmp_path):

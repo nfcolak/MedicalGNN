@@ -88,6 +88,9 @@ FOLD_BLOCK = {"test": "selected_test", "validation": "selected_validation",
               "dev": "selected_dev"}
 # ADR-023: test is the report fold; validation (and dev) only ever label a decision.
 FOLD_ROLE = {"test": "report", "validation": "decision", "dev": "decision"}
+# Fallback replay rule when the byte-exact hash cannot reproduce (another machine or
+# thread count): every row within this of the stored <fold>.npz and 100% argmax agreement.
+REPLAY_TOLERANCE = 1e-4
 GCHM_REFUSAL = "GCHM-PNA is not part of the explanation study"
 
 
@@ -237,9 +240,13 @@ def build_model(binding: dict[str, Any], state_dict: dict[str, torch.Tensor]):
 
 @torch.no_grad()
 def replay_check(model, splits, binding: dict[str, Any], *, is_method_adapter: bool,
-                 device="cpu", batch_size: int | None = None, fold: str = "test") -> None:
+                 device="cpu", batch_size: int | None = None, fold: str = "test",
+                 stored_npz: str | Path | None = None) -> dict[str, Any]:
     """Refuse to proceed unless a fresh pass over `fold` reproduces the exact
-    recorded prediction hash. This is the one check that makes every other
+    recorded prediction hash (or, when that byte hash cannot reproduce on this
+    machine, every row of the stored `<fold>.npz` within REPLAY_TOLERANCE with 100%
+    argmax agreement; the returned dict names the rule that passed). This is the one
+    check that makes every other
     reconstruction assumption above verifiable rather than merely plausible:
     if anything upstream was wrong, this fails loudly, closed, before a single
     explanation is generated.
@@ -268,13 +275,34 @@ def replay_check(model, splits, binding: dict[str, Any], *, is_method_adapter: b
     proba = torch.softmax(torch.cat(logits), dim=1).numpy()
     digest = proba_digest(proba)
     expected = binding[FOLD_BLOCK[fold]]["prediction_sha256"]
-    if digest != expected:
-        raise ValueError(
-            f"REPLAY CHECK FAILED: reloading best.pt and re-running {fold} "
-            f"produced prediction hash {digest}, not the recorded {expected}. "
-            "Refusing to generate explanations from a model that cannot be "
-            "shown to be the one that was actually trained and evaluated."
-        )
+    if digest == expected:
+        return {"mode": "exact_hash", "prediction_sha256": digest}
+    # A byte-exact hash only reproduces on the training machine with the same thread
+    # count and library build. On another machine (or another thread count) the float
+    # sums differ in the last bits, so the fallback compares with the stored
+    # predictions of the same fold, row by row (same rule as source masking).
+    if stored_npz is not None and Path(stored_npz).exists():
+        stored = np.load(stored_npz, allow_pickle=False)
+        ids = [str(d.sample_id) for d in splits[fold]]
+        stored_ids = [str(s) for s in stored["sample_ids"]]
+        if ids == stored_ids and stored["proba"].shape == proba.shape:
+            diff = float(np.abs(stored["proba"].astype(np.float64) - proba).max())
+            argmax_equal = bool((stored["proba"].argmax(1) == proba.argmax(1)).all())
+            if diff <= REPLAY_TOLERANCE and argmax_equal:
+                return {"mode": "stored_predictions_tolerance", "max_abs_diff": diff,
+                        "tolerance": REPLAY_TOLERANCE, "argmax_agreement": 1.0,
+                        "rows": len(ids), "prediction_sha256": digest}
+            detail = f"max abs diff {diff:.3g} (tolerance {REPLAY_TOLERANCE}), argmax equal {argmax_equal}"
+        else:
+            detail = "stored sample ids or shape differ from the rebuilt fold"
+    else:
+        detail = f"no stored {fold}.npz to compare with"
+    raise ValueError(
+        f"REPLAY CHECK FAILED: reloading best.pt and re-running {fold} "
+        f"produced prediction hash {digest}, not the recorded {expected}; {detail}. "
+        "Refusing to generate explanations from a model that cannot be "
+        "shown to be the one that was actually trained and evaluated."
+    )
 
 
 def build_wrapper(binding: dict[str, Any], model):
@@ -727,7 +755,8 @@ def run_explanations(run_dir, output_dir, *, fold: str = "test",
     binding = bundle.binding
     splits = rebuild_split(binding, fold)
     model, is_method_adapter = build_model(binding, bundle.state_dict)
-    replay_check(model, splits, binding, is_method_adapter=is_method_adapter, fold=fold)
+    replay = replay_check(model, splits, binding, is_method_adapter=is_method_adapter, fold=fold,
+                          stored_npz=Path(run_dir) / f"{fold}.npz")
 
     subjects = select_explained_subjects(
         splits[fold], max_subjects=max_subjects,
@@ -805,6 +834,7 @@ def run_explanations(run_dir, output_dir, *, fold: str = "test",
         "fold_role": FOLD_ROLE[fold],
         "fold_sample_ids_sha256": binding["split_sample_ids_sha256"][fold],
         "replay_verified": True,
+        "replay": replay,
         "cohort_schema_version": cohort["schema_version"],
         "cohort_file": "cohort.json",
         "cohort_is_full_fold": cohort["is_full_fold"],
