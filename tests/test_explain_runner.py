@@ -243,7 +243,7 @@ def test_kept_classes_and_missing_recorded_hashes_are_refused(tmp_path):
     with pytest.raises(ValueError, match="kept classes"):
         explain.rebuild_split(reordered, "test")
     for key in ("targets_sha256", "artifact_graphs_sha256", "artifact_visit_membership_sha256",
-                "graph_manifest_sha256"):
+                "graph_manifest_sha256", "preprocessing_sha256"):
         missing = {k: v for k, v in binding.items() if k != key}
         with pytest.raises(ValueError, match=f"records no {key}"):
             explain.rebuild_split(missing, "test")
@@ -366,12 +366,35 @@ def test_a_stored_npz_that_is_not_the_training_runs_never_reaches_the_single_gra
     run_dir = train_one(tmp_path, "run_swapped_npz", method="gsat", conv=None)
     binding = json.loads((run_dir / "binding.json").read_text())
     recorded = binding["selected_test"]["prediction_sha256"]
-    assert explain._stored_rows(run_dir / "test.npz", recorded)
+    fold_ids = [str(d.sample_id) for d in explain.rebuild_split(binding, "test")["test"]]
+    assert explain._stored_rows(run_dir / "test.npz", recorded, fold_ids)
     stored = dict(np.load(run_dir / "test.npz"))
     stored["proba"] = stored["proba"][:, ::-1].copy()        # the classes swapped
     np.savez(run_dir / "test.npz", **stored)
-    assert explain._stored_rows(run_dir / "test.npz", recorded) == {}
+    assert explain._stored_rows(run_dir / "test.npz", recorded, fold_ids) == {}
     output = tmp_path / "out_swapped_npz"
+    manifest = explain.run_explanations(run_dir, output, max_subjects=2, steps=2, epochs=3,
+                                        random_repeats=2)
+    assert manifest["replay"]["mode"] == "exact_hash" and manifest["record_files"]
+    for filename in manifest["record_files"]:
+        assert json.loads((output / filename).read_text())["single_graph_check"] is None
+
+
+def test_stored_rows_keyed_by_other_sample_ids_never_reach_the_single_graph_check(tmp_path):
+    """The recorded prediction hash covers the probabilities only; a stored npz whose sample ids are
+    not the rebuilt fold's (here rolled by one, probabilities untouched) gives no rows, so no visit is
+    compared with another visit's training prediction."""
+    run_dir = train_one(tmp_path, "run_rolled_ids", method="gsat", conv=None)
+    binding = json.loads((run_dir / "binding.json").read_text())
+    recorded = binding["selected_test"]["prediction_sha256"]
+    fold_ids = [str(d.sample_id) for d in explain.rebuild_split(binding, "test")["test"]]
+    rows = explain._stored_rows(run_dir / "test.npz", recorded, fold_ids)
+    assert list(rows) == fold_ids and len(set(fold_ids)) > 1
+    stored = dict(np.load(run_dir / "test.npz"))
+    stored["sample_ids"] = np.roll(stored["sample_ids"], 1)
+    np.savez(run_dir / "test.npz", **stored)
+    assert explain._stored_rows(run_dir / "test.npz", recorded, fold_ids) == {}
+    output = tmp_path / "out_rolled_ids"
     manifest = explain.run_explanations(run_dir, output, max_subjects=2, steps=2, epochs=3,
                                         random_repeats=2)
     assert manifest["replay"]["mode"] == "exact_hash" and manifest["record_files"]

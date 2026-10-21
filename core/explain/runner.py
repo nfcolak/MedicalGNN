@@ -1071,14 +1071,18 @@ def explain_subject(wrapper, data, *, method: str, conv: str | None,
     return record
 
 
-def _stored_rows(stored_npz: Path, prediction_sha256: str) -> dict[str, np.ndarray]:
+def _stored_rows(stored_npz: Path, prediction_sha256: str,
+                 fold_ids: list[str]) -> dict[str, np.ndarray]:
     """sample id -> stored probability row of the fold's `<fold>.npz`; empty when it is absent or is
-    not the training run's (its probabilities do not hash to the recorded `prediction_sha256`), which
-    an exact-hash replay never opens the file to show."""
+    not the training run's (its probabilities do not hash to the recorded `prediction_sha256`, or
+    its sample ids are not the rebuilt fold's `fold_ids` in fold order), which an exact-hash replay
+    never opens the file to show."""
     if not stored_npz.exists():
         return {}
     stored = np.load(stored_npz, allow_pickle=False)
     if "proba" not in stored.files or proba_digest(stored["proba"]) != prediction_sha256:
+        return {}
+    if "sample_ids" not in stored.files or [str(s) for s in stored["sample_ids"]] != fold_ids:
         return {}
     return {str(i): row for i, row in zip(stored["sample_ids"], stored["proba"])}
 
@@ -1400,7 +1404,8 @@ def run_explanations(run_dir, output_dir, *, fold: str = "test",
                     "stability_draws": stability_draws, "sigma": stability_sigma,
                     "seed": random_seed}
 
-    stored_rows = _stored_rows(Path(run_dir) / f"{fold}.npz", binding[FOLD_BLOCK[fold]]["prediction_sha256"])
+    stored_rows = _stored_rows(Path(run_dir) / f"{fold}.npz", binding[FOLD_BLOCK[fold]]["prediction_sha256"],
+                               [str(d.sample_id) for d in splits[fold]])
     seconds_before_first_explanation = round(time.perf_counter() - run_started, 3)
     explained, failures = [], []
     for index, data in enumerate(subjects):

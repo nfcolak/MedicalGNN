@@ -334,23 +334,38 @@ def test_deletion_forward_is_the_adapters_own_forward_on_one_graph(mp2):
 
 
 def test_the_wrapper_runs_a_training_adapter_in_eval_and_leaves_it_training(tmp_path):
+    from cei.studies.cei_v3_graphxai import native_importance
+
     adapter = _mp2_adapter(tmp_path, dropout=0.5)
     batch, graph = _batch(), _without(_mp2_graph(), (PLAIN,))
     with torch.no_grad():
         reference = adapter(batch, epoch=0).logits
         deleted = adapter(_batch(graph), epoch=0).logits
+        target = int(reference.argmax(-1))
+        builtin, _ = native_importance(adapter, batch, target)
+    eval_wrapper = CEIGraphXAIWrapper(adapter, method='cei_gnn_mp2')
+    eval_x = eval_wrapper.set_context(batch)
+    eval_wrapper.builtin_node_importance(eval_x, batch.edge_index)
+    eval_detail = eval_wrapper.builtin_detail(target)
     wrapper = CEIGraphXAIWrapper(adapter, method='cei_gnn_mp2')
     adapter.train()
+    held = adapter.network.token_embedding
+    held.eval()                                   # a submodule the caller holds in eval
     x = wrapper.set_context(batch)
-    assert adapter.training
+    assert adapter.training and not held.training
     with torch.no_grad():
         assert torch.equal(wrapper(x, batch.edge_index), reference)
         assert torch.equal(wrapper.deletion_forward(graph), deleted)
-    assert adapter.training
+    assert adapter.training and not held.training
     assert wrapper.verify(x, batch.edge_index) == (True, 0.0)
-    assert wrapper._predicted_class() == int(reference.argmax(-1))
-    wrapper.builtin_node_importance(x, batch.edge_index)
-    assert adapter.training
+    assert wrapper._predicted_class() == target
+    importance = wrapper.builtin_node_importance(x, batch.edge_index)
+    assert adapter.training and not held.training
+    assert importance == [float(value) for value in builtin.detach()]
+    detail = wrapper.builtin_detail(target)
+    assert detail['accounting_logit_abs_diff'] == eval_detail['accounting_logit_abs_diff']
+    assert detail == eval_detail
+    assert adapter.training and not held.training
 
 
 # ------------------------------------------------------------------ build_cei_model

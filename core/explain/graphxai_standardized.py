@@ -34,7 +34,7 @@ import torch
 import torch_geometric
 from torch_geometric.nn import MessagePassing
 from torch_geometric.explain.algorithm.utils import set_masks, clear_masks
-from core.explain.explanation_contract import build_node_explanation
+from core.explain.explanation_contract import build_node_explanation, caller_state_kept
 
 VENDOR = Path(__file__).resolve().parents[2] / 'external/GraphXAI-main'
 sys.path.insert(0, str(VENDOR))
@@ -181,7 +181,21 @@ def explain_algorithms(wrapper, x, edge_index, *, batch, steps=32, epochs=50,
     wrapper has one. `v1_fidelity` adds the v1 (x-row zeroing) fidelity to each node
     explanation; new explanation records leave it off. `feature_penalty` is GNNExplainer's
     feature-mask size penalty: 'mean' (default) or 'sum' (the vendored coefficients, which the
-    historical screens were run with); its value is recorded in the provenance."""
+    historical screens were run with); its value is recorded in the provenance.
+
+    The wrapper runs in eval mode with its parameter gradients cleared between algorithms; every
+    module's training flag and every parameter's `.grad` are restored to the caller's on return."""
+    with caller_state_kept(wrapper):
+        return _explain_algorithms(
+            wrapper, x, edge_index, batch=batch, steps=steps, epochs=epochs,
+            reversible_edge_pairs=reversible_edge_pairs, node_reduction=node_reduction,
+            target_class=target_class, seed=seed, inert_edge_mask=inert_edge_mask, method=method,
+            v1_fidelity=v1_fidelity, feature_penalty=feature_penalty)
+
+
+def _explain_algorithms(wrapper, x, edge_index, *, batch, steps, epochs, reversible_edge_pairs,
+                        node_reduction, target_class, seed, inert_edge_mask, method, v1_fidelity,
+                        feature_penalty):
     if steps < 1 or epochs < 1:
         raise ValueError('positive explanation budgets required')
     if feature_penalty not in GNNEXPLAINER_COEFF_NOTES:

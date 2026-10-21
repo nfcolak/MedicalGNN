@@ -51,7 +51,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch_geometric.explain.algorithm.utils import clear_masks
 
-from core.explain.graphxai_wrapper import set_keyword_mask
+from core.explain.graphxai_wrapper import eval_preserving_modes, set_keyword_mask
 from core.registry import build_method
 
 CEI_METHODS = ("cei_gnn_v3", "cei_gnn_mp2")
@@ -232,17 +232,10 @@ class CEIGraphXAIWrapper(nn.Module):
         adapter = self.adapter
         return int(adapter.node_dim), int(adapter.token_dim), int(adapter.hidden)
 
-    @contextmanager
     def _adapter_in_eval(self):
-        """The checkpoint adapter in eval mode for the block; its earlier mode is restored."""
-        adapter = self.adapter
-        was_training = adapter.training
-        adapter.eval()
-        try:
-            yield adapter
-        finally:
-            if was_training:
-                adapter.train()
+        """The checkpoint adapter in eval mode for the block; every submodule's earlier mode is
+        restored."""
+        return eval_preserving_modes(self.adapter)
 
     def set_context(self, batch) -> torch.Tensor:
         with self._adapter_in_eval():

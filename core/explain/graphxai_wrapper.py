@@ -90,6 +90,19 @@ def _tie_stats(node_type, importance) -> dict:
                 "constant_over_eligible": None}
 
 
+@contextmanager
+def eval_preserving_modes(module):
+    """`module` in eval mode for the block; afterwards every submodule gets back its own earlier
+    training flag (also one held in eval inside a training model)."""
+    modes = [(submodule, submodule.training) for submodule in module.modules()]
+    module.eval()
+    try:
+        yield module
+    finally:
+        for submodule, flag in modes:
+            submodule.training = flag
+
+
 def set_keyword_mask(model, mask, edge_index) -> None:
     """PyG `set_masks` for a caller's mask tensor, keeping its autograd graph.
 
@@ -170,14 +183,8 @@ class _ContextWrapper(nn.Module):
         self._check_extra_context(batch)
         x = clinical_batch.x
         if self._explains_tokens:
-            was_training = self.adapter.training
-            self.adapter.eval()
-            try:
-                with torch.no_grad():
-                    tokens = self.adapter.embed_tokens(batch).detach().float()
-            finally:
-                if was_training:
-                    self.adapter.train()
+            with eval_preserving_modes(self.adapter), torch.no_grad():
+                tokens = self.adapter.embed_tokens(batch).detach().float()
             x = torch.cat([x, tokens.to(x.device)], dim=-1)
         self._context = clinical_batch
         self._raw_context = batch
@@ -223,18 +230,13 @@ class _ContextWrapper(nn.Module):
         del view
 
     def _call_adapter(self, view, *, edge_mask=None, token_vectors=None):
-        was_training = self.adapter.training
-        self.adapter.eval()
-        try:
+        with eval_preserving_modes(self.adapter):
             if not self._is_method_adapter:
                 return self.adapter(view)
             kwargs = {"epoch": 0, "external_edge_mask": edge_mask}
             if token_vectors is not None:
                 kwargs["token_vectors"] = token_vectors
             return self.adapter(view, **kwargs).logits
-        finally:
-            if was_training:
-                self.adapter.train()
 
     def forward(self, x, edge_index, batch=None, edge_mask=None, edge_attr_override=None,
                 **kwargs):
@@ -272,15 +274,10 @@ class _ContextWrapper(nn.Module):
         from torch_geometric.data import Batch
 
         batch = Batch.from_data_list([data])
-        was_training = self.adapter.training
-        self.adapter.eval()
-        try:
+        with eval_preserving_modes(self.adapter):
             if not self._is_method_adapter:
                 return self.adapter(batch)
             return self.adapter(batch, epoch=0).logits
-        finally:
-            if was_training:
-                self.adapter.train()
 
     def inert_edge_mask(self):
         """Edges the model never reads; None when it reads every edge."""
@@ -383,14 +380,12 @@ class ClinicalGraphXAIWrapper(_ContextWrapper):
 
         adapter._initial_coalition = recording_initial
         adapter._induced_graph_embedding = counting_induced
-        was_training = adapter.training
         try:
-            detail = dict(adapter.explain_detail(self._raw_context, target_class))
+            with eval_preserving_modes(adapter):
+                detail = dict(adapter.explain_detail(self._raw_context, target_class))
         finally:
             del adapter._initial_coalition
             del adapter._induced_graph_embedding
-            if was_training:
-                adapter.train()
         settings = self._protgnn_settings()
         eligible = removable_node_mask(self._context.node_type).tolist()
         subgraph_eligible = [node for node in detail["subgraph_nodes"] if eligible[node]]
@@ -440,7 +435,8 @@ class ClinicalGraphXAIWrapper(_ContextWrapper):
 
     def _gsat_pass(self):
         """(node attention, edge attention) of one fresh eval pass of GSAT's own `explain`."""
-        node_attention = self.adapter.explain(self._raw_context).detach().clone()
+        with eval_preserving_modes(self.adapter):
+            node_attention = self.adapter.explain(self._raw_context).detach().clone()
         edge_attention = self.adapter.last_edge_attention.detach().clone()
         return node_attention, edge_attention
 

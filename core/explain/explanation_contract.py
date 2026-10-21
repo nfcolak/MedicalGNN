@@ -7,6 +7,7 @@ this module to resolve that policy and to compute prediction-targeted fidelity+
 """
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import dataclass
 import csv
 import json
@@ -249,6 +250,21 @@ def _importance_array(node_importance: Any, num_nodes: int) -> np.ndarray:
     return importance
 
 
+@contextmanager
+def caller_state_kept(module: torch.nn.Module):
+    """The block may switch `module` to eval and clear its parameter gradients; afterwards every
+    submodule's training flag and every parameter's `.grad` are those the caller left."""
+    modes = [(submodule, submodule.training) for submodule in module.modules()]
+    grads = [(parameter, parameter.grad) for parameter in module.parameters()]
+    try:
+        yield module
+    finally:
+        for submodule, flag in modes:
+            submodule.training = flag
+        for parameter, grad in grads:
+            parameter.grad = grad
+
+
 def deterministic_input_gradient(
     wrapper: torch.nn.Module,
     x: torch.Tensor,
@@ -257,19 +273,21 @@ def deterministic_input_gradient(
     batch: torch.Tensor,
     target_class: int | None = None,
 ) -> np.ndarray:
-    """Return deterministic absolute input×gradient node attribution."""
-    wrapper.eval()
-    features = x.detach().clone().requires_grad_(True)
-    wrapper.zero_grad(set_to_none=True)
-    logits = wrapper(features, edge_index, batch=batch)
-    if logits.ndim != 2 or logits.size(0) != 1:
-        raise ValueError("standardized explanations score exactly one graph at a time.")
-    predicted = int(logits.argmax(dim=-1).item())
-    target = predicted if target_class is None else int(target_class)
-    logits[0, target].backward()
-    if features.grad is None:
-        raise RuntimeError("model forward produced no gradient for node features.")
-    return (features.grad * features).abs().sum(dim=1).detach().cpu().numpy()
+    """Return deterministic absolute input×gradient node attribution. The wrapper's module
+    flags and parameter gradients are restored afterwards."""
+    with caller_state_kept(wrapper):
+        wrapper.eval()
+        features = x.detach().clone().requires_grad_(True)
+        wrapper.zero_grad(set_to_none=True)
+        logits = wrapper(features, edge_index, batch=batch)
+        if logits.ndim != 2 or logits.size(0) != 1:
+            raise ValueError("standardized explanations score exactly one graph at a time.")
+        predicted = int(logits.argmax(dim=-1).item())
+        target = predicted if target_class is None else int(target_class)
+        logits[0, target].backward()
+        if features.grad is None:
+            raise RuntimeError("model forward produced no gradient for node features.")
+        return (features.grad * features).abs().sum(dim=1).detach().cpu().numpy()
 
 
 def build_node_explanation(

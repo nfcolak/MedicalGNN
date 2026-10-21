@@ -591,6 +591,69 @@ def test_real_explainers_run_through_the_wrapper(name):
         assert provenance["inert_edges"]["count"] == int(wrapper.inert_edge_mask().sum())
 
 
+def _training_adapter_and_wrapper(name, tmp_path):
+    """(adapter with dropout 0.5, its wrapper, the raw one-graph batch) for one of the four
+    explained methods."""
+    if name == "cei_gnn_mp2":
+        from core.explain.cei_bridge import CEIGraphXAIWrapper
+        from tests.test_cei_mp2_explain import _batch, _mp2_adapter
+
+        adapter = _mp2_adapter(tmp_path, dropout=0.5)
+        return adapter, CEIGraphXAIWrapper(adapter, method=name), _batch()
+    torch.manual_seed(59)
+    adapter = build_method(
+        name, num_tokens=NUM_TOKENS, node_dim=NODE_DIM, edge_dim=EDGE_DIM,
+        num_classes=NUM_CLASSES, hidden=8, layers=2, dropout=0.5, token_dim=TOKEN_DIM,
+        num_triples=NUM_TRIPLES, args=method_args())
+    batch = Batch.from_data_list([one_graph()])
+    wrapper = wrap_any(name, batch, adapter)[0]
+    return adapter, wrapper, batch
+
+
+def _explanations(wrapper, batch, method):
+    """explain_algorithms and runner._collect_importances on the held graph, as comparable text."""
+    import json
+
+    from core.explain import runner
+    from core.explain.graphxai_standardized import explain_algorithms
+
+    x = wrapper.set_context(batch)
+    batch_index = torch.zeros(x.size(0), dtype=torch.long)
+    algorithms = explain_algorithms(wrapper, x, batch.edge_index, batch=batch_index, steps=4,
+                                    epochs=5, seed=0)
+    with torch.no_grad():
+        prediction = int(wrapper(x, batch.edge_index).argmax(-1))
+    collected = runner._collect_importances(wrapper, batch, x, method=method, steps=4, epochs=5,
+                                            ig=None, prediction=prediction, seed=0)
+    return x, json.dumps([algorithms, collected], sort_keys=True, default=repr)
+
+
+@pytest.mark.parametrize("name", (*BASELINES, "cei_gnn_mp2"))
+def test_explaining_a_training_model_leaves_its_flags_and_gradients_as_found(name, tmp_path):
+    adapter, wrapper, batch = _training_adapter_and_wrapper(name, tmp_path)
+    adapter.eval()
+    reference_x, reference = _explanations(wrapper, batch, name)
+
+    adapter.train()
+    held = next(adapter.children())
+    held.eval()                                   # a submodule the caller holds in eval
+    flags = {module: module.training for module in adapter.modules()}
+    assert flags[adapter] and not flags[held]
+    grads = {}
+    for parameter in adapter.parameters():
+        parameter.grad = torch.full_like(parameter, 7.0)
+        grads[parameter] = parameter.grad
+
+    x, explained = _explanations(wrapper, batch, name)
+
+    assert {module: module.training for module in adapter.modules()} == flags
+    for parameter, grad in grads.items():
+        assert parameter.grad is grad
+        assert torch.equal(grad, torch.full_like(parameter, 7.0))
+    assert torch.equal(x, reference_x)
+    assert explained == reference
+
+
 def test_explain_algorithms_isolates_one_algorithms_failure_from_the_others(monkeypatch):
     """One algorithm failing must not discard the other two algorithms' results."""
     import core.explain.graphxai_standardized as graphxai_standardized
