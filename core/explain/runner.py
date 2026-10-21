@@ -229,12 +229,27 @@ def build_model(binding: dict[str, Any], state_dict: dict[str, torch.Tensor]):
     if token_dim is None:
         token_dim = _infer_token_dim(state_dict, is_method_adapter=True)
     effective_settings = dict(binding["method_config"].get("effective_settings", {}))
+    # GraphCare reports its recency decay as `recency_decay` (run_config) but reads it back
+    # only as `graphcare_decay_rate` / `decay_rate`; without this alias the rebuilt model
+    # silently falls back to the native default and differs on every multi-visit graph.
+    if method == "graphcare" and "recency_decay" in effective_settings:
+        effective_settings.setdefault("decay_rate", effective_settings["recency_decay"])
     model = build_method(
         method, num_tokens=num_tokens, node_dim=node_dim, edge_dim=edge_dim,
         num_classes=num_classes, hidden=hidden, layers=layers, dropout=0.0,
         token_dim=int(token_dim), num_triples=num_triples,
         args=Namespace(edge_direction=binding["edge_direction"], **effective_settings),
     )
+    # Fail closed: every setting the training run recorded must be the one the rebuilt
+    # model reports, so a setting that is reported under one name and read under another
+    # can never fall back to a default unnoticed.
+    recorded = binding["method_config"].get("effective_settings", {})
+    rebuilt = model.run_config().get("effective_settings", {})
+    mismatched = {key: (recorded[key], rebuilt.get(key)) for key in recorded
+                  if rebuilt.get(key) != recorded[key]}
+    if mismatched:
+        raise ValueError(f"rebuilt {method} model's effective settings differ from binding.json: "
+                         f"{mismatched} (recorded, rebuilt)")
     model.load_state_dict(state_dict)
     return model, True
 

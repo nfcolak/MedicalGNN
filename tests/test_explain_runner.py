@@ -81,11 +81,16 @@ def test_gsat_runner_replays_and_explains(tmp_path):
 
 def test_graphcare_recency_decay_is_recovered_not_defaulted(tmp_path):
     """The one confirmed case where a non-shape hyperparameter is baked
-    directly into the forward pass (not just the training loss). If this
-    runner silently defaulted recency_decay instead of reading it back from
-    method_config.effective_settings, the replay check below would (correctly)
-    fail -- this test is the proof it doesn't."""
-    run_dir = train_one(tmp_path, "run_graphcare", method="graphcare", conv=None)
+    directly into the forward pass (not just the training loss). GraphCare
+    reports it as `recency_decay` but reads it as `graphcare_decay_rate` /
+    `decay_rate`, so the run is trained with a NON-default decay: a runner that
+    fell back to the native default would rebuild a different model."""
+    run_dir = train_one(tmp_path, "run_graphcare", method="graphcare", conv=None,
+                        graphcare_decay_rate=0.0116)
+    bundle = explain.load_run_bundle(run_dir)
+    assert bundle.binding["method_config"]["effective_settings"]["recency_decay"] == 0.0116
+    model, _ = explain.build_model(bundle.binding, bundle.state_dict)
+    assert model.recency_decay == 0.0116
     output = tmp_path / "explanations_graphcare"
     manifest = explain.run_explanations(
         run_dir, output, max_subjects=2, steps=2, epochs=3
@@ -93,6 +98,17 @@ def test_graphcare_recency_decay_is_recovered_not_defaulted(tmp_path):
     assert manifest["method"] == "graphcare"
     assert manifest["replay_verified"] is True
     assert manifest["failed_count"] == 0, manifest["failures"]
+
+
+def test_build_model_refuses_settings_that_do_not_round_trip(tmp_path):
+    """A recorded setting the rebuilt model does not report back (a name the adapter
+    does not read) must refuse, never fall back to a default silently."""
+    run_dir = train_one(tmp_path, "run_graphcare_tampered", method="graphcare", conv=None)
+    bundle = explain.load_run_bundle(run_dir)
+    binding = copy.deepcopy(bundle.binding)
+    binding["method_config"]["effective_settings"]["unread_setting"] = 0.123
+    with pytest.raises(ValueError, match="effective settings differ"):
+        explain.build_model(binding, bundle.state_dict)
 
 
 def test_replay_check_refuses_a_tampered_prediction_hash(tmp_path):
