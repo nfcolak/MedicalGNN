@@ -159,6 +159,59 @@ def test_a_record_without_the_v1_fidelity_is_refused_with_the_reason():
         v1.validate_explanation_record(record, method="gsat", topology="star", seed=0)
 
 
+class _DroppedLinear(__import__("torch").nn.Module):
+    """One-graph toy model with dropout in front of the linear map; the bias keeps class 0 the
+    prediction in either mode, so only the input gradient depends on the mode."""
+
+    def __init__(self):
+        import torch
+
+        super().__init__()
+        self.drop = torch.nn.Dropout(0.5)
+        self.held = torch.nn.Dropout(0.5)
+        self.lin = torch.nn.Linear(3, 2)
+        with torch.no_grad():
+            self.lin.bias.copy_(torch.tensor([100.0, -100.0]))
+
+    def forward(self, x, edge_index, batch=None, **kwargs):
+        del edge_index, batch, kwargs
+        return self.lin(self.held(self.drop(x))).sum(dim=0, keepdim=True)
+
+
+def test_the_input_gradient_fallback_leaves_a_training_model_as_found():
+    import torch
+
+    from core.explain import explanation_contract as v1
+
+    torch.manual_seed(5)
+    x = torch.randn(6, 3)
+    edge_index = torch.tensor([[0, 1, 2, 3, 4], [1, 2, 3, 4, 5]])
+    batch = torch.zeros(6, dtype=torch.long)
+    model = _DroppedLinear()
+    reference = v1.build_node_explanation(copy.deepcopy(model).eval(), x, edge_index,
+                                          batch=batch)["node_importance"]
+
+    model.train()
+    model.held.eval()                             # a submodule the caller holds in eval
+    flags = {module: module.training for module in model.modules()}
+    assert flags[model] and flags[model.drop] and not flags[model.held]
+    assert not torch.equal(model(x, edge_index), model.eval()(x, edge_index))   # dropout acts
+    for module, flag in flags.items():
+        module.training = flag
+    grads = {}
+    for parameter in model.parameters():
+        parameter.grad = torch.full_like(parameter, 7.0)
+        grads[parameter] = parameter.grad
+
+    explained = v1.build_node_explanation(model, x, edge_index, batch=batch)
+
+    assert {module: module.training for module in model.modules()} == flags
+    for parameter, grad in grads.items():
+        assert parameter.grad is grad
+        assert torch.equal(grad, torch.full_like(parameter, 7.0))
+    assert explained["node_importance"] == reference
+
+
 def test_the_historical_cei_export_schema_accepts_a_v1_fidelity_explanation():
     from cei.studies.cei_graphxai import _validate_algorithm_record
 

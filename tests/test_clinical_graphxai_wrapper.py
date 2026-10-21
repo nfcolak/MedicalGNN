@@ -601,10 +601,13 @@ def _training_adapter_and_wrapper(name, tmp_path):
         adapter = _mp2_adapter(tmp_path, dropout=0.5)
         return adapter, CEIGraphXAIWrapper(adapter, method=name), _batch()
     torch.manual_seed(59)
+    # GraphCare's own message dropout (the adapter default) acts before the visit attention its
+    # built-in reads; the readout dropout alone acts only after it.
     adapter = build_method(
         name, num_tokens=NUM_TOKENS, node_dim=NODE_DIM, edge_dim=EDGE_DIM,
         num_classes=NUM_CLASSES, hidden=8, layers=2, dropout=0.5, token_dim=TOKEN_DIM,
-        num_triples=NUM_TRIPLES, args=method_args())
+        num_triples=NUM_TRIPLES,
+        args=method_args(**({"graphcare_message_dropout": 0.5} if name == "graphcare" else {})))
     batch = Batch.from_data_list([one_graph()])
     wrapper = wrap_any(name, batch, adapter)[0]
     return adapter, wrapper, batch
@@ -630,7 +633,18 @@ def _explanations(wrapper, batch, method):
 
 @pytest.mark.parametrize("name", (*BASELINES, "cei_gnn_mp2"))
 def test_explaining_a_training_model_leaves_its_flags_and_gradients_as_found(name, tmp_path):
+    import copy
+
     adapter, wrapper, batch = _training_adapter_and_wrapper(name, tmp_path)
+    probe = copy.deepcopy(adapter)                # dropout must act, or the case is vacuous
+    with torch.no_grad():
+        evaluated = probe.eval()(batch, epoch=0).logits
+        attention = probe.last_visit_weight.clone() if name == "graphcare" else None
+        torch.manual_seed(0)
+        trained = probe.train()(batch, epoch=0).logits
+    assert not torch.equal(trained, evaluated)
+    if name == "graphcare":                       # also on the attention path of the built-in
+        assert not torch.equal(probe.last_visit_weight, attention)
     adapter.eval()
     reference_x, reference = _explanations(wrapper, batch, name)
 
