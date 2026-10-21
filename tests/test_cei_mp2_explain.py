@@ -15,6 +15,7 @@ import torch
 from torch_geometric.data import Batch
 
 from core.explain import graphxai_standardized as gx
+from cei.options import DEFAULTS
 from core.explain import runner
 from core.explain.cei_bridge import (
     CEI_METHODS, INTERVENTION_SCOPES, CEIGraphXAIWrapper, build_cei_model,
@@ -318,6 +319,48 @@ def test_build_cei_model_refuses_a_mismatched_method_config(mp2, tmp_path):
     v3_config = dict(adapter.run_config(), method='cei_gnn_v3')
     with pytest.raises(ValueError, match='method_config records'):
         build_cei_model(_binding(adapter, method_config=v3_config), adapter.state_dict())
+
+
+ABLATION_SWITCHES = ('ev_combine', 'ev_pair', 'ev_edge', 'readout', 'pool_hidden')
+
+
+def _predating(config, names=ABLATION_SWITCHES):
+    """A method_config as recorded by a run trained before `names` existed."""
+    old = copy.deepcopy(config)
+    for section in ('architecture', 'effective_settings', 'mp2_options'):
+        if isinstance(old.get(section), dict):
+            for name in names:
+                old[section].pop(name, None)
+    return old
+
+
+def test_a_run_that_predates_later_options_rebuilds_when_they_hold_their_defaults(mp2):
+    """The final runs were trained before the section-4 ablation switches existed; their
+    binding.json lacks them. At their defaults (the earlier behaviour) the run rebuilds."""
+    adapter, _, batch, _ = mp2
+    config = adapter.run_config()
+    assert all(config['mp2_options'][name] == DEFAULTS[name] for name in ABLATION_SWITCHES)
+    model = build_cei_model(_binding(adapter, method_config=_predating(config)), adapter.state_dict())
+    with torch.no_grad():
+        assert torch.equal(model(batch, epoch=0).logits, adapter(batch, epoch=0).logits)
+
+
+def test_a_predating_run_still_refuses_any_recorded_difference(mp2):
+    adapter, *_ = mp2
+    old = _predating(adapter.run_config())
+    old['mp2_options'] = dict(old['mp2_options'], mp_hub_max=0)
+    with pytest.raises(ValueError, match='configuration differs'):
+        build_cei_model(_binding(adapter, method_config=old), adapter.state_dict())
+
+
+def test_a_later_option_away_from_its_default_is_not_dropped():
+    from core.explain.cei_bridge import _comparable_run_config
+
+    rebuilt = {'method': 'cei_gnn_mp2', 'mp2_options': {'mp_layers': 2, 'readout': 'pool'}}
+    recorded = {'method': 'cei_gnn_mp2', 'mp2_options': {'mp_layers': 2}}
+    assert _comparable_run_config(rebuilt, recorded) != recorded
+    rebuilt['mp2_options']['readout'] = 'evidence'
+    assert _comparable_run_config(rebuilt, recorded) == recorded
 
 
 def test_build_cei_model_loads_the_checkpoint_strictly(mp2):

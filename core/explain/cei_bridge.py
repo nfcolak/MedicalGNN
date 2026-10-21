@@ -100,12 +100,41 @@ def build_cei_model(binding: dict, state_dict: dict):
                        weights=binding.get("weights")),
     )
     model.load_state_dict(state_dict)
-    if model.run_config() != config:
+    if _comparable_run_config(model.run_config(), config) != config:
         raise ValueError(
             "rebuilt CEI-GNN's configuration differs from binding.json's method_config "
             "(check that the recorded v3_state file is the one on disk); refusing to "
             "explain a model that cannot be shown to be the one that was trained")
     return model.eval()
+
+
+# The sections of an mp2 run_config() that list option values by name.
+_OPTION_SECTIONS = ("architecture", "effective_settings", "mp2_options")
+
+
+def _comparable_run_config(rebuilt: dict, recorded: dict) -> dict:
+    """The rebuilt run_config() without options the recorded run predates.
+
+    Options added to cei_gnn_mp2 after a run was trained (e.g. the section-4 ablation switches)
+    are missing from that run's binding.json. Such an option is dropped from the comparison only
+    when the rebuilt model holds it at its documented default, which is the behaviour the run was
+    trained with (cei/options.py: each later option defaults to the earlier behaviour); any other
+    value, and every option the binding does record, is still compared exactly.
+    """
+    if rebuilt.get("method") != "cei_gnn_mp2":
+        return rebuilt
+    from cei.options import DEFAULTS
+
+    comparable = dict(rebuilt)
+    for section in _OPTION_SECTIONS:
+        new, old = rebuilt.get(section), recorded.get(section)
+        if not isinstance(new, dict) or not isinstance(old, dict):
+            continue
+        comparable[section] = {
+            key: value for key, value in new.items()
+            if key in old or key not in DEFAULTS or value != DEFAULTS[key]
+        }
+    return comparable
 
 
 class CEIGraphXAIWrapper(nn.Module):
