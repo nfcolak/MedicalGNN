@@ -1,4 +1,4 @@
-"""Black-box baselines (clinical_gnn with --conv edge_conditioned | hgt | gchm) under
+"""Black-box baselines (clinical_gnn with --conv edge_conditioned | hgt) under
 the GraphXAI runner: post-hoc explainers only, through PyG's own mask hook.
 
 The point of these tests is the plan's "applied exactly once per edge": the mask
@@ -6,7 +6,6 @@ must reach every message, and must reach it once, not zero times and not twice.
 """
 import inspect
 import json
-import types
 
 import pytest
 import torch
@@ -15,7 +14,7 @@ from core.explain import graphxai_standardized as gx
 from core.explain import runner
 from tests.test_explain_runner import train_one
 
-CONVS = ("edge_conditioned", "hgt", "gchm")
+CONVS = ("edge_conditioned", "hgt")
 
 
 def overrides(conv, **extra):
@@ -32,7 +31,7 @@ def run(request, tmp_path):
     run_dir = train_one(tmp_path, f"run_{conv}", **overrides(conv))
     bundle = runner.load_run_bundle(run_dir)
     binding = bundle.binding
-    splits = runner.rebuild_validation_split(binding)
+    splits = runner.rebuild_split(binding, "validation")
     model, is_adapter = runner.build_model(binding, bundle.state_dict)
     assert is_adapter is False
     return conv, run_dir, binding, splits, model, runner.build_wrapper(binding, model)
@@ -79,7 +78,7 @@ def test_runner_explains_the_baseline_end_to_end(run, tmp_path):
             assert contribution["edge_count"] == record["graphxai"]["GNNExplainer"]["provenance"]["edge_count"]
 
 
-@pytest.mark.parametrize("run", ["edge_conditioned", "gchm"], indirect=True)
+@pytest.mark.parametrize("run", ["edge_conditioned"], indirect=True)
 def test_an_explicit_removal_mask_is_applied_exactly_once(run):
     """Independent reference: scale every message by 0.5 by hand. If the wrapper's
     mask were applied twice the result would match a 0.25 reference instead."""
@@ -108,7 +107,7 @@ def test_hgt_mask_scales_messages_after_the_attention_softmax(tmp_path):
     run_dir = train_one(tmp_path, "run_hgt_mask", **overrides("hgt"))
     bundle = runner.load_run_bundle(run_dir)
     binding = bundle.binding
-    splits = runner.rebuild_validation_split(binding)
+    splits = runner.rebuild_split(binding, "validation")
     model, _ = runner.build_model(binding, bundle.state_dict)
     wrapper = runner.build_wrapper(binding, model)
     x = wrapper.set_context(runner._single_graph_batch(splits["validation"][0]))

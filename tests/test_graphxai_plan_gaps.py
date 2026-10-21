@@ -1,6 +1,6 @@
 """GraphXAI plan: behaviours added after the first port.
 
-- item 1: cohort contract v2 (validation/dev only, hash-pinned to the run),
+- item 1: cohort contract v2 (test = report fold, validation/dev = decision folds, hash-pinned to the run),
   runner writes cohort.json, CEI-GNN is refused clearly
 - item 2: the wrapper must reproduce the model on every graph before explaining
 - item 3: an all-zero edge-mask derivative is "unsupported", not a result
@@ -24,7 +24,8 @@ IDS = ["s1", "s2", "s3", "s4"]
 
 
 def binding_for(ids):
-    return {"split_sample_ids_sha256": {"validation": sample_ids_sha256(ids),
+    return {"split_sample_ids_sha256": {"test": sample_ids_sha256(ids),
+                                        "validation": sample_ids_sha256(ids),
                                         "dev": sample_ids_sha256(ids[:2])},
             "preprocessing_sha256": "pp"}
 
@@ -40,10 +41,13 @@ def test_cohort_v2_is_pinned_to_the_runs_fold_hash():
     assert prefix["is_full_fold"] is False and prefix["explained_count"] == 2
 
 
-def test_cohort_v2_never_accepts_the_test_fold():
-    with pytest.raises(ValueError, match="test fold"):
-        build_cohort_v2(binding_for(IDS), fold="test", fold_sample_ids=IDS,
-                        explained_sample_ids=IDS)
+def test_cohort_v2_accepts_the_test_fold_and_refuses_unknown_folds():
+    binding = binding_for(IDS)
+    cohort = build_cohort_v2(binding, fold="test", fold_sample_ids=IDS, explained_sample_ids=IDS)
+    validate_cohort_v2(cohort, binding)
+    assert cohort["fold"] == "test"
+    with pytest.raises(ValueError, match="report fold"):
+        build_cohort_v2(binding, fold="holdout", fold_sample_ids=IDS, explained_sample_ids=IDS)
 
 
 def test_cohort_v2_rejects_a_fold_that_differs_from_the_runs_hash():
@@ -66,7 +70,7 @@ def trained(tmp_path):
     run_dir = train_one(tmp_path, "run_plan_gaps", method="gsat", conv=None)
     bundle = runner.load_run_bundle(run_dir)
     binding = bundle.binding
-    splits = runner.rebuild_validation_split(binding)
+    splits = runner.rebuild_split(binding, "validation")
     model, _ = runner.build_model(binding, bundle.state_dict)
     return run_dir, bundle, binding, splits, runner.build_wrapper(binding, model)
 
@@ -79,7 +83,7 @@ def test_runner_writes_a_v2_cohort_and_records_its_version(tmp_path, trained):
     validate_cohort_v2(cohort, binding)
     assert manifest["cohort_schema_version"] == 2
     assert manifest["cohort_is_full_fold"] == cohort["is_full_fold"]
-    assert cohort["fold"] == "validation"
+    assert cohort["fold"] == "test"
 
 
 def test_runner_refuses_the_older_cei_variants_clearly(trained):

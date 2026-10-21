@@ -156,6 +156,7 @@ Further analyses read the stored predictions of the final runs (no training). Ea
 | `comparison/s7_why` | section 7: class-support analysis, same classes across K (`support.py`), inference-time source masking (`masking.py`) | `results/s7_why/support/`, `results/s7_why/masking/` |
 | `comparison/s8_cost` | section 8: parameter counts, inference benchmark, inference memory, training cost | `results/s8_cost/` |
 | `comparison/s9_repro` | section 9: graph scan for the reproduction check | `results/s9_repro/` |
+| `comparison/explain` | post-hoc explanations of the final runs of GSAT, GraphCare, ProtGNN and CEI-GNN: GradExplainer, IntegratedGradExplainer and GNNExplainer (vendored GraphXAI, `external/GraphXAI-main`) plus each model's built-in explanation, scored with evidence-removal fidelity and deletion/insertion curves (`run.py` drives `core/explain/runner.py` over the runs, `summarize.py` writes the aggregate tables) | not run yet |
 
 Source masking (`results/s7_why/masking/`) scores the test fold with the stored final checkpoints (inference only; baselines chosen on validation; unmasked predictions match the stored test predictions in all 27 runs). `--fold validation` reproduces the earlier validation tables.
 
@@ -255,6 +256,7 @@ comparison/
 ├── s3_ledger/                evidence-ledger probes (section 3)
 ├── s6_stats/ s7_why/         statistics (section 6), class support and source masking (section 7)
 ├── s8_cost/ s9_repro/        model cost (section 8), reproduction scan (section 9)
+├── explain/                  explanation driver (run.py: --plan prints one runner call per final run, --execute runs them) and summary tables (summarize.py)
 └── standardized/             DATA AND RESULTS (git-ignored; disk-free APFS clones of the originals)
     ├── event_inputs/
     │   ├── clinical_graph_L4_plus60_v5c_20261009/       the final graph (graphs.jsonl, manifest.json, ...)
@@ -309,6 +311,8 @@ Prefix every command with `env -u PYTHONPATH PYTHONDONTWRITEBYTECODE=1 /usr/bin/
 | Check the frozen split (read only) | `-m comparison.final.split_check` | no |
 | Show one training plan | `-m core.train <method args> --top-k-labels <K> --artifact ... --targets ... --output ... --seed 1234` | no |
 | Re-run the final trainings | `-m comparison.final.run [--ks 10,20,30]` | yes, needs approval |
+| Show the explanation runs (test fold, 500 patients per run) | `-m comparison.explain.run --out <new dir> --plan` | no |
+| Explain the final runs (inference only, frozen checkpoints) | `-m comparison.explain.run --out <new dir> --execute`, then `-m comparison.explain.summarize --explanations <that dir> --out <new dir>` | no (long) |
 
 ## 8. Rules that matter for the layout
 

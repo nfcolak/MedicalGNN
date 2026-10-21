@@ -27,7 +27,7 @@ from tests.test_explain_runner import train_one
 def bridge(tmp_path):
     torch.manual_seed(5)
     adapter = _adapter(tmp_path).eval()
-    wrapper = CEIGraphXAIWrapper(adapter)
+    wrapper = CEIGraphXAIWrapper(adapter, method="cei_gnn_v3")
     batch = Batch.from_data_list([_graph()])
     return adapter, wrapper, batch, wrapper.set_context(batch)
 
@@ -142,10 +142,15 @@ def test_build_model_refuses_a_cei_whose_recorded_configuration_does_not_match(b
 
 
 # ------------------------------------------------------------------ fold + CLI defaults
+DEV_RUN = {"selection_fold": "dev", "dev_limit": 3}    # a run that selects on its dev fold
+
+
 def test_a_run_that_keeps_validation_closed_is_explained_on_its_dev_fold(tmp_path):
-    run_dir = train_one(tmp_path, "run_dev_only", method="gsat", conv=None, final_eval="none")
+    run_dir = train_one(tmp_path, "run_dev_only", method="gsat", conv=None, final_eval="none",
+                        **DEV_RUN)
     with pytest.raises(ValueError, match="selected_validation"):
-        runner.run_explanations(run_dir, tmp_path / "ex_val", max_subjects=1, steps=2, epochs=3)
+        runner.run_explanations(run_dir, tmp_path / "ex_val", fold="validation", max_subjects=1,
+                                steps=2, epochs=3)
     out = tmp_path / "ex_dev"
     manifest = runner.run_explanations(run_dir, out, fold="dev", max_subjects=2, steps=2, epochs=3,
                                        ig_step_candidates=(4,), random_repeats=0)
@@ -156,7 +161,8 @@ def test_a_run_that_keeps_validation_closed_is_explained_on_its_dev_fold(tmp_pat
 
 
 def test_the_dev_fold_replay_really_checks_the_dev_hash(tmp_path):
-    run_dir = train_one(tmp_path, "run_dev_tamper", method="gsat", conv=None)
+    run_dir = train_one(tmp_path, "run_dev_tamper", method="gsat", conv=None,
+                        final_eval="validation", **DEV_RUN)
     binding_path = run_dir / "binding.json"
     binding = json.loads(binding_path.read_text())
     binding["selected_dev"]["prediction_sha256"] = "0" * 64

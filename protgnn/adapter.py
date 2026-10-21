@@ -228,11 +228,14 @@ class ProtGNNAdapter(ClinicalMethodAdapter):
         with torch.no_grad():
             correct = prototype_identity.t()
             self.prototype_classifier.weight.copy_(correct + (-0.5) * (1.0 - correct))
+        # Not part of the state dict: a model rebuilt from a checkpoint has not
+        # seen the projection, so its counts are unknown rather than zero.
         self.projection_summary = {
             "epoch": None,
-            "projected_prototypes": 0,
-            "unmatched_prototypes": self.num_prototypes,
+            "projected_prototypes": None,
+            "unmatched_prototypes": None,
             "candidate_graphs_by_class": {},
+            "source": "not_recorded_in_checkpoint",
         }
 
     def _node_and_graph_embeddings(self, batch, edge_mask=None):
@@ -587,8 +590,9 @@ class ProtGNNAdapter(ClinicalMethodAdapter):
                 "subgraph_similarity": float(similarity) if coalition else None,
                 "node_count": int(node_state.size(0)),
                 "prototypes_projected_onto_training_subgraphs":
-                    int(self.projection_summary["projected_prototypes"]),
-                "prototypes_unmatched": int(self.projection_summary["unmatched_prototypes"]),
+                    self.projection_summary["projected_prototypes"],
+                "prototypes_unmatched": self.projection_summary["unmatched_prototypes"],
+                "projection_summary_source": self.projection_summary["source"],
             }
         finally:
             if was_training:
@@ -665,6 +669,7 @@ class ProtGNNAdapter(ClinicalMethodAdapter):
             "projected_prototypes": int(projected),
             "unmatched_prototypes": int(self.num_prototypes - projected),
             "candidate_graphs_by_class": counts,
+            "source": "computed_in_process",
         }
         self._epoch_projection_record = {
             "epoch": int(epoch) + 1,

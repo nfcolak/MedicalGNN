@@ -3,13 +3,12 @@
 `ClinicalGraphXAIWrapper` covers every method whose forward() only needs the
 standard ClinicalBatch tensors (x, token, node_type, edge_index, edge_attr,
 edge_relation, edge_triple, batch_index, graph_count): gsat, protgnn,
-and -- via `is_method_adapter=False` -- GCHMv2/GCHMv3. The GCHM pair aren't
-ClinicalMethodAdapter subclasses at all (they're not in METHOD_REGISTRY;
-train.py constructs and calls them through a separate path): their
-forward(data, edge_mask=None) returns a plain logits tensor directly, no
-MethodOutput wrapper and no `epoch` argument, which is the one thing
-`is_method_adapter` branches on -- everything else (context assembly,
-set_context, verify) is identical. `GraphCareGraphXAIWrapper` is the one
+and -- via `is_method_adapter=False` -- the black-box `ClinicalGNN` baselines.
+`ClinicalGNN` isn't a ClinicalMethodAdapter (it's not in METHOD_REGISTRY):
+its forward(data) returns a plain logits tensor directly, no MethodOutput
+wrapper and no `epoch` argument, which is the one thing `is_method_adapter`
+branches on -- everything else (context assembly, set_context, verify) is
+identical. `GraphCareGraphXAIWrapper` is the one
 method that doesn't fit this class at all -- GraphCare also requires
 visit_membership_index, num_visits, and global_node_mask, which GraphXAI
 never supplies, so (like every other wrapper in this project) they're fixed
@@ -30,15 +29,6 @@ convention): graph_count must be 1.
   subset to the same global-node-excluding edge filter GraphCare's own
   message pass already applies (see GraphCareGraphXAIWrapper.forward), so an
   external mask lands on the correct edges once that filter runs.
-- GCHMv2/v3's `HubGatedPNALayer` aggregates four statistics (mean/min/max/std)
-  per node, not one sum/mean -- "mask this edge out" means something
-  different for each: sum/mean/std divide by the mask's own weighted count
-  rather than the raw edge count, so a masked-out edge is truly removed
-  rather than diluting the average toward zero; min/max push a masked
-  message toward a saturating sentinel instead of multiplying it by the
-  mask, since a naively zeroed message is still a real candidate value that
-  could win the reduction outright. See HubGatedPNALayer._aggregate's own
-  docstring-comment for the full reasoning.
 """
 from __future__ import annotations
 
@@ -50,7 +40,6 @@ import torch.nn as nn
 
 from torch_geometric.explain.algorithm.utils import clear_masks, set_masks
 
-from core.explain import gchm_builtin
 from core.method_base import ClinicalBatch, read_clinical_batch
 from core.tensorize import PAYLOAD_WIDTH
 
@@ -59,10 +48,6 @@ from core.tensorize import PAYLOAD_WIDTH
 # own prototype subgraph (binary membership; the model's explanation is a
 # subgraph, not a ranking). Others raise rather than fabricating a score.
 _SUPPORTS_BUILTIN_EXPLAIN = frozenset({"gsat", "protgnn"})
-# Models that are not ClinicalMethodAdapters and keep their code untouched: their built-in
-# explanation is read off their own computation by a function in core/explain/.
-# GCHM-PNA v3: node-additive label-wise + wide-vote accounting. v2 has neither path.
-_EXTERNAL_BUILTINS = {"gchm_v3": gchm_builtin.explain}
 
 
 class ClinicalGraphXAIWrapper(nn.Module):
@@ -78,15 +63,14 @@ class ClinicalGraphXAIWrapper(nn.Module):
         self._num_triples = int(num_triples)
         self._num_relations = int(num_relations)
         # True for every ClinicalMethodAdapter (forward(batch, *, epoch,
-        # external_edge_mask) -> MethodOutput). GCHMv2/v3 are plain nn.Module
-        # classes with their own simpler forward(data, edge_mask=None) ->
-        # logits convention -- not registered in METHOD_REGISTRY, not part of
-        # ClinicalMethodAdapter at all -- so this wrapper calls them
-        # differently rather than needing a near-duplicate class.
+        # external_edge_mask) -> MethodOutput). ClinicalGNN is a plain nn.Module
+        # with its own simpler forward(data) -> logits convention -- not
+        # registered in METHOD_REGISTRY, not part of ClinicalMethodAdapter at
+        # all -- so this wrapper calls it differently rather than needing a
+        # near-duplicate class.
         self._is_method_adapter = is_method_adapter
         self._context: ClinicalBatch | None = None
         self._raw_context = None
-        self._external_detail = None
 
     def set_context(self, batch) -> torch.Tensor:
         clinical_batch = read_clinical_batch(
@@ -101,7 +85,6 @@ class ClinicalGraphXAIWrapper(nn.Module):
             )
         self._context = clinical_batch
         self._raw_context = batch
-        self._external_detail = None
         return clinical_batch.x
 
     def _batch_with(self, x, edge_index, *, token=None, edge_attr=None):
@@ -148,10 +131,6 @@ class ClinicalGraphXAIWrapper(nn.Module):
         reuses state from a prior forward(edge_mask=...) probe. `target_class` is
         passed only to adapters whose explanation is class-specific (ProtGNN)."""
         del x, edge_index, batch
-        if self._method in _EXTERNAL_BUILTINS:
-            importance, self._external_detail = _EXTERNAL_BUILTINS[self._method](
-                self.adapter, self._raw_context, target_class)
-            return importance
         if self._method not in _SUPPORTS_BUILTIN_EXPLAIN:
             raise NotImplementedError(
                 f"{self._method} has no per-node built-in explanation in this adapter"
@@ -171,8 +150,6 @@ class ClinicalGraphXAIWrapper(nn.Module):
     def builtin_detail(self):
         """The adapter's own structured explanation (e.g. ProtGNN's prototype,
         its activation and the matching subgraph), or None if it has none."""
-        if self._external_detail is not None:
-            return self._external_detail
         detail = getattr(self.adapter, "explain_detail", None)
         return None if detail is None else detail(self._raw_context)
 
@@ -194,7 +171,7 @@ class ClinicalGraphXAIWrapper(nn.Module):
 
 
 class ClinicalGNNGraphXAIWrapper(ClinicalGraphXAIWrapper):
-    """Black-box baselines: `ClinicalGNN` with conv in (edge_conditioned, hgt, gchm).
+    """Black-box baselines: `ClinicalGNN` with conv in (edge_conditioned, hgt).
 
     Their layers are genuine `torch_geometric.nn.MessagePassing` modules, so
     GNNExplainer's learned mask reaches the messages through PyG's own
@@ -208,9 +185,8 @@ class ClinicalGNNGraphXAIWrapper(ClinicalGraphXAIWrapper):
 
     Soft-mask caveat, as for every other model here: the mask multiplies each
     message after it is computed. For HGT that is after the per-receiver softmax,
-    so masked-out edges do not renormalise the remaining attention weights, and
-    for GCHM's PNA-style aggregation a zeroed message still takes part in
-    min/max. A soft mask is not the same intervention as deleting the edge.
+    so masked-out edges do not renormalise the remaining attention weights. A soft
+    mask is not the same intervention as deleting the edge.
     `hgt` also reads relation identity from `edge_triple`, not from `edge_attr`.
     """
 

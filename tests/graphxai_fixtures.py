@@ -1,12 +1,11 @@
 """Fixtures shared by the GraphXAI tests.
 
-Copied verbatim from tests/test_clinical_method_adapters.py, tests/test_gchm_v2.py and
+Copied verbatim from tests/test_clinical_method_adapters.py, a former clinical_gnn test module and
 tests/test_real_graphxai.py (as of 0a855d55), which the initial release removed. Only the
 helpers the GraphXAI tests use are kept; nothing else of those modules is restored.
 """
 from __future__ import annotations
 
-import argparse
 import json
 import torch
 from argparse import Namespace
@@ -71,7 +70,7 @@ def method_args(**overrides):
     values.update(overrides)
     return Namespace(**values)
 
-# --- from tests/test_gchm_v2.py @ 0a855d55 ---
+# --- from a former clinical_gnn test module @ 0a855d55 ---
 def clinical_graph(sample_id, value=70.0, *, extra_measurement=True, prior_visits=0):
     """One contract-valid graph: patient, index visit, complaint, vital, lab + analyte."""
     nodes = [
@@ -137,17 +136,22 @@ def artifact(tmp_path, count=24, test_rows=2):
     return root, targets, canonical
 
 def run_args(root, targets, canonical, output, **overrides):
-    # Like the protocol, dev runs draw a bounded TRAIN sample (12 of 18 rows here) so
-    # unused TRAIN patients remain for the patient-disjoint dev split.
+    # Default = the final protocol's shape: selection on validation, the test fold scored once
+    # (4 validation rows, `test_rows` test rows). A dev run (selection_fold='dev', dev_limit=3,
+    # final_eval='validation') draws a bounded TRAIN sample so unused TRAIN patients remain for
+    # the patient-disjoint dev split.
     values = dict(artifact=str(root), targets=str(targets), canonical=str(canonical),
-                  output=str(output), method='clinical_gnn', conv='gchm_v2', seed=7,
+                  output=str(output), method='gsat', conv=None, seed=7,
                   top_k_labels=2, drop_relation=None, rewire_relation=None, edges='all',
                   train_limit=12, token_min_count=1, min_prior_visits=0, device='cpu',
                   batch_size=4, hidden=8, layers=1, dropout=0.0, token_dim=4, heads=2,
                   modulation='multiplicative', weights='none', lr=0.01, epochs=2,
                   no_edge_payload=False, no_message_passing=False,
-                  edge_direction='bidirectional', selection_fold='dev', dev_limit=3,
-                  final_eval='validation', sample_seed=None)
+                  edge_direction='bidirectional', selection_fold='validation', dev_limit=None,
+                  final_eval='test', sample_seed=None)
+    if overrides.get('final_eval') in ('none', 'validation') and 'selection_fold' not in overrides:
+        # a run that never scores test is a dev-selection run (train.py: --final-eval none needs it)
+        values.update(selection_fold='dev', dev_limit=3)
     values.update(overrides)
     # Start from the real parser so every flag the current train.py reads has its default
     # (optimizer, protocol keys, ...), then apply this fixture's small-run values.

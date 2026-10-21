@@ -113,9 +113,13 @@ def _fixed_ple(network, features, metadata):
 
 
 class CEIV3GraphXAIWrapper(ClinicalGraphXAIWrapper):
-    """Exact v3 continuous path with the original PLE term cached and held fixed."""
+    """Exact v3 / mp2 continuous path with the original PLE term cached and held fixed."""
     def __init__(self, adapter, graph):
         super().__init__(adapter, graph)
+        # The checkpoint adapter is kept as a plain attribute, not a submodule: an explainer's
+        # set_masks then reaches only the private network copy that runs the forward pass.
+        del self._modules['adapter']
+        object.__setattr__(self, 'adapter', adapter)
         clinical, membership, visit_graph = adapter._read(self.graph)
         self.clinical, self.membership, self.visit_graph = clinical, membership, visit_graph
         # A private network copy prevents changing the checkpoint adapter's behaviour.
@@ -219,6 +223,8 @@ def native_importance(adapter, graph, target):
     """
     if not hasattr(adapter, 'network'):
         return None, {'status': 'unavailable', 'reason': NATIVE_UNAVAILABLE}
+    if hasattr(adapter.network, 'ledger_keys'):
+        return ledger_importance(adapter, graph, target)
     with torch.no_grad():
         parts = adapter.forward_continuous(adapter.continuous_inputs(graph), graph.edge_index,
                                            graph, return_parts=True)
@@ -235,6 +241,63 @@ def native_importance(adapter, graph, target):
                           'fixed_absence_contribution': float(parts['absence_contributions'][:, target].sum()),
                           'bias': float(parts['bias'][target]),
                           'accounting_logit_abs_diff': float((accounting - parts['logits'][0, target]).abs()),
+                          **BOUNDARIES}
+
+
+# cei_gnn_mp2 ledger blocks by owner: node rows sit on their node, edge rows are split half to
+# each endpoint, pair rows half to each pair member; the rest (absence, extra blocks) are no nodes.
+NODE_ROWS = ('node_contributions', 'node_contributions_message', 'nbr_contributions')
+EDGE_ROWS = ('edge_contributions', 'edge_contributions_message')
+PAIR_ROWS = ('pair_contributions', 'pair_contributions_message')
+LEDGER_TOLERANCE = 1e-4
+
+
+def ledger_importance(adapter, graph, target):
+    """cei_gnn_mp2: ``native_importance`` over every block of the additive evidence ledger.
+
+    ``ledger_keys()`` lists the row blocks with ``logits = bias + sum of their rows``; it raises
+    for a configuration whose ledger is not additive (ev_combine='mlp', readout='pool'). The
+    accounting ``sum(signed node) + bias + fixed blocks`` must equal the explained logit within
+    ``LEDGER_TOLERANCE`` (relative to max(1, |logit|)), otherwise this raises. Rows read the
+    message-passing state, so a node's rows also carry evidence its neighbours sent to it.
+    """
+    network = adapter.network
+    keys = network.ledger_keys()
+    with torch.no_grad():
+        parts = adapter.forward_continuous(adapter.continuous_inputs(graph), graph.edge_index,
+                                           graph, return_parts=True)
+        signed = parts['node_contributions'].new_zeros((int(graph.num_nodes),))
+        blocks, fixed = {}, {}
+        for key in keys:
+            values = parts[key][:, target]
+            blocks[key] = float(values.sum())
+            if key in NODE_ROWS:
+                signed += values
+            elif key in EDGE_ROWS or key in PAIR_ROWS:
+                owners = graph.edge_index if key in EDGE_ROWS else parts['pairs']
+                half = values * 0.5
+                signed.index_add_(0, owners[0], half)
+                signed.index_add_(0, owners[1], half)
+            else:
+                fixed[key] = float(values.sum())
+        logit = parts['logits'][0, target]
+        accounting = signed.sum() + parts['bias'][target] + sum(fixed.values())
+        gap = float((accounting - logit).abs())
+    if gap > LEDGER_TOLERANCE * max(1.0, float(logit.abs())):
+        raise ValueError(f'cei_gnn_mp2 evidence ledger does not reproduce the logit '
+                         f'(|accounting - logit| = {gap:.3g}); refusing a non-exact built-in explanation')
+    return signed.abs(), {'status': 'success',
+                          'implementation': 'mp2 evidence ledger (ledger_keys) gate-times-vote accounting',
+                          'node_reduction': 'absolute signed node + neighbourhood rows plus half incident '
+                                            'edge/pair contributions',
+                          'ledger_keys': list(keys), 'ledger_block_totals': blocks,
+                          'signed_node_contributions': signed.tolist(),
+                          'fixed_absence_contribution': fixed.pop('absence_contributions', 0.0),
+                          'fixed_extra_block_contributions': fixed,
+                          'bias': float(parts['bias'][target]),
+                          'accounting_logit_abs_diff': gap,
+                          'message_passing_rows': 'node and neighbourhood rows read the message-passing '
+                                                  'state; they include evidence sent by neighbours',
                           **BOUNDARIES}
 
 

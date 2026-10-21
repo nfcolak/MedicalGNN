@@ -1,7 +1,7 @@
 """Synthetic tests for the item-#4 full-evidence-removal fidelity module.
 
 Covers all three wrapper shapes this project built (a plain ClinicalMethodAdapter
-via gsat, GraphCare's own wrapper, and a non-adapter GCHM model) to prove the
+via gsat, GraphCare's own wrapper, and a non-adapter black-box ClinicalGNN) to prove the
 mechanism generalises, not just one lucky case.
 """
 import math
@@ -11,14 +11,15 @@ import torch
 
 from core import NODE_KINDS
 from core.explain import fidelity_v2 as fv2
-from gchm_pna.gchm_v2 import GCHMv2
+from core.model import ClinicalGNN
 from core.explain.graphxai_wrapper import (
+    ClinicalGNNGraphXAIWrapper,
     ClinicalGraphXAIWrapper,
     GraphCareGraphXAIWrapper,
 )
-from core.tensorize import ALL_RELATIONS
+from core.tensorize import ALL_RELATIONS, PAYLOAD_WIDTH
 from tests.graphxai_fixtures import (
-    EDGE_DIM, NODE_DIM, NUM_CLASSES, NUM_TOKENS, NUM_TRIPLES, method_args, synthetic_graph,
+    EDGE_DIM, NODE_DIM, NUM_CLASSES, NUM_TOKENS, NUM_TRIPLES, synthetic_graph,
 )
 from tests.test_clinical_graphxai_wrapper import build_adapter
 
@@ -64,22 +65,22 @@ def wrap_graphcare(graph):
     return wrapper, x
 
 
-def wrap_gchm(graph):
-    model = GCHMv2(
+def wrap_black_box(graph):
+    model = ClinicalGNN(
         num_tokens=NUM_TOKENS, node_dim=NODE_DIM, edge_dim=EDGE_DIM, num_classes=NUM_CLASSES,
-        num_relations=NUM_RELATIONS, degree_histogram=[0, 2, 3, 1],
-        hidden=8, layers=2, dropout=0.0, token_dim=4,
+        hidden=8, layers=2, dropout=0.0, token_dim=4, conv="edge_conditioned",
+        num_triples=NUM_TRIPLES, payload_dim=PAYLOAD_WIDTH,
     )
     model.eval()
-    wrapper = ClinicalGraphXAIWrapper(
-        model, method="gchm_v2", node_dim=NODE_DIM, edge_dim=EDGE_DIM, num_tokens=NUM_TOKENS,
-        num_triples=NUM_TRIPLES, num_relations=NUM_RELATIONS, is_method_adapter=False,
+    wrapper = ClinicalGNNGraphXAIWrapper(
+        model, method="edge_conditioned", node_dim=NODE_DIM, edge_dim=EDGE_DIM,
+        num_tokens=NUM_TOKENS, num_triples=NUM_TRIPLES, num_relations=NUM_RELATIONS,
     )
     x = wrapper.set_context(graph)
     return wrapper, x
 
 
-WRAPPERS = {"gsat": wrap_gsat, "graphcare": wrap_graphcare, "gchm_v2": wrap_gchm}
+WRAPPERS = {"gsat": wrap_gsat, "graphcare": wrap_graphcare, "black_box": wrap_black_box}
 
 
 def test_removable_node_mask_excludes_structural_and_concept_kinds():
@@ -93,7 +94,7 @@ def test_removable_node_mask_excludes_structural_and_concept_kinds():
     assert set(fv2.EVIDENCE_NODE_KINDS) == {"complaint", "measurement", "vital", "diagnosis"}
 
 
-@pytest.mark.parametrize("name", ["gsat", "graphcare", "gchm_v2"])
+@pytest.mark.parametrize("name", ["gsat", "graphcare", "black_box"])
 def test_fidelity_plus_and_minus_v2_are_finite_and_well_formed(name):
     torch.manual_seed(101)
     graph = seven_node_graph()
@@ -116,7 +117,7 @@ def test_fidelity_plus_and_minus_v2_are_finite_and_well_formed(name):
         assert result["removable_node_count"] == 3
 
 
-@pytest.mark.parametrize("name", ["gsat", "graphcare", "gchm_v2"])
+@pytest.mark.parametrize("name", ["gsat", "graphcare", "black_box"])
 def test_structural_nodes_are_never_selected_even_with_maximal_importance(name):
     """Give the patient and visit nodes the highest possible importance score
     and confirm they're still never evicted -- removability is enforced by
@@ -139,7 +140,7 @@ def test_structural_nodes_are_never_selected_even_with_maximal_importance(name):
     assert plus["k"] == 3
 
 
-@pytest.mark.parametrize("name", ["gsat", "graphcare", "gchm_v2"])
+@pytest.mark.parametrize("name", ["gsat", "graphcare", "black_box"])
 def test_an_explanation_with_all_its_weight_on_protected_nodes_is_refused(name):
     """Zero importance on every eligible node means the explanation names no
     evidence. It is refused, not silently padded with tie-break nodes."""
@@ -152,7 +153,7 @@ def test_an_explanation_with_all_its_weight_on_protected_nodes_is_refused(name):
                              importance, 0)
 
 
-@pytest.mark.parametrize("name", ["gsat", "graphcare", "gchm_v2"])
+@pytest.mark.parametrize("name", ["gsat", "graphcare", "black_box"])
 def test_full_eviction_changes_token_not_only_x(name):
     """The whole point of item #4: prove the intervention actually reaches
     token (and edges), not only x. Construct an importance vector that always
@@ -191,7 +192,7 @@ def test_full_eviction_changes_token_not_only_x(name):
     )
 
 
-@pytest.mark.parametrize("name", ["gsat", "graphcare", "gchm_v2"])
+@pytest.mark.parametrize("name", ["gsat", "graphcare", "black_box"])
 def test_deletion_and_insertion_curves_are_well_formed(name):
     torch.manual_seed(109)
     graph = seven_node_graph()

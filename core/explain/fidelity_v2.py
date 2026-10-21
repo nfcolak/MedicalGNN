@@ -5,9 +5,8 @@ cooccur/ontology/full pipeline and your already-reported thesis numbers run
 through) "removes" a node by zeroing its `x` row alone. The node's `token`,
 its numeric value, and every edge connecting it to the rest of the graph all
 survive that intervention -- so a model with any path that reads token/value
-directly instead of purely through `x` (GCHM-v3's `wide_token`/`wide_value`
-class-vote paths are the confirmed case, but it's not specific to them: any
-method's token embedding lookup sees the "removed" node's real identity) can
+directly instead of purely through `x` (any method's token embedding lookup
+sees the "removed" node's real identity) can
 still see evidence that was supposed to be gone. This module removes a node's
 full identity instead: `x` zeroed, `token` replaced with the padding/unseen
 id (0 -- every token embedding in this codebase uses `padding_idx=0`), and
