@@ -14,6 +14,13 @@ and its expected output directory and executes nothing. --execute runs the comma
 non-zero exit status on the first failing run and writes `<out>/driver_manifest.json` (also after a failure, with
 `complete` false). --out must be a new or empty directory; a filled one is refused.
 
+--keep-going continues after a failing run (exit status 1 if any run failed). --resume skips planned runs whose folder
+already holds `explanation_manifest.json` (recorded as `skipped_existing`), keeps the previous driver manifest as
+`driver_manifest.<its started_at>.json` and refuses an interrupted run folder or any file outside the plan.
+--jobs N runs up to N runner processes at once, each with OMP_NUM_THREADS and MKL_NUM_THREADS = max(1, cpus // N).
+Every `driver_manifest.json` entry carries `seconds`, `started_at`, `status` (ok, failed, skipped_existing) and
+`max_rss_mb` (peak memory of the child, null when unknown).
+
 Before anything is printed or executed, every selected run's `binding.json` is checked: `protocol` is `fair_v10t`,
 `top_k_labels` equals K, `final_eval` is `test` and `method` matches the run-dir prefix. One mismatch stops the driver.
 
@@ -25,6 +32,10 @@ import json
 import os
 import subprocess
 import sys
+import threading
+import time
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
+from datetime import datetime, timezone
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
@@ -39,6 +50,7 @@ FOLDS = ('test', 'validation')
 FOLD_ROLE = {'test': 'report', 'validation': 'decision'}
 DROPPED = {'gchm_pna': 'GCHM-PNA is not part of the explanation study'}
 MANIFEST_NAME = 'driver_manifest.json'
+RUN_MANIFEST = 'explanation_manifest.json'
 
 
 def shown(path):
@@ -108,26 +120,148 @@ def plan_runs(runs, ks, methods, seeds, fold, sample_patients, out):
     return entries
 
 
+def utc_now():
+    return datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+
+
+def cpu_count():
+    return os.cpu_count() or 1
+
+
 def run_command(command, env):
-    """Default executor: the runner as a child process; returns its exit status."""
-    return subprocess.run(command, env=env, cwd=REPO).returncode
+    """Default executor: the runner as a child process; returns its exit status and peak memory.
+
+    The child is reaped with `os.wait4` to read `ru_maxrss` (KiB on Linux, bytes on macOS)."""
+    process = subprocess.Popen(command, env=env, cwd=REPO)
+    _, status, usage = os.wait4(process.pid, 0)
+    code = os.waitstatus_to_exitcode(status)
+    process.returncode = code
+    divisor = 1024 * 1024 if sys.platform == 'darwin' else 1024
+    return {'returncode': code, 'max_rss_mb': round(usage.ru_maxrss / divisor, 1)}
 
 
-def write_manifest(out, args, entries, results, complete):
+def write_manifest(out, args, entries, results, complete, started_at=None):
+    """`results` maps a run's output name to its record (returncode, seconds, started_at, status, max_rss_mb)."""
+    runs = []
+    for e in entries:
+        r = results.get(e['output'], {})
+        runs.append({'k': e['k'], 'method': e['method'], 'seed': e['seed'], 'output': e['output'],
+                     'returncode': r.get('returncode'), 'status': r.get('status'), 'seconds': r.get('seconds'),
+                     'started_at': r.get('started_at'), 'max_rss_mb': r.get('max_rss_mb')}
+                    | ({k: r[k] for k in ('explained_count', 'failed_count') if k in r}))
     manifest = {
         'schema': 'medgnn.explanation_driver_manifest', 'protocol': PROTOCOL, 'fold': args.fold,
         'fold_role': FOLD_ROLE[args.fold], 'ks': args.ks, 'methods': args.methods, 'seeds': args.seeds,
         'sample_patients': args.sample_patients, 'planned_runs': len(entries), 'complete': complete,
-        'runs': [{'k': e['k'], 'method': e['method'], 'seed': e['seed'], 'output': e['output'],
-                  'returncode': results.get(e['output'])} for e in entries],
+        'started_at': started_at, 'runs': runs,
     }
     Path(out).mkdir(parents=True, exist_ok=True)
     (Path(out) / MANIFEST_NAME).write_text(json.dumps(manifest, indent=2) + '\n')
     return manifest
 
 
+def check_resume_out(out, entries):
+    """Under --resume the output folder may be filled, but only by planned run folders and driver manifests.
+
+    Returns the planned runs that are finished (hold `explanation_manifest.json`); an interrupted run folder is
+    refused with its name (the user moves it; nothing is deleted)."""
+    out = Path(out)
+    if out.exists() and not out.is_dir():
+        raise SystemExit(f'--out must be a directory: {shown(out)}')
+    planned = {e['output'] for e in entries}
+    if out.is_dir():
+        for item in sorted(out.iterdir()):
+            if item.is_file() and (item.name == MANIFEST_NAME or
+                                   (item.name.startswith('driver_manifest.') and item.name.endswith('.json'))):
+                continue
+            if item.is_dir() and item.name.startswith('top'):
+                for child in sorted(item.iterdir()):
+                    if f'{item.name}/{child.name}' not in planned or not child.is_dir():
+                        raise SystemExit(f'--resume: {shown(child)} is outside the planned runs')
+                continue
+            raise SystemExit(f'--resume: {shown(item)} is outside the planned runs')
+    finished = {}
+    for e in entries:
+        folder = out / e['output']
+        if not folder.exists():
+            continue
+        if not (folder / RUN_MANIFEST).is_file():
+            raise SystemExit(f'--resume: {shown(folder)} holds no {RUN_MANIFEST} (interrupted run); '
+                             'move it away and run again')
+        finished[e['output']] = json.loads((folder / RUN_MANIFEST).read_text())
+    return finished
+
+
+def keep_previous_manifest(out):
+    """Rename the previous driver manifest to `driver_manifest.<started_at>.json`; returns its run records."""
+    path = Path(out) / MANIFEST_NAME
+    if not path.is_file():
+        return {}
+    previous = json.loads(path.read_text())
+    stamp = previous.get('started_at')
+    if not stamp:
+        stamp = datetime.fromtimestamp(path.stat().st_mtime, timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+    target = Path(out) / f'driver_manifest.{stamp.replace(":", "-")}.json'
+    if target.exists():
+        raise SystemExit(f'--resume: {shown(target)} already exists')
+    path.rename(target)
+    return {r.get('output'): r for r in previous.get('runs', [])}
+
+
+def execute_one(entry, executor, env):
+    """One run through the executor hook (int return code, or dict with returncode and max_rss_mb)."""
+    started_at, t0 = utc_now(), time.monotonic()
+    result = executor(entry['command'], env)
+    seconds = round(time.monotonic() - t0, 1)
+    if isinstance(result, dict):
+        code, rss = result['returncode'], result.get('max_rss_mb')
+    else:
+        code, rss = result, None
+    return {'returncode': code, 'seconds': seconds, 'started_at': started_at,
+            'status': 'ok' if code == 0 else 'failed', 'max_rss_mb': rss}
+
+
+def run_entries(todo, executor, env, jobs, keep_going, record):
+    """Run `todo` with up to `jobs` at once; `record(entry, result)` is called under the caller's lock.
+
+    Returns the first failing return code (None when nothing failed) and the number of failures."""
+    first_failure, failures = None, 0
+
+    def finish(entry, result):
+        nonlocal first_failure, failures
+        record(entry, result)
+        if result['returncode'] != 0:
+            failures += 1
+            if first_failure is None:
+                first_failure = result['returncode']
+            print(f'run {entry["output"]} failed with exit status {result["returncode"]}'
+                  + ('' if keep_going else '; stopped'), file=sys.stderr)
+
+    if jobs <= 1:
+        for entry in todo:
+            finish(entry, execute_one(entry, executor, env))
+            if first_failure is not None and not keep_going:
+                break
+        return first_failure, failures
+    pending, queue = {}, list(todo)
+    with ThreadPoolExecutor(max_workers=jobs) as pool:
+        while queue or pending:
+            while queue and len(pending) < jobs and (keep_going or first_failure is None):
+                entry = queue.pop(0)
+                pending[pool.submit(execute_one, entry, executor, env)] = entry
+            if not pending:
+                break
+            done, _ = wait(pending, return_when=FIRST_COMPLETED)
+            for future in done:
+                finish(pending.pop(future), future.result())
+    return first_failure, failures
+
+
 def main(argv=None, *, executor=run_command):
-    """CLI entry; `executor(command, env) -> returncode` is the injectable runner call."""
+    """CLI entry; `executor(command, env)` is the injectable runner call.
+
+    It returns the exit status, or a dict `{returncode, max_rss_mb}`; with `--jobs` above 1 it is called from worker
+    threads."""
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--runs', default=DEFAULT_RUNS)
     parser.add_argument('--ks', default=','.join(map(str, DEFAULT_KS)))
@@ -138,35 +272,65 @@ def main(argv=None, *, executor=run_command):
     parser.add_argument('--out', required=True, help='a new, empty directory')
     parser.add_argument('--plan', action='store_true', help='print the runner commands, execute nothing')
     parser.add_argument('--execute', action='store_true', help='run the commands one after another')
+    parser.add_argument('--keep-going', action='store_true', help='continue after a failing run; exit 1 if any failed')
+    parser.add_argument('--resume', action='store_true',
+                        help='skip planned runs that already hold an explanation manifest')
+    parser.add_argument('--jobs', type=int, default=1, help='runner processes at once (default 1)')
     args = parser.parse_args(argv)
     args.ks = parse_list(args.ks, int, 'ks')
     args.methods = parse_list(args.methods, str, 'methods')
     args.seeds = parse_list(args.seeds, int, 'seeds')
+    if args.jobs < 1:
+        raise SystemExit('--jobs: must be at least 1')
     check_methods(args.methods)
-    check_out(args.out)
+    if not args.resume:
+        check_out(args.out)
     runs = Path(args.runs)
     if not runs.is_absolute():
         runs = REPO / runs
     entries = plan_runs(runs, args.ks, args.methods, args.seeds, args.fold, args.sample_patients, args.out)
+    finished = check_resume_out(args.out, entries) if args.resume else {}
 
     if args.plan or not args.execute:
         print(f'fold {args.fold} ({FOLD_ROLE[args.fold]} fold), protocol {PROTOCOL}, {len(entries)} runs')
         for entry in entries:
             print(' '.join(entry['command']))
-            print(f'  -> {entry["output"]}')
+            print(f'  -> {entry["output"]}' + ('  (finished, skipped on --resume)' if entry['output'] in finished else ''))
         return 0 if args.plan else 2
 
     env = dict(os.environ, PYTHONDONTWRITEBYTECODE='1')
+    if args.jobs > 1:
+        threads = str(max(1, cpu_count() // args.jobs))
+        env.update(OMP_NUM_THREADS=threads, MKL_NUM_THREADS=threads)
+    started_at = utc_now()
+    previous = keep_previous_manifest(args.out) if args.resume else {}
     results = {}
     for entry in entries:
-        code = executor(entry['command'], env)
-        results[entry['output']] = code
-        if code != 0:
-            write_manifest(args.out, args, entries, results, complete=False)
-            print(f'run {entry["output"]} failed with exit status {code}; stopped', file=sys.stderr)
-            return code if code > 0 else 1
-    write_manifest(args.out, args, entries, results, complete=True)
-    print(f'{len(entries)} runs explained; manifest {MANIFEST_NAME}')
+        if entry['output'] in finished:
+            old = previous.get(entry['output'], {})
+            results[entry['output']] = {
+                'returncode': 0, 'status': 'skipped_existing', 'seconds': old.get('seconds'),
+                'started_at': old.get('started_at'), 'max_rss_mb': old.get('max_rss_mb'),
+                'explained_count': finished[entry['output']].get('explained_count'),
+                'failed_count': finished[entry['output']].get('failed_count')}
+    todo = [e for e in entries if e['output'] not in finished]
+    lock = threading.Lock()
+
+    def record(entry, result):
+        with lock:
+            results[entry['output']] = result
+            write_manifest(args.out, args, entries, results, complete=False, started_at=started_at)
+
+    write_manifest(args.out, args, entries, results, complete=False, started_at=started_at)
+    first_failure, failures = run_entries(todo, executor, env, args.jobs, args.keep_going, record)
+    complete = failures == 0 and all(results.get(e['output']) for e in entries)
+    write_manifest(args.out, args, entries, results, complete=complete, started_at=started_at)
+    if failures:
+        if args.keep_going:
+            print(f'{failures} of {len(todo)} runs failed; manifest {MANIFEST_NAME}', file=sys.stderr)
+            return 1
+        return first_failure if first_failure > 0 else 1
+    print(f'{len(entries)} runs explained ({len(finished)} skipped); manifest {MANIFEST_NAME}')
     return 0
 
 

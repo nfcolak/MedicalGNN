@@ -38,6 +38,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import time
 from argparse import Namespace
 from dataclasses import dataclass
 from pathlib import Path
@@ -239,13 +240,44 @@ def build_model(binding: dict[str, Any], state_dict: dict[str, torch.Tensor]):
 
 
 @torch.no_grad()
+def fold_probabilities(model, splits, fold: str, batch_size: int, is_method_adapter: bool,
+                       device="cpu") -> np.ndarray:
+    """Softmax probabilities of every row of `fold`, batched the way training batched it
+    (`batch_size`), in fold order. The one forward loop shared by `replay_check` and the
+    replay difference tool."""
+    model = model.to(device).eval()
+    loader = DataLoader(splits[fold], batch_size=batch_size)
+    logits = []
+    for batch in loader:
+        batch = batch.to(device)
+        if is_method_adapter:
+            logits.append(model(batch, epoch=0).logits.cpu())
+        else:
+            logits.append(model(batch).cpu())
+    return torch.softmax(torch.cat(logits), dim=1).numpy()
+
+
+def environment_info() -> dict[str, Any]:
+    """The software and hardware the process runs on; the thread count is read now, i.e.
+    the count the forward passes really used."""
+    import platform
+
+    return {"torch": torch.__version__, "python": platform.python_version(),
+            "platform": platform.platform(), "machine": platform.machine(),
+            "torch_num_threads": int(torch.get_num_threads())}
+
+
+@torch.no_grad()
 def replay_check(model, splits, binding: dict[str, Any], *, is_method_adapter: bool,
                  device="cpu", batch_size: int | None = None, fold: str = "test",
                  stored_npz: str | Path | None = None) -> dict[str, Any]:
     """Refuse to proceed unless a fresh pass over `fold` reproduces the exact
     recorded prediction hash (or, when that byte hash cannot reproduce on this
-    machine, every row of the stored `<fold>.npz` within REPLAY_TOLERANCE with 100%
-    argmax agreement; the returned dict names the rule that passed). This is the one
+    machine, every row of the stored `<fold>.npz` within REPLAY_TOLERANCE and the same
+    argmax on every row except ties: a flip is accepted only on a row whose stored
+    top-two probability gap is below twice the tolerance, since each of the two
+    probabilities may move by up to the tolerance; the returned dict names the rule
+    that passed and counts the flips). This is the one
     check that makes every other
     reconstruction assumption above verifiable rather than merely plausible:
     if anything upstream was wrong, this fails loudly, closed, before a single
@@ -263,16 +295,7 @@ def replay_check(model, splits, binding: dict[str, Any], *, is_method_adapter: b
     """
     if batch_size is None:
         batch_size = binding.get("batch_size", 64)
-    model = model.to(device).eval()
-    loader = DataLoader(splits[fold], batch_size=batch_size)
-    logits = []
-    for batch in loader:
-        batch = batch.to(device)
-        if is_method_adapter:
-            logits.append(model(batch, epoch=0).logits.cpu())
-        else:
-            logits.append(model(batch).cpu())
-    proba = torch.softmax(torch.cat(logits), dim=1).numpy()
+    proba = fold_probabilities(model, splits, fold, batch_size, is_method_adapter, device)
     digest = proba_digest(proba)
     expected = binding[FOLD_BLOCK[fold]]["prediction_sha256"]
     if digest == expected:
@@ -286,13 +309,21 @@ def replay_check(model, splits, binding: dict[str, Any], *, is_method_adapter: b
         ids = [str(d.sample_id) for d in splits[fold]]
         stored_ids = [str(s) for s in stored["sample_ids"]]
         if ids == stored_ids and stored["proba"].shape == proba.shape:
-            diff = float(np.abs(stored["proba"].astype(np.float64) - proba).max())
-            argmax_equal = bool((stored["proba"].argmax(1) == proba.argmax(1)).all())
-            if diff <= REPLAY_TOLERANCE and argmax_equal:
+            stored_proba = stored["proba"].astype(np.float64)
+            diff = float(np.abs(stored_proba - proba).max())
+            flipped = stored_proba.argmax(1) != proba.argmax(1)
+            top_two = np.sort(stored_proba, axis=1)[:, -2:]
+            tie = (top_two[:, 1] - top_two[:, 0]) < 2 * REPLAY_TOLERANCE
+            flips_total, flips_tie = int(flipped.sum()), int((flipped & tie).sum())
+            if diff <= REPLAY_TOLERANCE and flips_total == flips_tie:
                 return {"mode": "stored_predictions_tolerance", "max_abs_diff": diff,
-                        "tolerance": REPLAY_TOLERANCE, "argmax_agreement": 1.0,
+                        "tolerance": REPLAY_TOLERANCE,
+                        "argmax_agreement": 1.0 - flips_total / max(1, len(ids)),
+                        "argmax_flips_total": flips_total, "argmax_flips_tie": flips_tie,
                         "rows": len(ids), "prediction_sha256": digest}
-            detail = f"max abs diff {diff:.3g} (tolerance {REPLAY_TOLERANCE}), argmax equal {argmax_equal}"
+            detail = (f"max abs diff {diff:.3g} (tolerance {REPLAY_TOLERANCE}), argmax flips "
+                      f"{flips_total} of {len(ids)} rows, {flips_tie} of them on ties "
+                      f"(stored top-two gap below {2 * REPLAY_TOLERANCE})")
         else:
             detail = "stored sample ids or shape differ from the rebuilt fold"
     else:
@@ -571,12 +602,31 @@ def _audit_subject(wrapper, batch, x, base_vectors, prediction, *, steps, epochs
     return out
 
 
+def _single_graph_check(single_logits, stored_row) -> dict[str, Any] | None:
+    """Informational only, never a refusal: how far the single-graph forward of an explained
+    visit is from its stored `<fold>.npz` row (a single graph can legitimately differ from a
+    batched row, e.g. GSAT's batch-sensitive normalisation)."""
+    if stored_row is None:
+        return None
+    try:
+        stored = np.asarray(stored_row, dtype=np.float64).reshape(-1)
+        proba = torch.softmax(single_logits.detach().reshape(1, -1).double(), dim=1)[0].numpy()
+        if stored.shape != proba.shape:
+            return None
+        return {"max_abs_diff": float(np.abs(stored - proba).max()),
+                "argmax_agrees": bool(stored.argmax() == proba.argmax())}
+    except Exception:  # noqa: BLE001 - informational, must not block the record
+        return None
+
+
 def explain_subject(wrapper, data, *, method: str, conv: str | None,
                     steps: int, epochs: int, num_relation_columns: int,
                     fidelity_v2_curve_points: int = 3, ig: dict[str, Any] | None = None,
                     random_repeats: int = 10, random_seed: int = 1234,
                     audit: dict[str, Any] | None = None,
-                    true_class_explanations: bool = True) -> dict[str, Any]:
+                    true_class_explanations: bool = True,
+                    stored_row=None) -> dict[str, Any]:
+    started = time.perf_counter()
     batch = _single_graph_batch(data)
     x = wrapper.set_context(batch)
     # Plan item 2: passing only x and edge_index is explaining a different model
@@ -588,7 +638,9 @@ def explain_subject(wrapper, data, *, method: str, conv: str | None,
             f"max |logit difference| = {wrapper_max_diff:.3g}"
         )
     with torch.no_grad():
-        prediction = int(wrapper(x, batch.edge_index).argmax(-1).item())
+        single_logits = wrapper(x, batch.edge_index)
+        prediction = int(single_logits.argmax(-1).item())
+    single_graph_check = _single_graph_check(single_logits, stored_row)
     true_class = int(data.y.view(-1)[0].item())
     seed = _stable_seed(random_seed, str(data.sample_id))
 
@@ -635,6 +687,7 @@ def explain_subject(wrapper, data, *, method: str, conv: str | None,
         "prediction_class_id": prediction,
         "explained_target": "predicted_class",
         "wrapper_verification": {"max_abs_logit_diff": wrapper_max_diff, "tolerance": 1e-5},
+        "single_graph_check": single_graph_check,
         "builtin_node_importance": collected["builtin"],
         "builtin_available": collected["builtin"] is not None,
         "builtin_unavailable_reason": collected["builtin_unavailable"],
@@ -679,7 +732,16 @@ def explain_subject(wrapper, data, *, method: str, conv: str | None,
     if audit is not None:
         record["audit"] = _audit_subject(wrapper, batch, x, vectors, prediction, steps=steps,
                                          epochs=epochs, ig=ig, audit=dict(audit, seed=seed))
+    record["seconds"] = round(time.perf_counter() - started, 3)
     return record
+
+
+def _stored_rows(stored_npz: Path) -> dict[str, np.ndarray]:
+    """sample id -> stored probability row of the fold's `<fold>.npz` (empty when absent)."""
+    if not stored_npz.exists():
+        return {}
+    stored = np.load(stored_npz, allow_pickle=False)
+    return {str(i): row for i, row in zip(stored["sample_ids"], stored["proba"])}
 
 
 def _prepare_clinical_ig(bundle, wrapper, subjects, splits, *, tolerance: float,
@@ -747,6 +809,7 @@ def run_explanations(run_dir, output_dir, *, fold: str = "test",
     write output. Raises before writing anything if the replay check fails. `steps` is the
     budget of the vendored (zero-baseline) IG; the clinical IG chooses its own step count
     from the completeness error."""
+    run_started = time.perf_counter()
     output_dir = Path(output_dir)
     if output_dir.exists() and any(output_dir.iterdir()):
         raise FileExistsError(f"explanation output directory must be empty: {output_dir}")
@@ -784,6 +847,8 @@ def run_explanations(run_dir, output_dir, *, fold: str = "test",
                     "stability_draws": stability_draws, "sigma": stability_sigma,
                     "seed": random_seed}
 
+    stored_rows = _stored_rows(Path(run_dir) / f"{fold}.npz")
+    seconds_before_first_explanation = round(time.perf_counter() - run_started, 3)
     records, failures = [], []
     for index, data in enumerate(subjects):
         try:
@@ -794,7 +859,8 @@ def run_explanations(run_dir, output_dir, *, fold: str = "test",
                     fidelity_v2_curve_points=fidelity_v2_curve_points, ig=ig_config,
                     random_repeats=random_repeats, random_seed=random_seed,
                     audit=audit_config if index < audit_subjects else None,
-                    true_class_explanations=true_class_explanations)
+                    true_class_explanations=true_class_explanations,
+                    stored_row=stored_rows.get(str(data.sample_id)))
             )
         except Exception as exc:  # noqa: BLE001 - one subject's failure must not lose the rest
             failures.append({"sample_id": str(data.sample_id), "error": str(exc)})
@@ -847,6 +913,9 @@ def run_explanations(run_dir, output_dir, *, fold: str = "test",
         "epochs": epochs,
         "clinical_ig": ig_summary,
         "record_files": record_files,
+        "environment": environment_info(),
+        "seconds_before_first_explanation": seconds_before_first_explanation,
+        "seconds_total": round(time.perf_counter() - run_started, 3),
         "source_code": recursive_source_hashes(Path(__file__).parent),
     }
     (output_dir / "explanation_manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")

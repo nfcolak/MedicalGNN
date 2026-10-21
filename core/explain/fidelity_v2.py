@@ -42,7 +42,7 @@ import torch
 
 from core import NODE_KINDS
 
-INTERVENTION_CONTRACT_VERSION = 3
+INTERVENTION_CONTRACT_VERSION = 4
 INTERVENTION_CONTRACT = (
     "evidence removal = x row zeroed + token set to the pad id + every incident edge masked to "
     "zero. Eligible evidence nodes: complaint, vital, measurement (lab result), diagnosis "
@@ -50,8 +50,11 @@ INTERVENTION_CONTRACT = (
     "(concept nodes, not patient facts). k is capped at the explanation's own support (nodes "
     "with nonzero importance), so a yes/no explanation is never padded with tie-break nodes. "
     "Deletion/insertion curves reported with AUC over k/removable_count, with a "
-    "random-removal reference. Not comparable with fidelity v1 (core/explain/fidelity.py, "
-    "x-row-only removal) or with contract version 2 (analyte was removable, no support cap). "
+    "random-removal reference. The insertion curve starts from its measured k = 0 value (the "
+    "probability drop with every removable node evicted); the deletion curve starts from (0, 0). "
+    "Not comparable with fidelity v1 (core/explain/fidelity.py, "
+    "x-row-only removal), with contract version 2 (analyte was removable, no support cap) or "
+    "with contract version 3 (insertion curve started from a fixed (0, 0) point). "
     "The module name fidelity_v2 is historical; INTERVENTION_CONTRACT_VERSION is the version."
 )
 STRUCTURAL_NODE_KINDS = ("patient", "visit", "knowledge", "analyte")
@@ -193,12 +196,15 @@ def curve_ks(removable_count: int, support: int, num_points: int) -> list[int]:
     return sorted({max(1, int(round(fraction * span))) for fraction in fractions})
 
 
-def _auc(ks: Sequence[int], probs: Sequence[float], removable_count: int) -> float:
-    # Trapezoidal AUC over k/removable_count with an explicit (0, 0) start point
-    # (zero nodes removed -> zero probability change, by construction).
+def _auc(ks: Sequence[int], probs: Sequence[float], removable_count: int, *,
+         anchor: float = 0.0) -> float:
+    # Trapezoidal AUC over k/removable_count with an explicit start point at k = 0 whose
+    # ordinate is `anchor`. Deletion: 0.0 (nothing removed -> no probability change, by
+    # construction). Insertion: the measured drop of the graph with every removable node
+    # evicted, which is not zero in general.
     xs = [0.0] + [k / removable_count for k in ks]
     integrate = getattr(np, "trapezoid", None) or np.trapz   # numpy>=2 renamed trapz
-    return float(integrate([0.0] + list(probs), xs))
+    return float(integrate([float(anchor)] + list(probs), xs))
 
 
 def _curve(wrapper, x, token, edge_index, node_type, node_importance, target_class,
@@ -207,6 +213,13 @@ def _curve(wrapper, x, token, edge_index, node_type, node_importance, target_cla
     support = eligible_support(node_type, node_importance)
     ks = curve_ks(removable_count, max(support, 1), num_points)
     orig = _predict(wrapper, x, edge_index)
+    anchor = 0.0
+    if keep_important:
+        # Insertion starts from the empty-evidence graph: keep nothing, evict every removable
+        # node. Computed through `_score_at_k` (which first checks that removable nodes exist,
+        # so a graph without any still raises) so it is the very number the random reference uses.
+        anchor = _score_at_k(wrapper, x, token, edge_index, node_type, node_importance,
+                             target_class, 0, keep_important=True, orig=orig)["prob"]
     points = [
         _score_at_k(wrapper, x, token, edge_index, node_type, node_importance,
                    target_class, k, keep_important=keep_important, orig=orig)
@@ -214,11 +227,14 @@ def _curve(wrapper, x, token, edge_index, node_type, node_importance, target_cla
     ]
     probs = [point["prob"] for point in points]
     used = [point["k"] for point in points]
-    auc = _auc(used, probs, removable_count)
+    auc = _auc(used, probs, removable_count, anchor=anchor)
     last_fraction = used[-1] / removable_count
     return {
         "k_values": used,
         "prob_at_k": probs,
+        # probability drop at k = 0 (the curve's first ordinate): 0.0 for deletion, the
+        # empty-evidence drop for insertion
+        "k0_prob": float(anchor),
         "removable_node_count": removable_count,
         "support_count": support,
         "explained_fraction": last_fraction,
@@ -233,7 +249,8 @@ def deletion_curve(wrapper, x, token, edge_index, node_type, node_importance,
                    target_class, *, num_points: int = 5) -> dict[str, Any]:
     """Fidelity+ at increasing k (most-important-first removal); AUC over
     k/removable_count. Higher AUC = removing important evidence consistently
-    hurts the prediction, not just at one arbitrary threshold."""
+    hurts the prediction, not just at one arbitrary threshold. Starts from (0, 0):
+    nothing removed, no change (`k0_prob` is 0.0)."""
     return _curve(wrapper, x, token, edge_index, node_type, node_importance,
                  target_class, keep_important=False, num_points=num_points)
 
@@ -265,8 +282,11 @@ class RandomReference:
     real explanations (only the order of removal differs), so any
     out-of-distribution effect of removing evidence is present in both."""
 
-    def __init__(self, ks, deletion, insertion, removable_count, seed):
+    def __init__(self, ks, deletion, insertion, removable_count, seed, insertion_k0=0.0):
         self.ks = [int(k) for k in ks]
+        # the insertion curves' measured k = 0 value on this graph (every removable node
+        # evicted); every random insertion draw starts from it, like the source's curve does
+        self.insertion_k0 = float(insertion_k0)
         self.deletion = {int(k): np.asarray(v, dtype=float) for k, v in deletion.items()}
         self.insertion = {int(k): np.asarray(v, dtype=float) for k, v in insertion.items()}
         self.removable_count = int(removable_count)
@@ -282,7 +302,8 @@ class RandomReference:
 
     def _auc_draws(self, kind, ks):
         return np.asarray([
-            _auc(ks, [self._draws(kind, k)[r] for k in ks], self.removable_count)
+            _auc(ks, [self._draws(kind, k)[r] for k in ks], self.removable_count,
+                 anchor=self.insertion_k0 if kind == "insertion" else 0.0)
             for r in range(self.repeats)
         ])
 
@@ -295,6 +316,18 @@ class RandomReference:
                 "beats_random_fraction": float(beaten.mean())}
 
     def compare(self, *, fidelity_plus, fidelity_minus, deletion_curve, insertion_curve):
+        """Each source number against the random draws of the same graph.
+
+        `deletion_mean_change` / `insertion_mean_change` are the AUC keys divided by the source's
+        own curve width (`explained_fraction`), the same width on both sides. `difference` and
+        `beats_random_fraction` of the AUC keys do not depend on the insertion anchor: the first
+        trapezoid adds the same 1/2 * d0 * k1/removable_count to the source and to every draw,
+        because both start from the same measured k = 0 value d0 and share their first k.
+        """
+        deletion_draws = self._auc_draws("deletion", deletion_curve["k_values"])
+        insertion_draws = self._auc_draws("insertion", insertion_curve["k_values"])
+        deletion_width = deletion_curve["explained_fraction"]
+        insertion_width = insertion_curve["explained_fraction"]
         return {
             "repeats": self.repeats,
             "seed": self.seed,
@@ -305,11 +338,15 @@ class RandomReference:
                 fidelity_minus["prob"], self._draws("insertion", fidelity_minus["k"]),
                 higher_is_better=False),
             "deletion_auc": self._summary(
-                deletion_curve["auc"],
-                self._auc_draws("deletion", deletion_curve["k_values"]), higher_is_better=True),
+                deletion_curve["auc"], deletion_draws, higher_is_better=True),
             "insertion_auc": self._summary(
-                insertion_curve["auc"],
-                self._auc_draws("insertion", insertion_curve["k_values"]), higher_is_better=False),
+                insertion_curve["auc"], insertion_draws, higher_is_better=False),
+            "deletion_mean_change": self._summary(
+                deletion_curve["mean_change"], deletion_draws / deletion_width,
+                higher_is_better=True),
+            "insertion_mean_change": self._summary(
+                insertion_curve["mean_change"], insertion_draws / insertion_width,
+                higher_is_better=False),
         }
 
 
@@ -327,6 +364,12 @@ def random_reference(wrapper, x, token, edge_index, node_type, target_class,
     ks = sorted({min(int(k), int(candidates.size)) for k in ks})
     deletion = {k: [] for k in ks}
     insertion = {k: [] for k in ks}
+    # the insertion curves' start: every removable node evicted. It does not depend on the
+    # draw's order, so it is computed once per visit, on the same path as the source's anchor.
+    flat = np.zeros(int(x.size(0)))
+    flat[candidates] = 1.0
+    insertion_k0 = _score_at_k(wrapper, x, token, edge_index, node_type, flat, target_class,
+                               0, keep_important=True, orig=orig)["prob"]
     for _ in range(repeats):
         order = rng.permutation(candidates)
         importance = np.zeros(int(x.size(0)))
@@ -336,7 +379,8 @@ def random_reference(wrapper, x, token, edge_index, node_type, target_class,
                                            target_class, k, keep_important=False, orig=orig)["prob"])
             insertion[k].append(_score_at_k(wrapper, x, token, edge_index, node_type, importance,
                                             target_class, k, keep_important=True, orig=orig)["prob"])
-    return RandomReference(ks, deletion, insertion, int(candidates.size), seed)
+    return RandomReference(ks, deletion, insertion, int(candidates.size), seed,
+                           insertion_k0=insertion_k0)
 
 
 def relation_vs_payload_contribution(wrapper, x, edge_index, edge_attr,
@@ -385,6 +429,10 @@ def insertion_curve(wrapper, x, token, edge_index, node_type, node_importance,
                     target_class, *, num_points: int = 5) -> dict[str, Any]:
     """Fidelity- at increasing k (most-important-first retention); AUC over
     k/removable_count. Lower AUC = a small amount of important evidence
-    consistently suffices to preserve the prediction."""
+    consistently suffices to preserve the prediction.
+
+    The curve starts at its measured k = 0 point: the probability drop of the graph with every
+    removable node evicted (`k0_prob`), not a fixed 0. The AUC is the trapezoid over that
+    anchored curve."""
     return _curve(wrapper, x, token, edge_index, node_type, node_importance,
                  target_class, keep_important=True, num_points=num_points)

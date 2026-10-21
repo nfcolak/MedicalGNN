@@ -231,3 +231,205 @@ def test_fidelity_minus_v2_with_k_equal_to_all_removable_nodes_is_the_identity()
     )
     assert result["prob"] == 0.0
     assert result["acc"] == 0
+
+
+# ------------------------------------------------------------------ insertion anchor (contract version 4)
+import numpy as np   # noqa: E402  (kept next to the tests that use it)
+
+
+class CountingWrapper:
+    """A hand-computable model: P(class 1) = (n + 1) / (n + 2) with n the number of removable
+    nodes whose x row is still nonzero, so every drop is a known fraction."""
+
+    def __init__(self, removable_indices):
+        self.removable_indices = list(removable_indices)
+
+    def __call__(self, x, edge_index, token_override=None, edge_mask=None):
+        n = int((x[self.removable_indices].abs().sum(dim=-1) > 0).sum().item())
+        return torch.tensor([[0.0, math.log(n + 1)]])
+
+
+def counting_graph(node_types):
+    node_type = torch.tensor(node_types, dtype=torch.long)
+    count = node_type.numel()
+    return (torch.ones(count, 1), torch.zeros(count, dtype=torch.long),
+            torch.tensor([[0, 1], [1, 2]]), node_type)
+
+
+THREE_REMOVABLE = [NODE_KINDS.index(kind) for kind in
+                   ("patient", "visit", "complaint", "measurement", "analyte", "vital", "knowledge")]
+# removable: nodes 2 (complaint), 3 (measurement), 5 (vital); P(class 1) with n kept = (n+1)/(n+2)
+IMPORTANCE_3 = np.array([0, 0, 0.9, 0.5, 0, 0.1, 0.0])
+
+
+def old_auc(ks, probs, removable_count):
+    """The version-3 trapezoid: a fixed (0, 0) start for both curves."""
+    xs = [0.0] + [k / removable_count for k in ks]
+    integrate = getattr(np, "trapezoid", None) or np.trapz
+    return float(integrate([0.0] + list(probs), xs))
+
+
+def old_curve(wrapper, x, token, edge_index, node_type, node_importance, target_class,
+              *, keep_important, num_points):
+    """The version-3 `_curve`, copied as the reference the new code must match."""
+    removable_count = int(fv2.removable_node_mask(node_type).sum().item())
+    support = fv2.eligible_support(node_type, node_importance)
+    ks = fv2.curve_ks(removable_count, max(support, 1), num_points)
+    orig = fv2._predict(wrapper, x, edge_index)
+    points = [fv2._score_at_k(wrapper, x, token, edge_index, node_type, node_importance,
+                              target_class, k, keep_important=keep_important, orig=orig) for k in ks]
+    probs = [point["prob"] for point in points]
+    used = [point["k"] for point in points]
+    auc = old_auc(used, probs, removable_count)
+    last_fraction = used[-1] / removable_count
+    return {"k_values": used, "prob_at_k": probs, "removable_node_count": removable_count,
+            "support_count": support, "explained_fraction": last_fraction, "auc": auc,
+            "mean_change": auc / last_fraction}
+
+
+def test_contract_version_is_four_and_the_text_states_the_anchor():
+    assert fv2.INTERVENTION_CONTRACT_VERSION == 4
+    assert "k = 0" in fv2.INTERVENTION_CONTRACT and "version 3" in fv2.INTERVENTION_CONTRACT
+
+
+def test_insertion_curve_starts_from_its_measured_k0_value_by_hand():
+    x, token, edge_index, node_type = counting_graph(THREE_REMOVABLE)
+    wrapper = CountingWrapper([2, 3, 5])
+    curve = fv2.insertion_curve(wrapper, x, token, edge_index, node_type, IMPORTANCE_3, 1, num_points=3)
+    # original P = 4/5; keeping k nodes leaves P = (k+1)/(k+2): drops .3, 2/15, .05, 0 at k = 0..3
+    assert curve["k_values"] == [1, 2, 3]
+    assert curve["prob_at_k"] == pytest.approx([2 / 15, 0.05, 0.0])
+    assert curve["k0_prob"] == pytest.approx(0.3)
+    # trapezoid over (0, .3), (1/3, 2/15), (2/3, .05), (1, 0) = 1/9 (the fixed-zero start gave 11/180)
+    assert curve["auc"] == pytest.approx(1 / 9)
+    assert curve["mean_change"] == pytest.approx(1 / 9)       # the curve spans the whole range
+    assert old_auc(curve["k_values"], curve["prob_at_k"], 3) == pytest.approx(11 / 180)
+
+
+def test_deletion_curve_keeps_its_zero_start_by_hand():
+    x, token, edge_index, node_type = counting_graph(THREE_REMOVABLE)
+    wrapper = CountingWrapper([2, 3, 5])
+    curve = fv2.deletion_curve(wrapper, x, token, edge_index, node_type, IMPORTANCE_3, 1, num_points=3)
+    assert curve["prob_at_k"] == pytest.approx([0.05, 2 / 15, 0.3])
+    assert curve["k0_prob"] == 0.0
+    assert curve["auc"] == pytest.approx(1 / 9)
+
+
+def test_one_removable_node_gives_an_insertion_auc_of_half_the_k0_drop():
+    x, token, edge_index, node_type = counting_graph([PATIENT_KIND, VISIT_KIND, NODE_KINDS.index("complaint")])
+    wrapper = CountingWrapper([2])
+    curve = fv2.insertion_curve(wrapper, x, token, edge_index, node_type, np.array([0, 0, 1.0]), 1,
+                                num_points=3)
+    # original P = 2/3, empty evidence P = 1/2: d0 = 1/6, and the only point (k = 1) has no change
+    assert curve["k_values"] == [1] and curve["prob_at_k"] == [0.0]
+    assert curve["k0_prob"] == pytest.approx(1 / 6)
+    assert curve["auc"] == pytest.approx((1 / 6) / 2)
+    assert curve["mean_change"] == pytest.approx((1 / 6) / 2)
+
+
+def test_a_graph_without_removable_nodes_still_raises_for_both_curves():
+    x, token, edge_index, node_type = counting_graph([PATIENT_KIND, VISIT_KIND, PATIENT_KIND])
+    wrapper = CountingWrapper([])
+    for curve in (fv2.insertion_curve, fv2.deletion_curve):
+        with pytest.raises(ValueError, match="no removable nodes available"):
+            curve(wrapper, x, token, edge_index, node_type, np.array([1.0, 1.0, 1.0]), 1)
+    with pytest.raises(ValueError, match="no removable nodes available"):
+        fv2.random_reference(wrapper, x, token, edge_index, node_type, 1, [1], repeats=2, seed=0)
+
+
+@pytest.mark.parametrize("name", ["gsat", "graphcare", "black_box"])
+def test_deletion_curve_and_the_single_point_metrics_equal_the_old_code_exactly(name):
+    torch.manual_seed(211)
+    graph = seven_node_graph()
+    wrapper, x = WRAPPERS[name](graph)
+    with torch.no_grad():
+        target = int(wrapper(x, graph.edge_index).argmax(-1).item())
+    importance = torch.rand(graph.x.size(0)).numpy()
+    args = (wrapper, x, graph.token, graph.edge_index, graph.node_type, importance, target)
+
+    new = fv2.deletion_curve(*args, num_points=4)
+    old = old_curve(*args, keep_important=False, num_points=4)
+    assert {key: new[key] for key in old} == old                   # bit-identical, not approx
+    assert new["k0_prob"] == 0.0
+
+    insertion = fv2.insertion_curve(*args, num_points=4)
+    old_insertion = old_curve(*args, keep_important=True, num_points=4)
+    for key in ("k_values", "prob_at_k", "removable_node_count", "support_count", "explained_fraction"):
+        assert insertion[key] == old_insertion[key]
+    removable = int(fv2.removable_node_mask(graph.node_type).sum())
+    assert insertion["auc"] - old_insertion["auc"] == pytest.approx(
+        0.5 * insertion["k0_prob"] * insertion["k_values"][0] / removable, abs=1e-12)
+
+    # fidelity+/- and sparsity: re-derived by hand from the same removal path
+    ordered = fv2._ordered_removable_indices(np.abs(importance), fv2.removable_node_mask(graph.node_type))
+    resolved = fv2.resolve_k(removable)
+    orig_probs = torch.softmax(wrapper(x, graph.edge_index), dim=-1).detach()
+    for keep, result in ((False, fv2.fidelity_plus_v2(*args)), (True, fv2.fidelity_minus_v2(*args))):
+        top = ordered[:resolved]
+        gone = np.setdiff1d(ordered, top) if keep else top
+        if gone.size == 0:
+            expected = 0.0
+        else:
+            x_gone, token_gone, evicted = fv2._evict(x, graph.token, gone)
+            mask = fv2._edge_mask_for_eviction(graph.edge_index, evicted)
+            probs = fv2._predict(wrapper, x_gone, graph.edge_index, token=token_gone, edge_mask=mask)[1]
+            expected = float(orig_probs[0, target] - probs[0, target])
+        assert result["prob"] == expected
+    from core.explain.fidelity import sparsity
+    eligible = np.abs(importance)[fv2.removable_node_mask(graph.node_type).numpy()]
+    assert fv2.sparsity_over_eligible(graph.node_type, importance)["mass90_sparsity"] == float(
+        sparsity(eligible, 0.9))
+
+
+@pytest.mark.parametrize("name", ["gsat", "graphcare", "black_box"])
+def test_random_reference_shares_the_anchor_and_the_auc_comparison_is_unchanged_by_it(name):
+    torch.manual_seed(223)
+    graph = seven_node_graph()
+    wrapper, x = WRAPPERS[name](graph)
+    with torch.no_grad():
+        target = int(wrapper(x, graph.edge_index).argmax(-1).item())
+    importance = torch.rand(graph.x.size(0)).numpy() + 0.05
+    args = (wrapper, x, graph.token, graph.edge_index, graph.node_type)
+    plus = fv2.fidelity_plus_v2(*args, importance, target)
+    minus = fv2.fidelity_minus_v2(*args, importance, target)
+    deletion = fv2.deletion_curve(*args, importance, target, num_points=3)
+    insertion = fv2.insertion_curve(*args, importance, target, num_points=3)
+    reference = fv2.random_reference(*args, target, insertion["k_values"], repeats=25, seed=5)
+    comparison = reference.compare(fidelity_plus=plus, fidelity_minus=minus,
+                                   deletion_curve=deletion, insertion_curve=insertion)
+
+    assert insertion["k0_prob"] != 0.0                         # the fixture does exercise the anchor
+    assert reference.insertion_k0 == insertion["k0_prob"]      # same removal path, same number
+    removable = insertion["removable_node_count"]
+    ks = insertion["k_values"]
+    draws = np.asarray([[reference.insertion[k][r] for k in ks] for r in range(reference.repeats)])
+    anchored = np.asarray([fv2._auc(ks, row, removable, anchor=reference.insertion_k0) for row in draws])
+    assert np.allclose(reference._auc_draws("insertion", ks), anchored)
+
+    # the version-3 comparison (both sides from a fixed zero) gives the same difference and beaten fraction
+    old_source = old_auc(ks, insertion["prob_at_k"], removable)
+    old_draws = np.asarray([old_auc(ks, row, removable) for row in draws])
+    assert comparison["insertion_auc"]["difference"] == pytest.approx(old_source - old_draws.mean(), abs=1e-12)
+    assert comparison["insertion_auc"]["beats_random_fraction"] == float((old_draws > old_source).mean())
+    assert comparison["insertion_auc"]["source"] == insertion["auc"]
+
+    # mean_change comparison: the AUC keys divided by the source's own width
+    for kind, curve in (("deletion", deletion), ("insertion", insertion)):
+        auc_part, mean_part = comparison[f"{kind}_auc"], comparison[f"{kind}_mean_change"]
+        width = curve["explained_fraction"]
+        assert mean_part["source"] == curve["mean_change"]
+        assert mean_part["random_mean"] * width == pytest.approx(auc_part["random_mean"])
+        assert mean_part["random_sd"] * width == pytest.approx(auc_part["random_sd"])
+        assert mean_part["difference"] * width == pytest.approx(auc_part["difference"])
+        assert mean_part["beats_random_fraction"] == auc_part["beats_random_fraction"]
+
+
+def test_random_reference_anchor_by_hand_on_the_counting_model():
+    x, token, edge_index, node_type = counting_graph(THREE_REMOVABLE)
+    wrapper = CountingWrapper([2, 3, 5])
+    reference = fv2.random_reference(wrapper, x, token, edge_index, node_type, 1, [1, 2, 3],
+                                     repeats=4, seed=1)
+    assert reference.insertion_k0 == pytest.approx(0.3)
+    # every random order gives the same counts here, so each draw's anchored insertion AUC is 1/9
+    assert np.allclose(reference._auc_draws("insertion", [1, 2, 3]), 1 / 9)
+    assert np.allclose(reference._auc_draws("deletion", [1, 2, 3]), 1 / 9)

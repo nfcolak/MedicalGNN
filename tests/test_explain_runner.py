@@ -276,3 +276,114 @@ def test_cei_mp2_is_registered_and_dispatched_through_the_bridge(monkeypatch):
     explain.build_wrapper(binding, model)
     assert calls["wrap"] == ("adapter", "cei_gnn_mp2")
     assert not hasattr(explain, "_build_cei")
+
+
+def test_fold_probabilities_is_the_replay_loop(tmp_path):
+    import numpy as np
+    import torch
+    from torch_geometric.loader import DataLoader
+
+    run_dir = train_one(tmp_path, "run_fold_probabilities", method="graphcare", conv=None)
+    bundle = explain.load_run_bundle(run_dir, "test")
+    splits = explain.rebuild_split(bundle.binding, "test")
+    model, is_adapter = explain.build_model(bundle.binding, bundle.state_dict)
+    model.eval()
+    with torch.no_grad():
+        old = torch.softmax(torch.cat([
+            model(b, epoch=0).logits for b in DataLoader(splits["test"], batch_size=3)]), dim=1).numpy()
+    new = explain.fold_probabilities(model, splits, "test", 3, is_adapter)
+    assert np.array_equal(new, old)
+    replay = explain.replay_check(model, splits, bundle.binding, is_method_adapter=is_adapter, fold="test",
+                                  batch_size=3, stored_npz=run_dir / "test.npz")
+    assert replay["mode"] in ("exact_hash", "stored_predictions_tolerance")
+
+
+def _tie_fixture(tmp_path, monkeypatch, stored, replayed):
+    """replay_check on crafted stored and replayed probabilities (the forward is replaced)."""
+    import types
+
+    import numpy as np
+
+    stored = np.asarray(stored, dtype=np.float64)
+    ids = [f"row-{i}" for i in range(len(stored))]
+    np.savez(tmp_path / "test.npz", sample_ids=np.array(ids), proba=stored)
+    splits = {"test": [types.SimpleNamespace(sample_id=i) for i in ids]}
+    monkeypatch.setattr(explain, "fold_probabilities",
+                        lambda *a, **k: np.asarray(replayed, dtype=np.float64))
+    binding = {"batch_size": 4, "selected_test": {"prediction_sha256": "0" * 64}}
+    return lambda: explain.replay_check(None, splits, binding, is_method_adapter=True, fold="test",
+                                        stored_npz=tmp_path / "test.npz")
+
+
+def test_a_tie_flip_with_a_stored_gap_between_one_and_two_tolerances_is_accepted(tmp_path, monkeypatch):
+    tol = explain.REPLAY_TOLERANCE
+    # row 0: stored top-two gap 1.5 tolerances, both probabilities moved by 0.9 tolerances and crossed
+    stored = [[0.40000, 0.40000 + 1.5 * tol, 0.19985], [0.2, 0.3, 0.5]]
+    replayed = [[0.40000 + 0.9 * tol, 0.40000 + 1.5 * tol - 0.9 * tol, 0.19985], [0.2, 0.3, 0.5]]
+    replay = _tie_fixture(tmp_path, monkeypatch, stored, replayed)()
+    assert replay["mode"] == "stored_predictions_tolerance"
+    assert replay["argmax_flips_total"] == 1 and replay["argmax_flips_tie"] == 1
+    assert replay["argmax_agreement"] == 0.5 and replay["rows"] == 2
+    assert replay["max_abs_diff"] <= tol and replay["tolerance"] == tol
+
+
+def test_no_flip_gives_zero_flip_counts_and_full_agreement(tmp_path, monkeypatch):
+    stored = [[0.2, 0.8], [0.6, 0.4]]
+    replay = _tie_fixture(tmp_path, monkeypatch, stored, [[0.2 + 5e-5, 0.8 - 5e-5], [0.6, 0.4]])()
+    assert replay["argmax_flips_total"] == 0 and replay["argmax_flips_tie"] == 0
+    assert replay["argmax_agreement"] == 1.0
+
+
+def test_a_non_tie_flip_is_refused(tmp_path, monkeypatch):
+    # stored gap 0.3, the replay reversed it: not a tie (and far over the tolerance)
+    replay = _tie_fixture(tmp_path, monkeypatch, [[0.55, 0.25, 0.2], [0.2, 0.3, 0.5]],
+                          [[0.25, 0.55, 0.2], [0.2, 0.3, 0.5]])
+    with pytest.raises(ValueError, match=r"REPLAY CHECK FAILED.*1 of 2 rows, 0 of them on ties"):
+        replay()
+
+
+def test_a_flip_on_a_tie_row_still_needs_every_row_within_the_tolerance(tmp_path, monkeypatch):
+    tol = explain.REPLAY_TOLERANCE
+    stored = [[0.4, 0.4 + tol, 0.2 - tol], [0.2, 0.3, 0.5]]
+    replayed = [[0.4 + tol, 0.4, 0.2 - tol], [0.2, 0.3 + 5 * tol, 0.5 - 5 * tol]]   # row 1 moved by 5 tolerances
+    with pytest.raises(ValueError, match="REPLAY CHECK FAILED"):
+        _tie_fixture(tmp_path, monkeypatch, stored, replayed)()
+
+
+def test_manifest_records_environment_and_timing_and_records_their_seconds(tmp_path):
+    import torch
+
+    run_dir = train_one(tmp_path, "run_provenance", method="gsat", conv=None)
+    output = tmp_path / "out_provenance"
+    manifest = explain.run_explanations(run_dir, output, max_subjects=2, steps=2, epochs=3)
+    env = manifest["environment"]
+    assert env["torch"] == torch.__version__ and env["torch_num_threads"] == torch.get_num_threads()
+    assert env["python"] and env["platform"] and env["machine"]
+    assert 0 < manifest["seconds_before_first_explanation"] < manifest["seconds_total"]
+    written = json.loads((output / "explanation_manifest.json").read_text())
+    assert written["environment"] == env
+    for filename in manifest["record_files"]:
+        record = json.loads((output / filename).read_text())
+        assert record["seconds"] > 0
+        check = record["single_graph_check"]
+        assert set(check) == {"max_abs_diff", "argmax_agrees"}
+        assert isinstance(check["argmax_agrees"], bool) and check["max_abs_diff"] >= 0.0
+
+
+def test_single_graph_check_is_null_without_a_stored_row_and_never_refuses(tmp_path):
+    import numpy as np
+
+    run_dir = train_one(tmp_path, "run_single_graph", method="gsat", conv=None)
+    bundle = explain.load_run_bundle(run_dir, "test")
+    splits = explain.rebuild_split(bundle.binding, "test")
+    model, _ = explain.build_model(bundle.binding, bundle.state_dict)
+    wrapper = explain.build_wrapper(bundle.binding, model)
+    data = splits["test"][0]
+    kwargs = dict(method="gsat", conv=None, steps=2, epochs=3, num_relation_columns=bundle.binding["num_relations"],
+                  random_repeats=0, true_class_explanations=False)
+    assert explain.explain_subject(wrapper, data, **kwargs)["single_graph_check"] is None
+    far = np.array([1.0, 0.0])      # a stored row far from any single-graph forward
+    record = explain.explain_subject(wrapper, data, stored_row=far, **kwargs)
+    assert record["single_graph_check"]["max_abs_diff"] > explain.REPLAY_TOLERANCE
+    assert isinstance(record["single_graph_check"]["argmax_agrees"], bool)
+    assert record["seconds"] > 0
