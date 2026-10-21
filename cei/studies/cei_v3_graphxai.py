@@ -242,7 +242,7 @@ def native_importance(adapter, graph, target):
                           'signed_node_contributions': signed.tolist(),
                           **sign_and_structure_shares(signed, graph.node_type),
                           'fixed_absence_contribution': float(parts['absence_contributions'][:, target].sum()),
-                          'bias': float(parts['bias'][target]),
+                          'bias': float(parts['bias'][target].detach()),
                           'accounting_logit_abs_diff': float((accounting - parts['logits'][0, target]).abs()),
                           **BOUNDARIES}
 
@@ -341,7 +341,7 @@ def ledger_importance(adapter, graph, target):
                           **sign_and_structure_shares(signed, graph.node_type),
                           'fixed_absence_contribution': fixed.pop('absence_contributions', 0.0),
                           'fixed_extra_block_contributions': fixed,
-                          'bias': float(parts['bias'][target]),
+                          'bias': float(parts['bias'][target].detach()),
                           'accounting_logit_abs_diff': gap,
                           'message_passing_rows': message_passing_rows(network),
                           **BOUNDARIES}
