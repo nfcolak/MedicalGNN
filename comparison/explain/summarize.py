@@ -210,6 +210,9 @@ def classify_record(record, where):
             if payload is not None and status != 'success':
                 raise SystemExit(f'{where}: {name} carries status {status!r}')
             provenance = (payload or {}).get('provenance') or {}
+            if (name == IG_SOURCE and status == 'success' and 'completeness_met' not in provenance
+                    and 'ig_clinical' in str(provenance.get('implementation'))):
+                raise SystemExit(f'{where}: {name} (clinical IG) carries no completeness_met')
             if name == IG_SOURCE and 'completeness_met' in provenance:
                 extras['ig_completeness_met'] = bool(provenance['completeness_met'])
             if name == IG_SOURCE:
@@ -388,14 +391,45 @@ def describe_groups(groups, limit=3):
     return '; '.join(parts)
 
 
-def check_mixed(runs, label, getter, allow, text=None):
-    """Refuse (or, when allowed, report) runs that disagree on `getter(run)`."""
-    found = {}
+def flat_items(value, prefix=''):
+    """{dotted key: canonical leaf} of nested mappings and lists."""
+    if isinstance(value, dict) and value:
+        items = value.items()
+    elif isinstance(value, list) and value:
+        items = enumerate(value)
+    else:
+        return {prefix: canonical(value)}
+    out = {}
+    for key, item in items:
+        out.update(flat_items(item, f'{prefix}.{key}' if prefix else str(key)))
+    return out
+
+
+def differing_items(values):
+    """For mappings, each value reduced to the dotted keys whose leaves are not the same in all of them
+    (`absent` where a value lacks the key); other values unchanged."""
+    if not all(isinstance(value, dict) for value in values):
+        return [canonical(value) for value in values]
+    flat = [flat_items(value) for value in values]
+    keys = sorted({key for items in flat for key in items})
+    differ = [key for key in keys if len({items.get(key) for items in flat}) > 1]
+    return ['; '.join(f'{key}: {items.get(key, "absent")}' for key in differ) for items in flat]
+
+
+def check_mixed(runs, label, getter, allow):
+    """Refuse (or, when allowed, report) runs that disagree on `getter(run)`; for mappings only the
+    entries that differ are named."""
+    found, values = {}, {}
     for run in runs:
-        found.setdefault(canonical(getter(run)), []).append(run['name'])
+        value = getter(run)
+        key = canonical(value)
+        found.setdefault(key, []).append(run['name'])
+        values.setdefault(key, value)
     if len(found) < 2:
         return None
-    groups = [((text or (lambda v: v))(value), names) for value, names in sorted(found.items())]
+    keys = sorted(found)
+    shown = differing_items([values[key] for key in keys])
+    groups = [(text, found[key]) for text, key in zip(shown, keys)]
     if not allow:
         raise SystemExit(f'refusing to mix {label} in one table: {describe_groups(groups)}; '
                          'pass --allow-mixed-code to summarise them anyway')
@@ -463,13 +497,13 @@ def collect(root, allow_incomplete=False, allow_mixed_code=False):
     mixed = [m for m in (
         check_mixed(runs, 'protocols', lambda r: r['protocol'], allow_mixed_code),
         check_mixed(runs, 'explanation code', lambda r: r['code_id'], allow_mixed_code),
-        check_mixed(runs, 'settings', lambda r: r['settings'], allow_mixed_code, lambda v: v[:160]),
+        check_mixed(runs, 'settings', lambda r: r['settings'], allow_mixed_code),
     ) if m]
     for k, method in sorted({(r['k'], r['method']) for r in runs}):
         group = [r for r in runs if (r['k'], r['method']) == (k, method)]
         for label, getter in (('disclosures', lambda r: r['disclosure']),
                               ('built-in explanation settings', lambda r: r['builtin_explanation'])):
-            found = check_mixed(group, f'{label} within K={k} {method}', getter, allow_mixed_code, lambda v: v[:160])
+            found = check_mixed(group, f'{label} within K={k} {method}', getter, allow_mixed_code)
             if found:
                 mixed.append(found)
     protocols = sorted({r['protocol'] for r in runs})

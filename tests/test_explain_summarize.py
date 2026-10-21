@@ -533,13 +533,37 @@ def test_mixed_explainer_settings_are_refused_but_the_chosen_ig_step_count_is_no
     assert len(summarize.collect(tmp_path / 'steps')[0]) == 2
     write_run(tmp_path / 'epochs', 10, 'gsat_seed1234', ONE, method='gsat')
     write_run(tmp_path / 'epochs', 10, 'gsat_seed7', ONE, method='gsat', settings=dict(SETTINGS, tie_draws=3))
-    with pytest.raises(SystemExit, match='refusing to mix settings'):
+    with pytest.raises(SystemExit, match=r'refusing to mix settings in one table: tie_draws: 10 \(top10/gsat_seed1234\); '
+                                         r'tie_draws: 3 \(top10/gsat_seed7\);'):
         summarize.collect(tmp_path / 'epochs')
     write_run(tmp_path / 'tolerance', 10, 'gsat_seed1234', ONE, method='gsat')
     write_run(tmp_path / 'tolerance', 10, 'gsat_seed7', ONE, method='gsat',
               settings=dict(SETTINGS, ig=dict(SETTINGS['ig'], tolerance=0.5)))
-    with pytest.raises(SystemExit, match='refusing to mix settings'):
+    with pytest.raises(SystemExit, match=r'refusing to mix settings in one table: ig.tolerance: 0.05 .*ig.tolerance: 0.5 '):
         summarize.collect(tmp_path / 'tolerance')
+
+
+def test_a_mixed_settings_or_disclosure_message_names_only_what_differs(tmp_path):
+    """Long settings and disclosures share their first characters; the refusal and the published warning
+    name the differing entries, not a common prefix."""
+    for seed in (1234, 2025):
+        write_run(tmp_path / 'in', 10, f'gsat_seed{seed}', ONE, method='gsat')
+    write_run(tmp_path / 'in', 10, 'gsat_seed7', ONE, method='gsat', settings=dict(SETTINGS, random_repeats=20),
+              disclosure=dict(DISCLOSURE, caveats=[*DISCLOSURE['caveats'], 'an added caveat']))
+    with pytest.raises(SystemExit) as refused:
+        summarize.collect(tmp_path / 'in')
+    message = str(refused.value)
+    assert 'random_repeats: 20 (top10/gsat_seed7)' in message
+    assert 'random_repeats: 50 (top10/gsat_seed1234, top10/gsat_seed2025)' in message
+    assert 'curve_points' not in message and 'cohort_sampling' not in message
+    out = run_main(tmp_path / 'in', tmp_path, 'allowed', '--allow-mixed-code')
+    text = (out / 'summary.md').read_text()
+    assert '**WARNING: mixed settings** (--allow-mixed-code): random_repeats: 20 (1 runs); random_repeats: 50 (2 runs)' in text
+    warning = next(line for line in text.splitlines() if line.startswith('**WARNING: mixed disclosures'))
+    assert 'caveats.1: an added caveat (1 runs)' in warning and 'caveats.1: absent (2 runs)' in warning
+    assert 'intervention' not in warning
+    mixed = {m['what']: m['values'] for m in json.loads((out / 'summary.json').read_text())['mixed']}
+    assert mixed['settings'] == [{'value': 'random_repeats: 20', 'runs': 1}, {'value': 'random_repeats: 50', 'runs': 2}]
 
 
 # ------------------------------------------------------------------ protocol, K and seed from the bindings
@@ -727,6 +751,12 @@ def test_runs_that_differ_only_in_the_vendored_graphxai_tree_are_refused(tmp_pat
     ({'fidelity_v2': {}}, r'gsat_seed7: GradExplainer has no fidelity_v2 entry'),
     ({'fidelity_v2': {'GradExplainer': {'fidelity_plus': {}}}}, r'gsat_seed7: GradExplainer has a malformed'),
     ({'random_reference': {'status': 'lost'}}, r"gsat_seed7: a record carries random_reference status 'lost'"),
+    ({'graphxai': {'GradExplainer': {'status': 'success'},
+                   'IntegratedGradExplainer': {'status': 'success',
+                                               'provenance': {'implementation': 'core.explain.ig_clinical'}}},
+      'fidelity_v2': {'GradExplainer': source(.2, .1, .3, .2, .5),
+                      'IntegratedGradExplainer': source(.2, .1, .3, .2, .5)}},
+     r'gsat_seed7: IntegratedGradExplainer \(clinical IG\) carries no completeness_met'),
 ])
 def test_records_the_summary_cannot_read_are_refused_with_the_run(tmp_path, extra, match):
     write_run(tmp_path, 10, 'gsat_seed7', [({'GradExplainer': source(.2, .1, .3, .2, .5)},

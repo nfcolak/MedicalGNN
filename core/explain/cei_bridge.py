@@ -232,10 +232,26 @@ class CEIGraphXAIWrapper(nn.Module):
         adapter = self.adapter
         return int(adapter.node_dim), int(adapter.token_dim), int(adapter.hidden)
 
+    @contextmanager
+    def _adapter_in_eval(self):
+        """The checkpoint adapter in eval mode for the block; its earlier mode is restored."""
+        adapter = self.adapter
+        was_training = adapter.training
+        adapter.eval()
+        try:
+            yield adapter
+        finally:
+            if was_training:
+                adapter.train()
+
     def set_context(self, batch) -> torch.Tensor:
+        with self._adapter_in_eval():
+            return self._set_context(batch)
+
+    def _set_context(self, batch) -> torch.Tensor:
         from cei.studies.cei_v3_graphxai import CEIV3GraphXAIWrapper
 
-        adapter = self.adapter.eval()
+        adapter = self.adapter
         clinical, _, _ = adapter._read(batch)
         if clinical.graph_count != 1:
             raise ValueError(
@@ -299,7 +315,8 @@ class CEIGraphXAIWrapper(nn.Module):
         """(is_faithful, max_abs_diff): this wrapper (no mask) vs the adapter's own forward on
         the raw batch."""
         got = self.forward(x, edge_index, batch=batch)
-        ref = self.adapter(self._raw_context, epoch=0).logits
+        with self._adapter_in_eval() as adapter:
+            ref = adapter(self._raw_context, epoch=0).logits
         return bool(torch.allclose(got, ref, atol=atol)), float((got - ref).abs().max().item())
 
     @torch.no_grad()
@@ -307,7 +324,8 @@ class CEIGraphXAIWrapper(nn.Module):
         """The adapter's own eval forward on one (re-encoded) graph: logits [1, C]."""
         from torch_geometric.data import Batch
 
-        return self.adapter.eval()(Batch.from_data_list([data]), epoch=0).logits
+        with self._adapter_in_eval() as adapter:
+            return adapter(Batch.from_data_list([data]), epoch=0).logits
 
     def inert_edge_mask(self):
         """Every CEI edge is read by the model."""
@@ -329,7 +347,8 @@ class CEIGraphXAIWrapper(nn.Module):
                 f"cei_gnn_mp2 with ev_combine={network.ev_combine!r}, readout={network.readout!r} "
                 "has no additive evidence ledger, so it has no exact per-node built-in explanation")
         target = int(target_class) if target_class is not None else self._predicted_class()
-        importance, provenance = native_importance(self.adapter, self._raw_context, target)
+        with self._adapter_in_eval() as adapter:
+            importance, provenance = native_importance(adapter, self._raw_context, target)
         if importance is None:
             raise NotImplementedError(
                 f"{self._method} has no per-node built-in explanation in this adapter")
@@ -338,7 +357,8 @@ class CEIGraphXAIWrapper(nn.Module):
         return [float(value) for value in importance.detach()]
 
     def _predicted_class(self) -> int:
-        return int(self.adapter(self._raw_context, epoch=0).logits.argmax(-1))
+        with self._adapter_in_eval() as adapter:
+            return int(adapter(self._raw_context, epoch=0).logits.argmax(-1))
 
     @torch.no_grad()
     def builtin_detail(self, target_class=None):

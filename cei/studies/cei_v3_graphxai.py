@@ -365,7 +365,7 @@ def explain_graph(adapter, graph, *, random_seed=2026):
         raise FloatingPointError('Nonfinite model/wrapper logits')
     start = time.monotonic()
     result = explain_algorithms(wrapper, x, graph.edge_index, batch=batch, steps=32, epochs=50,
-                                v1_fidelity=True)
+                                v1_fidelity=True, feature_penalty='sum')
     bundle_seconds = time.monotonic() - start
     for item in result.values():
         item['provenance'].update(BOUNDARIES)

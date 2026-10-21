@@ -106,6 +106,8 @@ def test_contract_version_six_states_the_operator_ties_reference_and_ranking():
                    "takes the visits of its surviving anchors", "as if the removed evidence had never been recorded",
                    "Combo threshold states follow combo provenance", "(state node, rule_id)",
                    "deletes the whole group", "evaluated again on the next-latest value",
+                   "a rule that holds on the surviving values gets its edges (and its state node when "
+                   "the record has none)", "can add a state the record did not have",
                    "threshold table of the graph artifact", "names the input", "never re-evaluated",
                    "not the record the graph builder would produce", "prior labs of an analyte whose index "
                    "labs are all deleted stay", "baseline_of edge is not re-anchored",

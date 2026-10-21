@@ -4,8 +4,9 @@ Upstream GNNExplainer's optimizer is retained. Its base prediction helper disabl
 all gradients and its legacy double-underscore masks are ignored by modern PyG;
 this adapter repairs those two API defects, not the optimization algorithm. Two
 settings differ from the vendored defaults and are recorded in every provenance:
-the feature-mask size penalty is the MEAN of sigmoid(F) over the columns (PyG's
-reduction; the vendored sum grows with the width of the explained row), and the
+the feature-mask size penalty is by default the MEAN of sigmoid(F) over the columns
+(PyG's reduction; the vendored sum grows with the width of the explained row, and is
+kept only where a historical study must reproduce its outputs), and the
 vendored module-level device is replaced by the device of the explained features.
 
 GNNExplainer normally drives its learned edge mask into the model by patching
@@ -44,6 +45,12 @@ GRADIENT_NODE_REDUCTION = 'sum_abs_over_columns'
 GNNEXPLAINER_FEATURE_PENALTY = 'mean'
 GNNEXPLAINER_COEFF_NOTE = ('edge: size 0.005 * sum(sigmoid(M)), entropy 1.0 * mean; feature: '
                            'size 1.0 * mean(sigmoid(F)) over the columns, entropy 0.1 * mean')
+# 'sum' keeps the vendored coefficients, so a study run with them reproduces its outputs.
+GNNEXPLAINER_COEFF_NOTES = {
+    'mean': GNNEXPLAINER_COEFF_NOTE,
+    'sum': ('edge: size 0.005 * sum(sigmoid(M)), entropy 1.0 * mean; feature: '
+            'size 1.0 * sum(sigmoid(F)) over the columns (vendored), entropy 0.1 * mean'),
+}
 SOFT_MASK_NOTE = ('a fractional edge mask is not a removal: hard 0/1 masks equal deletion and '
                   'keeping, soft values are compared by rank only')
 # What GNNExplainer's edge mask can and cannot reach in each final model.
@@ -140,7 +147,7 @@ class CompatibleGNNExplainer(GNNExplainer):
 
 # GNNExplainer's budget: kept at the 50 epochs every earlier study used; the paper uses
 # 100-300 and PyG defaults to 100 (disclosed in each record's provenance).
-GNNEXPLAINER_EPOCHS_NOTE = '50 epochs (paper 100-300, PyG default 100)'
+GNNEXPLAINER_EPOCHS_NOTE = 'paper 100-300, PyG default 100'
 
 
 def _explained_columns(wrapper, width):
@@ -157,7 +164,8 @@ def _ig_path(wrapper):
 
 def explain_algorithms(wrapper, x, edge_index, *, batch, steps=32, epochs=50,
                        reversible_edge_pairs=None, node_reduction='sum', target_class=None,
-                       seed=None, inert_edge_mask=None, method=None, v1_fidelity=False):
+                       seed=None, inert_edge_mask=None, method=None, v1_fidelity=False,
+                       feature_penalty=GNNEXPLAINER_FEATURE_PENALTY):
     """GradExplainer, the vendored (zero-baseline) IntegratedGradExplainer and GNNExplainer.
 
     `seed` (optional) fixes GNNExplainer's random mask initialisation: the connectivity
@@ -171,9 +179,13 @@ def explain_algorithms(wrapper, x, edge_index, *, batch, steps=32, epochs=50,
     count and indices are recorded as `inert_edges`. `method` (default: `wrapper.method`) selects
     the GNNExplainer disclosure text. The vendored IG runs inside `wrapper.ig_path()` where the
     wrapper has one. `v1_fidelity` adds the v1 (x-row zeroing) fidelity to each node
-    explanation; new explanation records leave it off."""
+    explanation; new explanation records leave it off. `feature_penalty` is GNNExplainer's
+    feature-mask size penalty: 'mean' (default) or 'sum' (the vendored coefficients, which the
+    historical screens were run with); its value is recorded in the provenance."""
     if steps < 1 or epochs < 1:
         raise ValueError('positive explanation budgets required')
+    if feature_penalty not in GNNEXPLAINER_COEFF_NOTES:
+        raise ValueError("feature_penalty must be 'mean' or 'sum'")
     # 'sum' is the historical reduction every existing caller (e.g. the CEI GraphXAI
     # studies) was run with; 'mean' divides by incident-edge count to remove the
     # degree bias and is opt-in so existing results stay reproducible.
@@ -219,8 +231,8 @@ def explain_algorithms(wrapper, x, edge_index, *, batch, steps=32, epochs=50,
         if name == 'GNNExplainer':
             provenance['seed'] = None if seed is None else int(seed)
             provenance['epochs_note'] = GNNEXPLAINER_EPOCHS_NOTE
-            provenance['feature_penalty'] = GNNEXPLAINER_FEATURE_PENALTY
-            provenance['coefficients'] = GNNEXPLAINER_COEFF_NOTE
+            provenance['feature_penalty'] = feature_penalty
+            provenance['coefficients'] = GNNEXPLAINER_COEFF_NOTES[feature_penalty]
             provenance['soft_mask'] = SOFT_MASK_NOTE
             provenance['disclosure'] = GNNEXPLAINER_DISCLOSURE.get(method)
         # Isolated per algorithm: one algorithm's failure (e.g. GNNExplainer's
@@ -246,7 +258,8 @@ def explain_algorithms(wrapper, x, edge_index, *, batch, steps=32, epochs=50,
             else:
                 if hasattr(wrapper, 'ple_term'):
                     provenance['ple_term'] = wrapper.ple_term
-                ex = CompatibleGNNExplainer(wrapper, feature_width=features.size(1))
+                ex = CompatibleGNNExplainer(
+                    wrapper, feature_width=features.size(1) if feature_penalty == 'mean' else None)
                 old = os.environ.get('GNNEXP_EPOCHS')
                 try:
                     with torch.random.fork_rng(devices=[]):

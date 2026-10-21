@@ -139,7 +139,7 @@ def by_hand(graph, membership, dropped, ordinal_map, visits=None):
 SAME = {0: 0, 1: 1, 2: 2}
 # the hand-written record has no combo rule; without a table the fallback combo rule is used
 NO_COMBO = {'source': 'distinct_anchor_tokens', 'groups_deleted': 0, 'reevaluated': 0, 'refired': 0,
-            'not_reevaluated': []}
+            'new_state_nodes': 0, 'not_reevaluated': []}
 EVIDENCE = ('c1', 'c2', 'hr', 'm1', 'm2', 'm3', 'mp', 'd1', 'd2')
 # selected -> (every node that leaves, cascaded counts, ordinal map of the surviving visits,
 #              new visits (old ordinals) of a surviving concept node whose anchors changed)
@@ -289,7 +289,10 @@ def test_cascade_off_keeps_the_concept_nodes():
     assert info['cascaded'] == {'analyte': 0, 'knowledge': 0, 'orphan': 0}
 
 
-def test_deleting_every_lab_is_the_source_masking_labs_record():
+def test_the_orphan_and_visit_renumbering_rules_are_the_source_masking_rules():
+    """On a record without a combo state and without a prior visit that is empty already, deleting
+    every lab is the labs mask of source masking (the two decided differences on builder graphs:
+    test_deletion_and_the_labs_mask_differ_in_the_two_decided_ways)."""
     graph, membership = record()
     labs = [i for i, n in enumerate(graph['nodes']) if n['kind'] == 'measurement']
     new_graph, new_membership, _ = delete_from_record(graph, membership, labs)
@@ -762,10 +765,12 @@ def test_every_deletion_is_the_rebuild_up_to_the_two_decided_departures(table, b
             seen['combo group deleted'] += combos['groups_deleted'] > 0
             seen['combo fired again'] += combos['refired'] > 0
             seen['combo re-evaluated unchanged'] += combos['reevaluated'] > combos['refired']
+            seen['state the record did not have added'] += combos['new_state_nodes'] > 0
             seen['emptied visit dropped'] += info['visits_dropped'] > 0
             seen['originally empty visit kept'] += info['visits_originally_empty'] > 0
             assert combos['not_reevaluated'] == []
-    assert len(seen) == 7 and min(seen.values()) > 0, seen
+            assert combos['new_state_nodes'] == len(set(_tokens(deleted_graph)) - set(_tokens(graph)))
+    assert len(seen) == 8 and min(seen.values()) > 0, seen
 
 
 def _tokens(graph):
@@ -799,7 +804,7 @@ def test_sirs_through_one_combo_goes_with_one_of_its_components(table, built):
     assert SIRS not in _tokens(result[0]) and _rule_edges(result[0], SIRS) == []
     # both SIRS rules read the heart rate; the one without a respiratory rate fires neither before nor after
     assert result[2]['combos'] == {'source': 'threshold_table', 'groups_deleted': 1, 'reevaluated': 2,
-                                   'refired': 0, 'not_reevaluated': []}
+                                   'refired': 0, 'new_state_nodes': 0, 'not_reevaluated': []}
     assert _same_as_rebuild(table, prep, 'P2', graph, membership, selected, result)
 
 
@@ -829,7 +834,7 @@ def test_a_deleted_latest_value_is_replaced_by_the_next_latest(table, built):
     assert sorted(tokens[e['source']] for e in result[0]['edges'] if e.get('rule_id') == 'combo_dka') == [
         ('lab:BIC', 15.0), ('lab:GLU', 300.0)]
     assert result[2]['combos'] == {'source': 'threshold_table', 'groups_deleted': 0, 'reevaluated': 1,
-                                   'refired': 1, 'not_reevaluated': []}
+                                   'refired': 1, 'new_state_nodes': 0, 'not_reevaluated': []}
     assert _same_as_rebuild(table, prep, 'P1', graph, membership, [latest], result)
     # an earlier value is not what the builder evaluated: nothing changes for the combo
     result = delete_from_record(graph, membership, [earlier], combo_rules=table['rules'])
@@ -845,6 +850,7 @@ def test_a_combo_that_only_an_earlier_value_fires_appears_as_in_the_rebuild(tabl
     result = delete_from_record(graph, membership, selected, combo_rules=table['rules'])
     assert _rule_edges(result[0], DKA) == [('lab:BIC', 'combo_dka'), ('lab:GLU', 'combo_dka')]
     assert result[2]['combos']['refired'] == 1
+    assert result[2]['combos']['new_state_nodes'] == 1          # a state the record did not have
     assert _same_as_rebuild(table, prep, 'P2', graph, membership, selected, result)
 
 
@@ -855,8 +861,9 @@ def test_without_a_table_a_combo_group_goes_but_is_never_reevaluated(table, buil
     result = delete_from_record(graph, membership, selected)
     assert SIRS not in _tokens(result[0])
     assert result[2]['combos'] == {'source': 'distinct_anchor_tokens', 'groups_deleted': 1, 'reevaluated': 0,
-                                   'refired': 0, 'not_reevaluated': [{'rule_id': 'combo_sirs_temp_hr',
-                                                                      'reason': 'no threshold table given'}]}
+                                   'refired': 0, 'new_state_nodes': 0,
+                                   'not_reevaluated': [{'rule_id': 'combo_sirs_temp_hr',
+                                                        'reason': 'no threshold table given'}]}
     assert _same_as_rebuild(table, prep, 'P2', graph, membership, selected, result)
     graph, membership = graphs['P1']
     selected = [_position(graph, 'lab:GLU', 280.0)]
@@ -871,6 +878,41 @@ def test_without_a_table_a_combo_group_goes_but_is_never_reevaluated(table, buil
                               'relation': 'medical:indicates', 'informative': True, 'rule_id': 'state_hyperk'})
     result = delete_from_record(*state, [k1])
     assert 'knowledge:state:hyperkalemia' in _tokens(result[0]) and result[2]['combos']['groups_deleted'] == 0
+
+
+GLU_SBP = 'knowledge:state:glucose_sbp'
+
+
+def test_deletion_and_the_labs_mask_differ_in_the_two_decided_ways(tmp_path):
+    """A builder patient with a combo state fired by a lab and a vital, and a prior visit that is empty
+    in the record: deleting every lab deletes the combo state (combo provenance) and keeps the empty
+    visit, where the labs mask of source masking keeps the state through the surviving vital and drops
+    that visit."""
+    path = tmp_path / 'thresholds.csv'
+    with path.open('w', newline='') as stream:
+        writer = csv.DictWriter(stream, fieldnames=THRESHOLD_COLUMNS)
+        writer.writeheader()
+        writer.writerows(RULES + [_rule('combo_glu_sbp', 'combo', 'lab:GLU', 'mg/dL', '>', '250', GLU_SBP),
+                                  _rule('combo_glu_sbp', 'combo', 'vital:sbp', 'mmHg', '<=', '100', GLU_SBP)])
+    rules = load_combo_rules(path, sha256(path), level_source='csv')
+    graph, membership = build_patient('P1', read_thresholds(path))
+    assert _rule_edges(graph, GLU_SBP) == [('lab:GLU', 'combo_glu_sbp'), ('vital:sbp', 'combo_glu_sbp')]
+    empty = sorted(set(membership['visit_ordinals'])
+                   - {o for o, pos in membership['membership_pairs'] if not membership['global_node_mask'][pos]})
+    assert len(empty) == 1
+    labs = [i for i, n in enumerate(graph['nodes']) if n['kind'] == 'measurement']
+    deleted_graph, deleted_membership, info = delete_from_record(graph, membership, labs, combo_rules=rules)
+    masked_graph, masked_membership, _ = apply_mask(graph, membership, 'labs')
+    assert GLU_SBP not in _tokens(deleted_graph)
+    assert GLU_SBP in _tokens(masked_graph)
+    assert _rule_edges(masked_graph, GLU_SBP) == [('vital:sbp', 'combo_glu_sbp')]
+    # both drop the prior visit whose only node was a prior lab; only the mask drops the empty one
+    assert info['visits_originally_empty'] == 1 and info['visits_dropped'] == 1
+    assert len(deleted_membership['visit_ordinals']) == len(membership['visit_ordinals']) - 1
+    assert len(masked_membership['visit_ordinals']) == len(membership['visit_ordinals']) - 2
+    # without the combo state and the empty visit the two records are the same
+    state = _position(masked_graph, GLU_SBP)
+    assert sorted(_tokens(deleted_graph)) == sorted(t for i, t in enumerate(_tokens(masked_graph)) if i != state)
 
 
 def test_a_combo_input_missing_from_the_record_is_reported(table):

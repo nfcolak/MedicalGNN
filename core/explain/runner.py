@@ -279,8 +279,8 @@ def _recorded(binding: dict[str, Any], key: str):
 def rebuild_split(binding: dict[str, Any], fold: str = "test") -> RebuiltSplits:
     """Reconstruct the train/validation(/dev)(/test) splits exactly as train.py built them, from
     binding.json's own recorded (already-resolved) arguments, and verify every input against the
-    training run: the targets file, the graph file and the visit-membership sidecar by their recorded
-    sha256 (and the artifact manifest when recorded), the kept classes, the refitted preprocessing by
+    training run: the targets file, the graph file, the visit-membership sidecar and the artifact
+    manifest by their recorded sha256, the kept classes, the refitted preprocessing by
     the recorded `preprocessing_sha256` (the same bytes train.py wrote) and the fold's sample ids. The
     test rows are decoded only for `fold == "test"`; nothing is fitted or selected on them. Returns the
     splits with the fitted preprocessing and the record encoder."""
@@ -296,8 +296,8 @@ def rebuild_split(binding: dict[str, Any], fold: str = "test") -> RebuiltSplits:
             raise ValueError(
                 f"the artifact's {filename} sha256 differs from binding.json's {key} -- the graph "
                 "inputs have changed since training; refusing to explain different graphs")
-    if binding.get("graph_manifest_sha256") is not None and \
-            sha256(artifact / "manifest.json") != binding["graph_manifest_sha256"]:
+    # the combo threshold table is read through this manifest, so its hash is required like the others
+    if sha256(artifact / "manifest.json") != _recorded(binding, "graph_manifest_sha256"):
         raise ValueError("the artifact's manifest.json sha256 differs from binding.json's "
                          "graph_manifest_sha256; refusing to explain against a different artifact")
     targets = train.load_targets(targets_path)
@@ -890,7 +890,9 @@ COMBO_RULE_TEXT = ("the medical:indicates edges of one (state node, rule_id) of 
                    "deleting any anchor deletes the group; when the latest index value of a combo token "
                    "is deleted the rule is evaluated again on the next-latest value with the graph "
                    "builder's rule check and the artifact's threshold table; an input missing from the "
-                   "record is reported and the group is deleted")
+                   "record is reported and the group is deleted; a rule that holds on the surviving values "
+                   "gets its edges (and its state node when the record has none), so deleting a latest "
+                   "value that failed a rule can add a state the record did not have")
 EMPTY_VISIT_TEXT = "prior visits the deletion emptied are dropped; prior visits empty in the record are kept"
 DEPARTURES_TEXT = ("the record with the nodes deleted, not the record the graph builder would produce "
                    "without the events: prior labs of an analyte whose index labs are all deleted stay "
@@ -916,8 +918,8 @@ def intervention_record(combo: dict[str, Any] | None = None) -> dict[str, Any]:
 
 def deletion_summary(scorer: DeletionScorer) -> dict[str, Any]:
     """What the visit's deletions did to combo states and visits, over every node set it scored:
-    how many sets deleted a combo group, had a rule evaluated again or fired again, and every
-    (rule, reason) a rule could not be evaluated again for."""
+    how many sets deleted a combo group, had a rule evaluated again or fired again, added a state
+    node the record did not have, and every (rule, reason) a rule could not be evaluated again for."""
     infos = scorer.deletion_infos()
     untouched = infos[0]
     combos = [info.get("combos") or {} for info in infos]
@@ -927,6 +929,7 @@ def deletion_summary(scorer: DeletionScorer) -> dict[str, Any]:
             "sets_with_combo_groups_deleted": sum(1 for c in combos if c.get("groups_deleted")),
             "sets_with_rules_reevaluated": sum(1 for c in combos if c.get("reevaluated")),
             "sets_with_rules_refired": sum(1 for c in combos if c.get("refired")),
+            "sets_with_new_states": sum(1 for c in combos if c.get("new_state_nodes")),
             "not_reevaluated": [{"rule_id": rule_id, "reason": reason}
                                 for rule_id, reason in not_reevaluated],
             "sets_with_visits_dropped": sum(1 for info in infos if info.get("visits_dropped")),
@@ -1068,11 +1071,15 @@ def explain_subject(wrapper, data, *, method: str, conv: str | None,
     return record
 
 
-def _stored_rows(stored_npz: Path) -> dict[str, np.ndarray]:
-    """sample id -> stored probability row of the fold's `<fold>.npz` (empty when absent)."""
+def _stored_rows(stored_npz: Path, prediction_sha256: str) -> dict[str, np.ndarray]:
+    """sample id -> stored probability row of the fold's `<fold>.npz`; empty when it is absent or is
+    not the training run's (its probabilities do not hash to the recorded `prediction_sha256`), which
+    an exact-hash replay never opens the file to show."""
     if not stored_npz.exists():
         return {}
     stored = np.load(stored_npz, allow_pickle=False)
+    if "proba" not in stored.files or proba_digest(stored["proba"]) != prediction_sha256:
+        return {}
     return {str(i): row for i, row in zip(stored["sample_ids"], stored["proba"])}
 
 
@@ -1393,7 +1400,7 @@ def run_explanations(run_dir, output_dir, *, fold: str = "test",
                     "stability_draws": stability_draws, "sigma": stability_sigma,
                     "seed": random_seed}
 
-    stored_rows = _stored_rows(Path(run_dir) / f"{fold}.npz")
+    stored_rows = _stored_rows(Path(run_dir) / f"{fold}.npz", binding[FOLD_BLOCK[fold]]["prediction_sha256"])
     seconds_before_first_explanation = round(time.perf_counter() - run_started, 3)
     explained, failures = [], []
     for index, data in enumerate(subjects):

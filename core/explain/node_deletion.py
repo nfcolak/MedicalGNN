@@ -20,8 +20,10 @@ Rules, in this order:
    (state node, rule_id) form a group: deleting any anchor of a group deletes the whole group. When a
    deleted node was the latest index value of a combo token, the rule is evaluated again on the
    surviving index values with the builder's own `_row_holds` (the next-latest value takes the
-   deleted one's place); a rule that fires again gets its edges (and, if needed, its state node)
-   as the builder would add them. This needs the threshold table the graph artifact was built with
+   deleted one's place); a rule that holds on the surviving values gets its edges (and its state node
+   when the record has none) as the builder would add them, so deleting a latest value that failed a
+   rule can add a state the record did not have (counted in `info['combos']['new_state_nodes']`).
+   This needs the threshold table the graph artifact was built with
    (`load_combo_rules`) and every input the builder reads from the record (value, unit, time,
    censoring sign and reference bounds of a lab, the patient's gender); when an input is missing the
    group is deleted without re-evaluation and the case is reported in `info['combos']`. Without a
@@ -123,7 +125,8 @@ class _NotReevaluated(Exception):
 
 def _combo_info(combo_rules: ComboRules | None) -> dict[str, Any]:
     return {'source': COMBO_SOURCE_TABLE if combo_rules is not None else COMBO_SOURCE_FALLBACK,
-            'groups_deleted': 0, 'reevaluated': 0, 'refired': 0, 'not_reevaluated': []}
+            'groups_deleted': 0, 'reevaluated': 0, 'refired': 0, 'new_state_nodes': 0,
+            'not_reevaluated': []}
 
 
 def _originally_empty(membership: dict) -> set[int]:
@@ -248,6 +251,7 @@ def _combo_groups(nodes: list[dict], work: list[tuple], remove: set[int],
                 target = len(nodes)
                 nodes.append({'id': f'new:{target_token}', 'kind': KNOWLEDGE, 'token': target_token,
                               'time_hours': None, 'available_hours': None})
+                info['new_state_nodes'] += 1
         recorded = {work[j][0]: work[j][3] for j in group}
         entries = []
         for anchor in sorted(after):
@@ -277,8 +281,9 @@ def delete_from_record(graph: dict, membership: dict, selected: Iterable[int], *
     Positions are the node indices of the encoded tensor (`encode_graph` keeps record order). The
     inputs are never modified. `combo_rules` are the combo rows of the artifact's threshold table
     (`load_combo_rules`); None uses the fallback combo rule (rule 3). `info['combos']` says which was
-    used, how many combo groups went, how many rules were evaluated again (and fired again) and which
-    could not be evaluated again, with the reason.
+    used, how many combo groups went, how many rules were evaluated again (and fired again), how many
+    state nodes the deletion added that the record did not have (`new_state_nodes`) and which could
+    not be evaluated again, with the reason.
     """
     nodes, edges = graph['nodes'], graph['edges']
     n = len(nodes)

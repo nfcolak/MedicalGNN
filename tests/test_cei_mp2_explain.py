@@ -333,6 +333,26 @@ def test_deletion_forward_is_the_adapters_own_forward_on_one_graph(mp2):
         assert torch.equal(wrapper.deletion_forward(_mp2_graph()), adapter(batch, epoch=0).logits)
 
 
+def test_the_wrapper_runs_a_training_adapter_in_eval_and_leaves_it_training(tmp_path):
+    adapter = _mp2_adapter(tmp_path, dropout=0.5)
+    batch, graph = _batch(), _without(_mp2_graph(), (PLAIN,))
+    with torch.no_grad():
+        reference = adapter(batch, epoch=0).logits
+        deleted = adapter(_batch(graph), epoch=0).logits
+    wrapper = CEIGraphXAIWrapper(adapter, method='cei_gnn_mp2')
+    adapter.train()
+    x = wrapper.set_context(batch)
+    assert adapter.training
+    with torch.no_grad():
+        assert torch.equal(wrapper(x, batch.edge_index), reference)
+        assert torch.equal(wrapper.deletion_forward(graph), deleted)
+    assert adapter.training
+    assert wrapper.verify(x, batch.edge_index) == (True, 0.0)
+    assert wrapper._predicted_class() == int(reference.argmax(-1))
+    wrapper.builtin_node_importance(x, batch.edge_index)
+    assert adapter.training
+
+
 # ------------------------------------------------------------------ build_cei_model
 def test_build_cei_model_rebuilds_mp2_from_its_recorded_options(mp2):
     adapter, _, batch, _ = mp2

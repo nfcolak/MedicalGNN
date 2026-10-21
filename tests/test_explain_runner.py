@@ -242,7 +242,8 @@ def test_kept_classes_and_missing_recorded_hashes_are_refused(tmp_path):
     reordered = dict(binding, kept_label_indices=list(reversed(binding["kept_label_indices"])))
     with pytest.raises(ValueError, match="kept classes"):
         explain.rebuild_split(reordered, "test")
-    for key in ("targets_sha256", "artifact_graphs_sha256", "artifact_visit_membership_sha256"):
+    for key in ("targets_sha256", "artifact_graphs_sha256", "artifact_visit_membership_sha256",
+                "graph_manifest_sha256"):
         missing = {k: v for k, v in binding.items() if k != key}
         with pytest.raises(ValueError, match=f"records no {key}"):
             explain.rebuild_split(missing, "test")
@@ -357,6 +358,25 @@ def test_replay_reports_the_exact_hash_mode_when_it_reproduces(tmp_path):
                                         steps=2, epochs=3)
     assert manifest["replay"]["mode"] == "exact_hash"
     assert manifest["replay"]["stored_npz_hash_verified"] is None
+
+
+def test_a_stored_npz_that_is_not_the_training_runs_never_reaches_the_single_graph_check(tmp_path):
+    """The exact-hash replay never opens <fold>.npz; its rows reach a record's single_graph_check only
+    when they hash to the recorded prediction hash, so a replaced file cannot pose as training's."""
+    run_dir = train_one(tmp_path, "run_swapped_npz", method="gsat", conv=None)
+    binding = json.loads((run_dir / "binding.json").read_text())
+    recorded = binding["selected_test"]["prediction_sha256"]
+    assert explain._stored_rows(run_dir / "test.npz", recorded)
+    stored = dict(np.load(run_dir / "test.npz"))
+    stored["proba"] = stored["proba"][:, ::-1].copy()        # the classes swapped
+    np.savez(run_dir / "test.npz", **stored)
+    assert explain._stored_rows(run_dir / "test.npz", recorded) == {}
+    output = tmp_path / "out_swapped_npz"
+    manifest = explain.run_explanations(run_dir, output, max_subjects=2, steps=2, epochs=3,
+                                        random_repeats=2)
+    assert manifest["replay"]["mode"] == "exact_hash" and manifest["record_files"]
+    for filename in manifest["record_files"]:
+        assert json.loads((output / filename).read_text())["single_graph_check"] is None
 
 
 def test_refuses_to_write_into_an_occupied_output_directory(tmp_path):
@@ -758,6 +778,7 @@ def test_records_carry_schema_3_and_every_source_is_scored_by_record_deletion(tm
     assert "prior labs of an analyte" in intervention["departures_from_a_rebuild"]
     assert "baseline_of edge is not re-anchored" in intervention["departures_from_a_rebuild"]
     assert "(state node, rule_id)" in intervention["combos"]
+    assert "can add a state the record did not have" in intervention["combos"]
     assert intervention["cascade"]
     # the fixture artifact has no threshold layer: the deletion's fallback combo rule, recorded
     assert intervention["combo_source"]["source"] == "distinct_anchor_tokens"
@@ -933,8 +954,18 @@ def test_manifest_and_binding_carry_settings_disclosure_code_and_the_model_run(t
     for block in manifest["disclosure"].values():
         text = block["intervention"]
         assert "version 6" in text and "(state node, rule_id)" in text
+        assert explain.COMBO_RULE_TEXT in text and "can add a state the record did not have" in text
         assert explain.EMPTY_VISIT_TEXT in text and explain.DEPARTURES_TEXT in text
     assert written["records"]["manifest_sha256"] == sha256(output / "explanation_manifest.json")
+
+
+def test_the_gnnexplainer_disclosure_names_its_epoch_count_once():
+    for method in explain.FINAL_METHODS:
+        final = explain.method_disclosure(method, epochs=50)["explainers"]["gnnexplainer"]
+        assert final.count("50 epochs") == 1 and final.startswith("50 epochs ("), final
+        assert "paper 100-300, PyG default 100" in final
+        short = explain.method_disclosure(method, epochs=3)["explainers"]["gnnexplainer"]
+        assert short.startswith("3 epochs (") and "50 epochs" not in short, short
 
 
 def test_outputs_hold_no_absolute_path(tmp_path):
@@ -1031,6 +1062,7 @@ def builder_artifact(base, count=24, test_rows=4):
                 "visit_membership_contract_version": VISIT_MEMBERSHIP_CONTRACT_VERSION,
                 "visit_membership_file": VISIT_MEMBERSHIP_FILENAME, "visit_membership_rows": count,
                 "visit_membership_sha256": sha256(membership_path), "level_source": "csv",
+                "thresholds_layer": True,
                 "thresholds": {"file": "thresholds.csv", "sha256": sha256(table), "rows": len(rules)},
                 "limitations": ["Synthetic fixture; not a research result."]}
     (root / "manifest.json").write_text(json.dumps(manifest))
@@ -1054,10 +1086,12 @@ def builder_run(tmp_path_factory):
 
 def test_the_record_encoder_is_the_split_tensor_on_builder_records(builder_run):
     """Multi-visit builder records of a rebuilt run: the record encoder gives the split tensor on
-    every encoded field, for the test and the validation fold, and each visit's deletion scorer (built
-    through VisitRecords.scorer, which checks the same) scores the untouched record exactly as the
-    adapter scores the split tensor."""
+    every encoded field (the level columns of the threshold layer included), for the test and the
+    validation fold, and each visit's deletion scorer (built through VisitRecords.scorer, which checks
+    the same) scores the untouched record exactly as the adapter scores the split tensor."""
     from torch_geometric.data import Batch
+
+    from core.tensorize import LEVEL_COLUMNS, node_feature_layout
 
     run_dir, _ = builder_run
     bundle = explain.load_run_bundle(run_dir)
@@ -1067,6 +1101,8 @@ def test_the_record_encoder_is_the_split_tensor_on_builder_records(builder_run):
     visit_counts = set()
     for fold in ("test", "validation"):
         splits = explain.rebuild_split(bundle.binding, fold)
+        assert splits.preprocessing.get("thresholds_layer") is True
+        assert set(LEVEL_COLUMNS) <= set(node_feature_layout(splits.preprocessing))
         records = splits.visit_records([d.sample_id for d in splits[fold]])
         for data in splits[fold]:
             graph, membership = records.records[data.sample_id]
@@ -1077,6 +1113,120 @@ def test_the_record_encoder_is_the_split_tensor_on_builder_records(builder_run):
             assert torch.equal(scorer.probs(()), adapter)
             visit_counts.add(int(data.num_visits.view(-1)[0]))
     assert max(visit_counts) > 1 and min(visit_counts) == 1     # prior visits and a single visit
+
+
+def _final_model_for_run(name, binding, prep, graph, tmp_path):
+    """One of the four final adapters sized to a rebuilt run (its preprocessing and edge view), with
+    perturbed weights; no training."""
+    from argparse import Namespace
+
+    from core.registry import METHOD_REGISTRY, build_method
+    from tests import test_node_deletion as nd
+    from tests.graphxai_fixtures import method_args
+
+    dims = dict(num_tokens=binding["vocabulary_size"], node_dim=binding["node_dim"],
+                edge_dim=binding["edge_dim"], num_classes=binding["num_classes"], hidden=8, token_dim=4,
+                num_triples=binding["num_meta_relations"])
+    torch.manual_seed(5)
+    if name == "cei_gnn_mp2":
+        state = nd._v3_state(prep, tmp_path / "K4.json", graph)
+        args = Namespace(method_options={"arm": "C", "v3_state": str(state), "k": 4, **nd.MP2_FINAL},
+                         seed=1234, edge_direction=binding["edge_direction"])
+        model = METHOD_REGISTRY["cei_gnn_mp2"](layers=1, dropout=0.0, args=args, **dims)
+    else:
+        args = method_args()
+        args.edge_direction = binding["edge_direction"]
+        model = build_method(name, layers=2, dropout=0.0, args=args, **dims)
+    return nd._perturb(model, 1005)
+
+
+@pytest.mark.parametrize("name", ("gsat", "graphcare", "protgnn", "cei_gnn_mp2"))
+def test_the_untouched_scorer_of_builder_records_is_each_final_adapter(builder_run, name, tmp_path):
+    """On a rebuilt run with the threshold layer, every test visit's deletion scorer (built through
+    VisitRecords.scorer, which checks the record against the split tensor) scores the untouched record
+    bit for bit as each final adapter scores the split tensor."""
+    from torch_geometric.data import Batch
+
+    from tests import test_node_deletion as nd
+
+    run_dir, _ = builder_run
+    binding = json.loads((run_dir / "binding.json").read_text())
+    splits = explain.rebuild_split(binding, "test")
+    records = splits.visit_records([d.sample_id for d in splits["test"]])
+    first = records.records[str(splits["test"][0].sample_id)][0]
+    model = _final_model_for_run(name, binding, splits.preprocessing, first, tmp_path)
+    for data in splits["test"]:
+        scorer = records.scorer(nd.model_forward(model), data)
+        assert scorer.combo_rules is splits.combo_rules
+        with torch.no_grad():
+            adapter = torch.softmax(model(Batch.from_data_list([data]), epoch=0).logits, -1)
+        assert torch.equal(scorer.probs(()), adapter), (name, data.sample_id)
+
+
+def _threshold_rules(tmp_path):
+    import csv
+
+    from core.explain.node_deletion import load_combo_rules
+    from core.schema import THRESHOLD_COLUMNS, read_thresholds
+    from tests import test_node_deletion as nd
+
+    path = tmp_path / "thresholds.csv"
+    with path.open("w", newline="") as stream:
+        writer = csv.DictWriter(stream, fieldnames=THRESHOLD_COLUMNS)
+        writer.writeheader()
+        writer.writerows(nd.RULES)
+    return read_thresholds(path), load_combo_rules(path, sha256(path), level_source="csv")
+
+
+def test_a_deletion_that_adds_a_state_the_record_did_not_have_is_counted(tmp_path):
+    """Deleting the latest glucose, which failed the DKA rule, lets the earlier one fire it: the state
+    node is new to the record and the visit's deletion summary counts the set."""
+    from tests import test_node_deletion as nd
+
+    rows, rules = _threshold_rules(tmp_path)
+    graph, membership = nd.build_patient("P2", rows)
+    assert nd.DKA not in nd._tokens(graph)
+    prep = nd.preprocessing([graph])
+    scorer = DeletionScorer(lambda data: torch.zeros(1, 3), graph, membership, nd.encoder(prep),
+                            combo_rules=rules)
+    scorer.probs([nd._position(graph, "lab:GLU", 200.0)])
+    scorer.probs([nd._position(graph, "vital:heartrate")])
+    summary = explain.deletion_summary(scorer)
+    assert summary["sets_scored"] == 2
+    assert summary["sets_with_rules_refired"] == 1 and summary["sets_with_new_states"] == 1
+
+
+def test_combo_rules_that_could_not_be_evaluated_again_reach_the_record_once(tmp_path):
+    """A record without the v5 lab inputs: every scored set that deletes the latest glucose (the
+    insertion curve's anchor deletes every eligible node) reports the DKA rule as not evaluated again;
+    the visit's record lists each (rule, reason) once."""
+    from core.method_base import relation_count
+    from tests import test_node_deletion as nd
+
+    rows, rules = _threshold_rules(tmp_path)
+    graph, membership = nd.build_patient("P1", rows, v5=False)
+    prep = nd.preprocessing([graph])
+    encode = nd.encoder(prep)
+    data = encode(graph, membership)
+    data.subject, data.y = "person-v4", torch.tensor([0])
+    wrapper = _four_wrapper("gsat", nd.build_model("gsat", prep, tmp_path), prep)
+    scorers = []
+
+    class Spied(explain.VisitRecords):
+        def scorer(self, forward, data):
+            scorers.append(super().scorer(forward, data))
+            return scorers[-1]
+
+    records = Spied({str(data.sample_id): (graph, membership)}, encode, rules)
+    record = explain.explain_subject(wrapper, data, method="gsat", conv=None, steps=2, epochs=3,
+                                     num_relation_columns=relation_count(None), records=records,
+                                     random_repeats=3, tie_draws=2, true_class_explanations=False)
+    listed = record["deletion_check"]["deletions"]["not_reevaluated"]
+    reported = [(case["rule_id"], case["reason"]) for info in scorers[0].deletion_infos()
+                for case in (info.get("combos") or {}).get("not_reevaluated", [])]
+    assert len(reported) > len(set(reported)) > 0             # the same case comes from many sets
+    assert listed == [{"rule_id": rule_id, "reason": reason} for rule_id, reason in sorted(set(reported))]
+    assert any(case["rule_id"] == "combo_dka" for case in listed)
 
 
 def test_the_artifact_threshold_table_reaches_every_deletion(builder_run, tmp_path):
