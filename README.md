@@ -156,7 +156,7 @@ Further analyses read the stored predictions of the final runs (no training). Ea
 | `comparison/s7_why` | section 7: class-support analysis, same classes across K (`support.py`), inference-time source masking (`masking.py`) | `results/s7_why/support/`, `results/s7_why/masking/` |
 | `comparison/s8_cost` | section 8: parameter counts, inference benchmark, inference memory, training cost | `results/s8_cost/` |
 | `comparison/s9_repro` | section 9: graph scan for the reproduction check | `results/s9_repro/` |
-| `comparison/explain` | post-hoc explanations of the final runs of GSAT, GraphCare, ProtGNN and CEI-GNN: GradExplainer, IntegratedGradExplainer and GNNExplainer (vendored GraphXAI, `external/GraphXAI-main`) plus each model's built-in explanation, scored with evidence-removal fidelity and deletion/insertion curves (`run.py` drives `core/explain/runner.py` over the runs, `summarize.py` writes the aggregate tables) | not run yet |
+| `comparison/explain` | explanations of the trained final models of GSAT, GraphCare, ProtGNN and CEI-GNN mp2 as they are: GradExplainer and GNNExplainer (vendored GraphXAI, `external/GraphXAI-main`, upstream a11e65f; GNNExplainer 50 epochs, seeded per visit, mean feature-mask penalty), Integrated Gradients from a not-recorded baseline (`core/explain/ig_clinical.py`; start step count chosen on validation, raised per visit until completeness holds) over the same input for every model (numeric row and token vector), and each model's own explanation (GSAT node attention, GraphCare last-layer visit attention, ProtGNN prototype subgraph from the model's own projection search with its recorded settings, CEI-GNN evidence ledger). Fidelity deletes the evidence from the graph record (with the concept nodes derived from it), re-encodes it with the run's preprocessing and scores the model's own forward; deletion/insertion curves and every number are compared with random deletion on the same graph. Not computed: the GraphXAI paper metrics that need ground truth (`run.py` drives `core/explain/runner.py` over the runs, `summarize.py` writes the aggregate tables) | not run yet |
 
 Source masking (`results/s7_why/masking/`) scores the test fold with the stored final checkpoints (inference only; baselines chosen on validation; unmasked predictions match the stored test predictions in all 27 runs). `--fold validation` reproduces the earlier validation tables.
 
@@ -312,7 +312,7 @@ Prefix every command with `env -u PYTHONPATH PYTHONDONTWRITEBYTECODE=1 /usr/bin/
 | Show one training plan | `-m core.train <method args> --top-k-labels <K> --artifact ... --targets ... --output ... --seed 1234` | no |
 | Re-run the final trainings | `-m comparison.final.run [--ks 10,20,30]` | yes, needs approval |
 | Show the explanation runs (test fold, 500 patients per run) | `-m comparison.explain.run --out <new dir> --plan` | no |
-| Explain the final runs (inference only, frozen checkpoints) | `-m comparison.explain.run --out <new dir> --execute`, then `-m comparison.explain.summarize --explanations <that dir> --out <new dir>` | no (long) |
+| Explain the final runs (inference only, frozen checkpoints) | `-m comparison.explain.run --out <new dir> --execute`, then `-m comparison.explain.summarize --explanations <that dir> --out <new dir>` | yes, needs approval (long) |
 
 ## 8. Rules that matter for the layout
 

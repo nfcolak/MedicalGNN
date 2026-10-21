@@ -3,8 +3,9 @@
 No training, preprocessing fitting, dev/validation/test encoding, or historical
 output writes. Feature interventions zero numeric/token/type-vector channels;
 CEI's PLE term and absence inputs remain fixed. These are not clinical deletions.
-ProtGNN's clinical adapter exposes no native node-importance API: never fabricate
-one from its projection/search helpers or relabel a post-hoc score as native.
+This historical screen gave ProtGNN no native node importance and did not use its
+projection search; the final explanation study's ProtGNN built-in is that search
+(the adapter's explain_detail), never a relabelled post-hoc score.
 """
 from __future__ import annotations
 
@@ -55,8 +56,9 @@ SEEDS = (1234, 2025, 7)
 MODELS = ('C_K4', 'P')
 EXPLAINERS = ('GradExplainer', 'IntegratedGradExplainer', 'GNNExplainer', 'Native', 'Random')
 METRICS = ('fidelity_plus', 'fidelity_minus', 'sparsity')
-NATIVE_UNAVAILABLE = ('Clinical ProtGNNAdapter has no native prototype-similarity node-importance API. '
-                      '_initial_coalition/_mcts_project are training projection helpers, not a patient explanation API.')
+NATIVE_UNAVAILABLE = ('This screen scored no native ProtGNN node importance: it did not run the '
+                      'projection search (_initial_coalition/_mcts_project). The final explanation '
+                      'study uses that search as the ProtGNN built-in.')
 BOUNDARIES = dict(EXPLANATION_BOUNDARIES, ple_inputs='fixed original PLE term',
                   absence_inputs='fixed original membership/token/type/visit inputs',
                   explained_input='continuous numeric, token embedding and type embedding node channels',
@@ -238,6 +240,7 @@ def native_importance(adapter, graph, target):
     return signed.abs(), {'status': 'success', 'implementation': 'v3 return_parts gate-times-vote accounting',
                           'node_reduction': 'absolute signed node plus half incident edge/pair contributions',
                           'signed_node_contributions': signed.tolist(),
+                          **sign_and_structure_shares(signed, graph.node_type),
                           'fixed_absence_contribution': float(parts['absence_contributions'][:, target].sum()),
                           'bias': float(parts['bias'][target]),
                           'accounting_logit_abs_diff': float((accounting - parts['logits'][0, target]).abs()),
@@ -250,6 +253,48 @@ NODE_ROWS = ('node_contributions', 'node_contributions_message', 'nbr_contributi
 EDGE_ROWS = ('edge_contributions', 'edge_contributions_message')
 PAIR_ROWS = ('pair_contributions', 'pair_contributions_message')
 LEDGER_TOLERANCE = 1e-4
+SHARED_DENOMINATORS = ('rows share per-graph gate denominators, so the ledger is an exact '
+                       'decomposition of this logit, not a per-node removal effect')
+
+
+def sign_and_structure_shares(signed, node_type):
+    """How much of the |signed| ranking is invisible to node removal or points the other way:
+    the share of sum |signed| on protected (non-removable) nodes and the removable nodes whose
+    net contribution lowers the explained logit (they still rank by |signed|)."""
+    from core.explain.fidelity_v2 import removable_node_mask
+
+    eligible = removable_node_mask(node_type.long())
+    magnitude = signed.abs()
+    total = float(magnitude.sum())
+    negative = int(((signed < 0) & eligible).sum())
+    count = int(eligible.sum())
+    return {'structural_abs_share': float(magnitude[~eligible].sum()) / total if total > 0 else 0.0,
+            'eligible_node_count': count, 'negative_eligible_count': negative,
+            'negative_eligible_share': negative / count if count else 0.0,
+            'ranking': 'absolute signed contribution; a negative node lowers the explained logit'}
+
+
+def message_passing_rows(network):
+    """Which state each ledger row block reads under the network's mp_feed / mp_dual_read."""
+    feed, dual_read = network.mp_feed, network.mp_dual_read
+    if feed == 'none':
+        text = 'no message passing: every row reads the encoder state h0 (node-local)'
+    elif feed == 'dual':
+        text = ('node, edge and pair rows read the encoder state h0; the neighbourhood (nbr) rows '
+                'read the message state and carry evidence sent by neighbours')
+    elif feed == 'all' and dual_read:
+        text = ('node, edge and pair rows read the encoder state h0; their *_message rows read the '
+                'message state and carry evidence sent by neighbours')
+    elif feed == 'all':
+        text = ('node, edge and pair rows read the message state; they include evidence sent by '
+                'neighbours')
+    elif feed == 'node':
+        text = ('node rows read the message state (they include evidence sent by neighbours); edge '
+                'and pair rows read the encoder state h0')
+    else:   # 'gates'
+        text = ('node votes, edge and pair rows read the encoder state h0; the node gates and the '
+                'edge gate read the message state')
+    return f'{text}; {SHARED_DENOMINATORS}'
 
 
 def ledger_importance(adapter, graph, target):
@@ -258,8 +303,9 @@ def ledger_importance(adapter, graph, target):
     ``ledger_keys()`` lists the row blocks with ``logits = bias + sum of their rows``; it raises
     for a configuration whose ledger is not additive (ev_combine='mlp', readout='pool'). The
     accounting ``sum(signed node) + bias + fixed blocks`` must equal the explained logit within
-    ``LEDGER_TOLERANCE`` (relative to max(1, |logit|)), otherwise this raises. Rows read the
-    message-passing state, so a node's rows also carry evidence its neighbours sent to it.
+    ``LEDGER_TOLERANCE`` (relative to max(1, |logit|)), otherwise this raises. Which rows read
+    the message-passing state depends on mp_feed (``message_passing_rows``): under the final
+    mp_feed='dual' only the neighbourhood rows carry evidence sent by neighbours.
     """
     network = adapter.network
     keys = network.ledger_keys()
@@ -292,12 +338,12 @@ def ledger_importance(adapter, graph, target):
                                             'edge/pair contributions',
                           'ledger_keys': list(keys), 'ledger_block_totals': blocks,
                           'signed_node_contributions': signed.tolist(),
+                          **sign_and_structure_shares(signed, graph.node_type),
                           'fixed_absence_contribution': fixed.pop('absence_contributions', 0.0),
                           'fixed_extra_block_contributions': fixed,
                           'bias': float(parts['bias'][target]),
                           'accounting_logit_abs_diff': gap,
-                          'message_passing_rows': 'node and neighbourhood rows read the message-passing '
-                                                  'state; they include evidence sent by neighbours',
+                          'message_passing_rows': message_passing_rows(network),
                           **BOUNDARIES}
 
 
@@ -318,7 +364,8 @@ def explain_graph(adapter, graph, *, random_seed=2026):
     if not torch.isfinite(actual).all():
         raise FloatingPointError('Nonfinite model/wrapper logits')
     start = time.monotonic()
-    result = explain_algorithms(wrapper, x, graph.edge_index, batch=batch, steps=32, epochs=50)
+    result = explain_algorithms(wrapper, x, graph.edge_index, batch=batch, steps=32, epochs=50,
+                                v1_fidelity=True)
     bundle_seconds = time.monotonic() - start
     for item in result.values():
         item['provenance'].update(BOUNDARIES)
@@ -335,7 +382,8 @@ def explain_graph(adapter, graph, *, random_seed=2026):
                           'random_seed': random_seed, **BOUNDARIES}
         result[name] = {'status': provenance['status'], 'provenance': provenance,
                         'node_explanation': None if importance is None else build_node_explanation(
-                            wrapper, x, graph.edge_index, batch=batch, node_importance=importance),
+                            wrapper, x, graph.edge_index, batch=batch, node_importance=importance,
+                            v1_fidelity=True),
                         'runtime_seconds': time.monotonic() - start}
     return result, actual.detach().numpy()[0], diff
 

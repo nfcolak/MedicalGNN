@@ -1,8 +1,8 @@
 """Cohort contract v2 for explaining finished clinical_graph_v2/v3 runs.
 
 v1 (`explanation_contract.py`) is bound to the canonical star-graph split, TEST_FOLD = 2
-and exactly 500 subjects. v2 explains the test fold (the report fold, ADR-023), the
-validation fold (a decision fold) or the ADR-008 dev split (a decision fold) of one
+and exactly 500 subjects. v2 explains the test fold (the report fold), the
+validation fold (a decision fold) or the dev split (a decision fold) of one
 finished run, hash-pinned to that run's `binding.json`. Nothing is fitted or selected
 on the test fold. v1 is not edited:
 historical outputs stay valid under v1, and a v2 cohort is never a v1 cohort.
@@ -29,8 +29,7 @@ def build_cohort_v2(binding: dict[str, Any], *, fold: str,
     recorded as such, never presented as the full fold."""
     if fold not in ALLOWED_FOLDS:
         raise ValueError(f"explanations may only use folds {ALLOWED_FOLDS}, not {fold!r} "
-                         "(test is the report fold, validation and dev are decision folds, "
-                         "ADR-023)")
+                         "(test is the report fold, validation and dev are decision folds)")
     recorded = binding.get("split_sample_ids_sha256", {}).get(fold)
     actual = sample_ids_sha256(fold_sample_ids)
     if recorded is None or recorded != actual:

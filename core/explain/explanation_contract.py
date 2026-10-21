@@ -279,8 +279,13 @@ def build_node_explanation(
     *,
     batch: torch.Tensor,
     node_importance: Any | None = None,
+    v1_fidelity: bool = False,
 ) -> dict[str, Any]:
-    """Compute the one shared standardized node-explanation metric schema."""
+    """Compute the one shared standardized node-explanation metric schema.
+
+    The v1 fidelity (x-row zeroing, core/explain/fidelity.py) is computed only with
+    `v1_fidelity=True` (the v1 record schema and the historical CEI screen); new explanation
+    records score removal with fidelity_v2 node deletion and carry no v1 numbers."""
     if x.ndim != 2 or x.size(0) < 1:
         raise ValueError("x must contain at least one node-feature row.")
     with torch.no_grad():
@@ -296,13 +301,7 @@ def build_node_explanation(
     top_k = resolve_node_top_k(int(x.size(0)))
     order = sorted(range(len(importance)), key=lambda index: (-abs(importance[index]), index))
     selected = order[: top_k.resolved_k]
-    plus = fidelity_plus(
-        wrapper, x, edge_index, importance, target, batch, k=top_k.resolved_k
-    )
-    minus = fidelity_minus(
-        wrapper, x, edge_index, importance, target, batch, k=top_k.resolved_k
-    )
-    return {
+    explanation = {
         "target": {"provenance": "model_prediction", "class_id": target},
         "node_importance": [float(value) for value in importance],
         "top_nodes": [
@@ -310,10 +309,16 @@ def build_node_explanation(
             for index in selected
         ],
         "top_k": top_k.as_dict(),
-        "fidelity_plus": plus,
-        "fidelity_minus": minus,
         "sparsity": sparsity(importance),
     }
+    if v1_fidelity:
+        explanation["fidelity_plus"] = fidelity_plus(
+            wrapper, x, edge_index, importance, target, batch, k=top_k.resolved_k
+        )
+        explanation["fidelity_minus"] = fidelity_minus(
+            wrapper, x, edge_index, importance, target, batch, k=top_k.resolved_k
+        )
+    return explanation
 
 
 def subject_id_of(record: Any) -> str:

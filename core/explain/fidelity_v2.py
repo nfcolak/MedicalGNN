@@ -1,40 +1,27 @@
-"""Fidelity with full evidence removal (GraphXAI improvement plan item #4).
+"""Fidelity by deleting evidence nodes from the graph (intervention contract version 5).
 
-`core/explain/fidelity.py` (v1, untouched here, still what the legacy star/
-cooccur/ontology/full pipeline and your already-reported thesis numbers run
-through) "removes" a node by zeroing its `x` row alone. The node's `token`,
-its numeric value, and every edge connecting it to the rest of the graph all
-survive that intervention -- so a model with any path that reads token/value
-directly instead of purely through `x` (any method's token embedding lookup
-sees the "removed" node's real identity) can
-still see evidence that was supposed to be gone. This module removes a node's
-full identity instead: `x` zeroed, `token` replaced with the padding/unseen
-id (0 -- every token embedding in this codebase uses `padding_idx=0`), and
-every edge touching it masked to zero via the `edge_mask` hook already built
-and verified earlier this project. A node with no feature signal, no token
-identity, and no graph connectivity is evidence that is actually gone, not
-quieted in one channel while two others still carry it.
+`core/explain/fidelity.py` (v1) "removes" a node by zeroing its `x` row; contract versions 2-4 of
+this module also set its token to the pad id and masked its edges. In both the node kept its type,
+its visit membership and its share of every pooled mean, so the model still saw it. Here a node is
+removed by deleting it from the raw graph record and re-encoding the record with the run's own
+preprocessing (`core/explain/node_deletion.py`): the score is the model's own forward on the graph
+it would have been given without that evidence. Every metric takes a `DeletionScorer` of one visit.
 
-Structural nodes -- `patient`, `visit` (the graph's scaffolding; removing the
-index-visit hub doesn't probe "was this evidence important", it collapses
-structure the model was never trained to see without) and `knowledge` (KG
-grounding nodes, present only for GraphCare, already excluded the same way by
-GraphCare's own direct-channel readout) -- are never candidates for removal.
+Eligible evidence nodes are complaints, vitals, measurements (lab results) and prior diagnoses.
+Patient and visit (scaffolding) and analyte and knowledge nodes (concepts derived from the evidence)
+are never selected; the derived concept nodes leave with their evidence (cascade).
 
-Do not compare these numbers to `core/explain/fidelity.py`'s. They measure a
-different, stricter intervention, exactly as the plan's own item #4 says not
-to conflate.
+Deletion/insertion curves over k, and their AUC, are reported instead of a single top-20% point, as in
+the insertion/deletion metrics of RISE: nothing is retrained, the trained
+model scores every reduced graph. A random-order deletion through the same operator on the same graph
+is the reference every source is compared with.
 
-Deletion/insertion curves (the plan's "[new]" bullet): removing nodes one at a
-time off a real graph walks it off its training distribution further with
-every node removed, so a single top-20% point can't distinguish "this
-explanation is good" from "this model breaks under any perturbation". A curve
-over k -- and its AUC -- is reported instead for the same reason ROAR/
-insertion-deletion curves are standard in the wider explainability literature,
-not just one point.
+The module name fidelity_v2 is historical; INTERVENTION_CONTRACT_VERSION is the version.
 """
 from __future__ import annotations
 
+from itertools import combinations
+from math import comb
 from typing import Any, Sequence
 
 import numpy as np
@@ -42,30 +29,43 @@ import torch
 
 from core import NODE_KINDS
 
-INTERVENTION_CONTRACT_VERSION = 4
+INTERVENTION_CONTRACT_VERSION = 5
 INTERVENTION_CONTRACT = (
-    "evidence removal = x row zeroed + token set to the pad id + every incident edge masked to "
-    "zero. Eligible evidence nodes: complaint, vital, measurement (lab result), diagnosis "
-    "(prior). Protected, never removed: patient, visit (scaffolding), knowledge and analyte "
-    "(concept nodes, not patient facts). k is capped at the explanation's own support (nodes "
-    "with nonzero importance), so a yes/no explanation is never padded with tie-break nodes. "
-    "Deletion/insertion curves reported with AUC over k/removable_count, with a "
-    "random-removal reference. The insertion curve starts from its measured k = 0 value (the "
-    "probability drop with every removable node evicted); the deletion curve starts from (0, 0). "
-    "Not comparable with fidelity v1 (core/explain/fidelity.py, "
-    "x-row-only removal), with contract version 2 (analyte was removable, no support cap) or "
-    "with contract version 3 (insertion curve started from a fixed (0, 0) point). "
-    "The module name fidelity_v2 is historical; INTERVENTION_CONTRACT_VERSION is the version."
+    "evidence removal = node deletion in the graph record: the selected evidence nodes and every edge "
+    "touching them are deleted from the raw graph record, which is re-encoded with the run's own fitted "
+    "preprocessing and scored by the model's own forward (no masks, no wrapper). Eligible evidence "
+    "nodes: complaint, vital, measurement (lab result), diagnosis (prior). Patient, visit, analyte and "
+    "knowledge nodes are never selected. Cascade: an analyte goes when no kept measurement has an "
+    "instance_of edge to it, a knowledge node goes when no kept non-knowledge node is linked to it "
+    "(repeated until nothing changes); then every node left without an edge goes (patient and index "
+    "visit excepted), as in source masking. Membership pairs of deleted nodes go and every surviving "
+    "analyte or knowledge node takes the visits of its surviving anchors (an analyte: its measurements' "
+    "visits, prior labs included; a knowledge node: its anchors' visits), as if the removed evidence had "
+    "never been recorded; prior visits left without a node are dropped and the remaining visits "
+    "renumbered in order (the index visit is always kept). Edges are not relinked: deleting a middle measurement of a trajectory leaves the chain "
+    "broken. Nodes are ranked by |importance|, so a signed explanation ranks a node that votes against "
+    "the class by its magnitude. k is capped at the explanation's own support (nodes with nonzero "
+    "importance). Ties: when the cut at k falls inside a group of equal |importance|, the metric is the "
+    "mean over seeded random orders inside that group (tie_draws, default 10; every distinct choice when "
+    "there are at most tie_draws of them). Deletion/insertion curves with up to 10 points (every k when "
+    "the support is at most 10) and AUC over k/removable_count; the insertion curve starts from its "
+    "measured k = 0 value (every eligible node deleted, with its cascade), the deletion curve from "
+    "(0, 0). Random reference: random deletion orders (default 50) through the same operator; a draw "
+    "equal to the source counts as half beaten; SD with ddof 1. Not comparable with fidelity v1 "
+    "(core/explain/fidelity.py) or with contract versions 2-4 (features zeroed and edges masked, the "
+    "node itself kept)."
 )
 STRUCTURAL_NODE_KINDS = ("patient", "visit", "knowledge", "analyte")
 EVIDENCE_NODE_KINDS = tuple(kind for kind in NODE_KINDS if kind not in STRUCTURAL_NODE_KINDS)
 STRUCTURAL_NODE_TYPE_IDS = tuple(NODE_KINDS.index(kind) for kind in STRUCTURAL_NODE_KINDS)
-PAD_TOKEN_ID = 0
 NODE_TOP_K_FRACTION = 0.2
+CURVE_POINTS = 10
+TIE_DRAWS = 10
+RANDOM_REPEATS = 50
 
 
 def removable_node_mask(node_type: torch.Tensor) -> torch.Tensor:
-    """True for every node this intervention is allowed to remove."""
+    """True for every node this intervention is allowed to select."""
     structural = torch.zeros_like(node_type, dtype=torch.bool)
     for type_id in STRUCTURAL_NODE_TYPE_IDS:
         structural |= node_type == type_id
@@ -80,8 +80,22 @@ def resolve_k(num_removable: int, fraction: float = NODE_TOP_K_FRACTION) -> int:
     return min(num_removable, max(1, int(fraction * num_removable)))
 
 
+def _abs_importance(node_type: torch.Tensor, node_importance) -> np.ndarray:
+    """|importance| as float, one finite value per node, or ValueError."""
+    importance = np.asarray(node_importance, dtype=float)
+    if importance.shape != (int(node_type.numel()),):
+        raise ValueError(f"node importance has shape {importance.shape}, expected "
+                         f"({int(node_type.numel())},)")
+    if not np.isfinite(importance).all():
+        raise ValueError("node importance has non-finite values")
+    return np.abs(importance)
+
+
 def _ordered_removable_indices(importance: np.ndarray, removable: torch.Tensor) -> np.ndarray:
-    """Removable node indices, most-to-least important, ties by lower index."""
+    """Removable node indices, most-to-least |importance|, ties by lower index."""
+    importance = np.asarray(importance, dtype=float)
+    if not np.isfinite(importance).all():
+        raise ValueError("node importance has non-finite values")
     removable_indices = np.flatnonzero(removable.detach().cpu().numpy())
     if removable_indices.size == 0:
         raise ValueError("no removable nodes available for top-k selection")
@@ -89,109 +103,123 @@ def _ordered_removable_indices(importance: np.ndarray, removable: torch.Tensor) 
     return np.asarray(order, dtype=np.int64)
 
 
-def _evict(x: torch.Tensor, token: torch.Tensor, node_indices: np.ndarray):
-    """x with the selected rows zeroed, token with the selected ids set to the
-    pad id, and a per-node boolean 'evicted' mask (for deriving an edge_mask)."""
-    evicted = torch.zeros(x.size(0), dtype=torch.bool, device=x.device)
-    evicted[torch.as_tensor(node_indices, dtype=torch.long, device=x.device)] = True
-    x_evicted = x.clone()
-    x_evicted[evicted] = 0.0
-    token_evicted = token.clone()
-    token_evicted[evicted] = PAD_TOKEN_ID
-    return x_evicted, token_evicted, evicted
-
-
-def _edge_mask_for_eviction(edge_index: torch.Tensor, evicted: torch.Tensor) -> torch.Tensor:
-    """1.0 for an edge with neither endpoint evicted, 0.0 if either is --
-    reuses the edge_mask hook verified across every method earlier this
-    project rather than physically deleting rows from edge_index."""
-    if edge_index.numel() == 0:
-        return torch.ones(0, dtype=torch.float32, device=edge_index.device)
-    source, target = edge_index
-    return (~(evicted[source] | evicted[target])).float()
-
-
-def _predict(wrapper, x, edge_index, token=None, edge_mask=None):
-    with torch.no_grad():
-        logits = wrapper(x, edge_index, token_override=token, edge_mask=edge_mask)
-    if logits.ndim != 2 or logits.size(0) != 1:
-        raise ValueError("fidelity_v2 scores exactly one graph at a time")
-    probs = torch.softmax(logits, dim=-1)
-    return int(probs.argmax(dim=-1).item()), probs
-
-
 def eligible_support(node_type: torch.Tensor, node_importance) -> int:
     """How many eligible evidence nodes the explanation gives nonzero importance."""
     removable = removable_node_mask(node_type).detach().cpu().numpy()
-    importance = np.abs(np.asarray(node_importance, dtype=float))
+    importance = _abs_importance(node_type, node_importance)
     return int(((importance > 0) & removable).sum())
 
 
-def _score_at_k(wrapper, x, token, edge_index, node_type, node_importance, target_class,
-                k: int, *, keep_important: bool, orig=None) -> dict[str, Any]:
+def tie_summary(node_type: torch.Tensor, importance) -> dict[str, Any]:
+    """How much of the ranking over eligible nodes is decided by ties of |importance|."""
+    removable = removable_node_mask(node_type).detach().cpu().numpy()
+    values = _abs_importance(node_type, importance)[removable]
+    if values.size == 0:
+        raise ValueError("no eligible evidence nodes")
+    _, counts = np.unique(values, return_counts=True)
+    return {"distinct_values_eligible": int(counts.size),
+            "largest_tie_group_eligible": int(counts.max()),
+            "constant_over_eligible": bool(counts.size == 1)}
+
+
+def _top_sets(importance: np.ndarray, ordered: np.ndarray, k: int, *, tie_draws: int,
+              seed: int, keep_important: bool):
+    """The top-k node sets to average over and the tie record of this cut.
+
+    Without a tie at the cut there is one set, ordered[:k]. When the k-th node's |importance| is shared
+    by nodes on both sides of the cut, the nodes above that value are always in and the rest of the k
+    come from the tied group: every distinct choice when there are at most `tie_draws` of them,
+    otherwise `tie_draws` seeded random choices (the seed depends on the visit seed, k and the mode
+    only, never on call order)."""
+    if k == 0:
+        return [ordered[:0]], {"tied_at_cut": False, "tie_group_size": 0, "tie_draws": 1}
+    values = importance[ordered]
+    cut_value = values[k - 1]
+    group = np.sort(ordered[values == cut_value])
+    above = ordered[values > cut_value]
+    needed = k - above.size
+    if needed == group.size:
+        return [ordered[:k]], {"tied_at_cut": False, "tie_group_size": int(group.size), "tie_draws": 1}
+    if comb(int(group.size), int(needed)) <= tie_draws:
+        choices = [np.asarray(c, dtype=np.int64) for c in combinations(group.tolist(), int(needed))]
+    else:
+        rng = np.random.default_rng([int(seed), int(k), int(keep_important)])
+        choices = [rng.permutation(group)[:needed] for _ in range(tie_draws)]
+    sets = [np.concatenate([above, choice]) for choice in choices]
+    return sets, {"tied_at_cut": True, "tie_group_size": int(group.size), "tie_draws": len(sets)}
+
+
+def _drop(scorer, deleted, target_class, orig_probs, orig_pred) -> tuple[float, int]:
+    probs = scorer.probs(deleted)
+    pred = int(probs.argmax(dim=-1).item())
+    return (float(orig_probs[0, target_class] - probs[0, target_class]),
+            int(orig_pred == target_class) - int(pred == target_class))
+
+
+def _score_at_k(scorer, node_importance, target_class, k: int, *, keep_important: bool,
+                tie_draws: int = TIE_DRAWS, seed: int = 0) -> dict[str, Any]:
+    node_type = scorer.node_type
     removable = removable_node_mask(node_type)
-    importance = np.abs(np.asarray(node_importance, dtype=float))
+    importance = _abs_importance(node_type, node_importance)
     ordered = _ordered_removable_indices(importance, removable)
     support = int((importance[ordered] > 0).sum())
     if support == 0:
         raise ValueError("explanation has no nonzero importance on eligible evidence nodes")
+    if tie_draws < 1:
+        raise ValueError("tie_draws must be positive")
     requested = int(k)
     # Never pad a short explanation (e.g. ProtGNN's 3-6 node subgraph) with nodes the
     # model did not choose: past the support, order is a tie-break, not an explanation.
     k = min(requested, ordered.size, support)
-    top = ordered[:k]
-    to_evict = (
-        np.setdiff1d(ordered, top, assume_unique=False) if keep_important else top
-    )
-    orig_pred, orig_probs = orig if orig is not None else _predict(wrapper, x, edge_index)
-    if to_evict.size == 0:
-        # Nothing left to remove (k covers every removable node, keep-mode):
-        # the untouched graph is its own answer, not an error.
-        evicted_pred, evicted_probs = orig_pred, orig_probs
-    else:
-        x_evicted, token_evicted, evicted = _evict(x, token, to_evict)
-        edge_mask = _edge_mask_for_eviction(edge_index, evicted)
-        evicted_pred, evicted_probs = _predict(
-            wrapper, x_evicted, edge_index, token=token_evicted, edge_mask=edge_mask
-        )
+    orig_probs = scorer.probs(())
+    orig_pred = int(orig_probs.argmax(dim=-1).item())
+    sets, ties = _top_sets(importance, ordered, k, tie_draws=tie_draws, seed=seed,
+                           keep_important=keep_important)
+    drops, accs = [], []
+    for top in sets:
+        deleted = np.setdiff1d(ordered, top) if keep_important else top
+        prob, acc = _drop(scorer, deleted.tolist(), target_class, orig_probs, orig_pred)
+        drops.append(prob)
+        accs.append(acc)
     return {
-        "acc": int(orig_pred == target_class) - int(evicted_pred == target_class),
-        "prob": float(orig_probs[0, target_class] - evicted_probs[0, target_class]),
+        "acc": float(np.mean(accs)),
+        "prob": float(np.mean(drops)),
         "k": int(k),
         "k_requested": requested,
         "support_count": support,
         "target_class": int(target_class),
         "removable_node_count": int(removable.sum().item()),
+        **ties,
     }
 
 
-def fidelity_plus_v2(wrapper, x, token, edge_index, node_type, node_importance,
-                     target_class, k: int | None = None) -> dict[str, Any]:
-    """Evict the top-k most important REMOVABLE nodes (x, token, and every
-    incident edge); higher prob drop = more faithful. k defaults to 20% of
-    removable nodes, floor 1 -- same policy core/explain/fidelity.py uses, over
-    the removable set instead of every node."""
-    removable_count = int(removable_node_mask(node_type).sum().item())
+def fidelity_plus_v2(scorer, node_importance, target_class, k: int | None = None, *,
+                     tie_draws: int = TIE_DRAWS, seed: int = 0) -> dict[str, Any]:
+    """Delete the top-k most important eligible nodes; higher prob drop = more faithful. k defaults
+    to 20% of the eligible nodes, floor 1 (the policy of core/explain/fidelity.py over the eligible
+    set instead of every node)."""
+    removable_count = int(removable_node_mask(scorer.node_type).sum().item())
     resolved_k = resolve_k(removable_count) if k is None else int(k)
-    return _score_at_k(wrapper, x, token, edge_index, node_type, node_importance,
-                       target_class, resolved_k, keep_important=False)
+    return _score_at_k(scorer, node_importance, target_class, resolved_k, keep_important=False,
+                       tie_draws=tie_draws, seed=seed)
 
 
-def fidelity_minus_v2(wrapper, x, token, edge_index, node_type, node_importance,
-                      target_class, k: int | None = None) -> dict[str, Any]:
-    """Keep only the top-k most important removable nodes, evict every other
-    removable node (structural nodes are never evicted either way); lower
-    prob drop = more faithful."""
-    removable_count = int(removable_node_mask(node_type).sum().item())
+def fidelity_minus_v2(scorer, node_importance, target_class, k: int | None = None, *,
+                      tie_draws: int = TIE_DRAWS, seed: int = 0) -> dict[str, Any]:
+    """Keep only the top-k most important eligible nodes and delete every other eligible node
+    (with the cascade); lower prob drop = more faithful."""
+    removable_count = int(removable_node_mask(scorer.node_type).sum().item())
     resolved_k = resolve_k(removable_count) if k is None else int(k)
-    return _score_at_k(wrapper, x, token, edge_index, node_type, node_importance,
-                       target_class, resolved_k, keep_important=True)
+    return _score_at_k(scorer, node_importance, target_class, resolved_k, keep_important=True,
+                       tie_draws=tie_draws, seed=seed)
 
 
 def curve_ks(removable_count: int, support: int, num_points: int) -> list[int]:
-    """Curve points spread over the explanation's own support (dense importance:
-    the whole eligible set, as before; a 5-node subgraph: 5 nodes)."""
+    """Curve points spread over the explanation's own support (dense importance: the whole eligible
+    set; a 5-node subgraph: 5 nodes); every k when the support has at most `num_points` nodes."""
     span = max(1, min(removable_count, support))
+    if span <= num_points:
+        return list(range(1, span + 1))
     fractions = [i / num_points for i in range(1, num_points + 1)]
     return sorted({max(1, int(round(fraction * span))) for fraction in fractions})
 
@@ -200,31 +228,37 @@ def _auc(ks: Sequence[int], probs: Sequence[float], removable_count: int, *,
          anchor: float = 0.0) -> float:
     # Trapezoidal AUC over k/removable_count with an explicit start point at k = 0 whose
     # ordinate is `anchor`. Deletion: 0.0 (nothing removed -> no probability change, by
-    # construction). Insertion: the measured drop of the graph with every removable node
-    # evicted, which is not zero in general.
+    # construction). Insertion: the measured drop of the graph with every eligible node
+    # deleted, which is not zero in general.
     xs = [0.0] + [k / removable_count for k in ks]
     integrate = getattr(np, "trapezoid", None) or np.trapz   # numpy>=2 renamed trapz
     return float(integrate([float(anchor)] + list(probs), xs))
 
 
-def _curve(wrapper, x, token, edge_index, node_type, node_importance, target_class,
-          *, keep_important: bool, num_points: int) -> dict[str, Any]:
+def _empty_evidence_drop(scorer, target_class) -> float:
+    """Drop of the explained-class probability with every eligible node deleted (and its cascade):
+    the insertion curves' k = 0 value, shared by the source and every random draw."""
+    candidates = np.flatnonzero(removable_node_mask(scorer.node_type).detach().cpu().numpy())
+    if candidates.size == 0:
+        raise ValueError("no removable nodes available for top-k selection")
+    orig_probs = scorer.probs(())
+    orig_pred = int(orig_probs.argmax(dim=-1).item())
+    return _drop(scorer, candidates.tolist(), target_class, orig_probs, orig_pred)[0]
+
+
+def _curve(scorer, node_importance, target_class, *, keep_important: bool, num_points: int,
+           tie_draws: int, seed: int) -> dict[str, Any]:
+    node_type = scorer.node_type
     removable_count = int(removable_node_mask(node_type).sum().item())
     support = eligible_support(node_type, node_importance)
     ks = curve_ks(removable_count, max(support, 1), num_points)
-    orig = _predict(wrapper, x, edge_index)
-    anchor = 0.0
-    if keep_important:
-        # Insertion starts from the empty-evidence graph: keep nothing, evict every removable
-        # node. Computed through `_score_at_k` (which first checks that removable nodes exist,
-        # so a graph without any still raises) so it is the very number the random reference uses.
-        anchor = _score_at_k(wrapper, x, token, edge_index, node_type, node_importance,
-                             target_class, 0, keep_important=True, orig=orig)["prob"]
     points = [
-        _score_at_k(wrapper, x, token, edge_index, node_type, node_importance,
-                   target_class, k, keep_important=keep_important, orig=orig)
+        _score_at_k(scorer, node_importance, target_class, k, keep_important=keep_important,
+                    tie_draws=tie_draws, seed=seed)
         for k in ks
     ]
+    deleted_info = scorer.last_info
+    anchor = _empty_evidence_drop(scorer, target_class) if keep_important else 0.0
     probs = [point["prob"] for point in points]
     used = [point["k"] for point in points]
     auc = _auc(used, probs, removable_count, anchor=anchor)
@@ -239,20 +273,35 @@ def _curve(wrapper, x, token, edge_index, node_type, node_importance, target_cla
         "support_count": support,
         "explained_fraction": last_fraction,
         "auc": auc,
-        # AUC divided by the width of the curve: comparable between a dense
-        # explanation and a short yes/no one, whose curves cover different widths.
+        # AUC divided by the width of the curve; still width-dependent, a side column next to
+        # the width-matched differences to random
         "mean_change": auc / last_fraction,
+        "tied_at_cut": [point["tied_at_cut"] for point in points],
+        "tie_group_size": [point["tie_group_size"] for point in points],
+        "tie_draws": [point["tie_draws"] for point in points],
+        # what the deletion operator removed at the last point (last tie draw)
+        "deleted_info": deleted_info,
     }
 
 
-def deletion_curve(wrapper, x, token, edge_index, node_type, node_importance,
-                   target_class, *, num_points: int = 5) -> dict[str, Any]:
-    """Fidelity+ at increasing k (most-important-first removal); AUC over
-    k/removable_count. Higher AUC = removing important evidence consistently
-    hurts the prediction, not just at one arbitrary threshold. Starts from (0, 0):
-    nothing removed, no change (`k0_prob` is 0.0)."""
-    return _curve(wrapper, x, token, edge_index, node_type, node_importance,
-                 target_class, keep_important=False, num_points=num_points)
+def deletion_curve(scorer, node_importance, target_class, *, num_points: int = CURVE_POINTS,
+                   tie_draws: int = TIE_DRAWS, seed: int = 0) -> dict[str, Any]:
+    """Fidelity+ at increasing k (most-important-first deletion); AUC over k/removable_count. Higher
+    AUC = deleting important evidence consistently hurts the prediction. Starts from (0, 0)."""
+    return _curve(scorer, node_importance, target_class, keep_important=False,
+                  num_points=num_points, tie_draws=tie_draws, seed=seed)
+
+
+def insertion_curve(scorer, node_importance, target_class, *, num_points: int = CURVE_POINTS,
+                    tie_draws: int = TIE_DRAWS, seed: int = 0) -> dict[str, Any]:
+    """Fidelity- at increasing k (most-important-first retention, every other eligible node
+    deleted); AUC over k/removable_count. Lower AUC = a small amount of important evidence
+    consistently suffices to preserve the prediction.
+
+    The curve starts at its measured k = 0 point: the probability drop of the graph with every
+    eligible node deleted (`k0_prob`), not a fixed 0."""
+    return _curve(scorer, node_importance, target_class, keep_important=True,
+                  num_points=num_points, tie_draws=tie_draws, seed=seed)
 
 
 def sparsity_over_eligible(node_type: torch.Tensor, node_importance, mass: float = 0.9) -> dict[str, Any]:
@@ -264,7 +313,7 @@ def sparsity_over_eligible(node_type: torch.Tensor, node_importance, mass: float
     from core.explain.fidelity import sparsity
 
     removable = removable_node_mask(node_type).detach().cpu().numpy()
-    importance = np.abs(np.asarray(node_importance, dtype=float))[removable]
+    importance = _abs_importance(node_type, node_importance)[removable]
     if importance.size == 0:
         raise ValueError("no eligible evidence nodes")
     support = int((importance > 0).sum())
@@ -277,15 +326,14 @@ def sparsity_over_eligible(node_type: torch.Tensor, node_importance, mass: float
 
 
 class RandomReference:
-    """What random removal does on this very graph: the calibration an explanation
-    has to beat. Every number comes from the same `_score_at_k` code path as the
-    real explanations (only the order of removal differs), so any
-    out-of-distribution effect of removing evidence is present in both."""
+    """What random deletion does on this very graph: the calibration an explanation has to beat.
+    Every number comes from the same deletion operator as the real explanations (only the order
+    differs), so any out-of-distribution effect of deleting evidence is present in both."""
 
     def __init__(self, ks, deletion, insertion, removable_count, seed, insertion_k0=0.0):
         self.ks = [int(k) for k in ks]
-        # the insertion curves' measured k = 0 value on this graph (every removable node
-        # evicted); every random insertion draw starts from it, like the source's curve does
+        # the insertion curves' measured k = 0 value on this graph (every eligible node
+        # deleted); every random insertion draw starts from it, like the source's curve does
         self.insertion_k0 = float(insertion_k0)
         self.deletion = {int(k): np.asarray(v, dtype=float) for k, v in deletion.items()}
         self.insertion = {int(k): np.asarray(v, dtype=float) for k, v in insertion.items()}
@@ -309,20 +357,24 @@ class RandomReference:
 
     @staticmethod
     def _summary(source, draws, *, higher_is_better):
-        mean, sd = float(draws.mean()), float(draws.std())
+        mean = float(draws.mean())
+        sd = float(draws.std(ddof=1)) if draws.size > 1 else 0.0
         beaten = (draws < source) if higher_is_better else (draws > source)
+        # a draw equal to the source is half beaten (short yes/no explanations often tie)
+        score = beaten.astype(float) + 0.5 * (draws == source)
         return {"source": float(source), "random_mean": mean, "random_sd": sd,
                 "difference": float(source - mean),
-                "beats_random_fraction": float(beaten.mean())}
+                "beats_random_fraction": float(score.mean())}
 
     def compare(self, *, fidelity_plus, fidelity_minus, deletion_curve, insertion_curve):
         """Each source number against the random draws of the same graph.
 
         `deletion_mean_change` / `insertion_mean_change` are the AUC keys divided by the source's
-        own curve width (`explained_fraction`), the same width on both sides. `difference` and
-        `beats_random_fraction` of the AUC keys do not depend on the insertion anchor: the first
-        trapezoid adds the same 1/2 * d0 * k1/removable_count to the source and to every draw,
-        because both start from the same measured k = 0 value d0 and share their first k.
+        own curve width (`explained_fraction`), the same width on both sides, so their `difference`
+        is the width-matched difference to random. `difference` and `beats_random_fraction` of the
+        AUC keys do not depend on the insertion anchor: the first trapezoid adds the same
+        1/2 * d0 * k1/removable_count to the source and to every draw, because both start from the
+        same measured k = 0 value d0 and share their first k.
         """
         deletion_draws = self._auc_draws("deletion", deletion_curve["k_values"])
         insertion_draws = self._auc_draws("insertion", insertion_curve["k_values"])
@@ -350,35 +402,28 @@ class RandomReference:
         }
 
 
-def random_reference(wrapper, x, token, edge_index, node_type, target_class,
-                     ks: Sequence[int], *, repeats: int, seed: int) -> RandomReference:
-    """Random-order eviction at each k, `repeats` times, through `_score_at_k`."""
-    if repeats < 1:
-        raise ValueError("repeats must be positive")
-    removable = removable_node_mask(node_type)
-    candidates = np.flatnonzero(removable.detach().cpu().numpy())
+def random_reference(scorer, target_class, ks: Sequence[int], *, repeats: int = RANDOM_REPEATS,
+                     seed: int) -> RandomReference:
+    """Random-order deletion at each k, `repeats` times, through the same deletion operator."""
+    if repeats < 2:
+        raise ValueError("repeats must be at least 2 (the SD uses ddof 1)")
+    candidates = np.flatnonzero(removable_node_mask(scorer.node_type).detach().cpu().numpy())
     if candidates.size == 0:
         raise ValueError("no removable nodes available for a random reference")
     rng = np.random.default_rng(int(seed))
-    orig = _predict(wrapper, x, edge_index)
+    orig_probs = scorer.probs(())
+    orig_pred = int(orig_probs.argmax(dim=-1).item())
     ks = sorted({min(int(k), int(candidates.size)) for k in ks})
     deletion = {k: [] for k in ks}
     insertion = {k: [] for k in ks}
-    # the insertion curves' start: every removable node evicted. It does not depend on the
-    # draw's order, so it is computed once per visit, on the same path as the source's anchor.
-    flat = np.zeros(int(x.size(0)))
-    flat[candidates] = 1.0
-    insertion_k0 = _score_at_k(wrapper, x, token, edge_index, node_type, flat, target_class,
-                               0, keep_important=True, orig=orig)["prob"]
+    # the insertion curves' start (every eligible node deleted) does not depend on the draw's
+    # order; it is the very number the source curves use
+    insertion_k0 = _empty_evidence_drop(scorer, target_class)
     for _ in range(repeats):
         order = rng.permutation(candidates)
-        importance = np.zeros(int(x.size(0)))
-        importance[order] = np.arange(order.size, 0, -1, dtype=float)   # positive, strictly ordered
         for k in ks:
-            deletion[k].append(_score_at_k(wrapper, x, token, edge_index, node_type, importance,
-                                           target_class, k, keep_important=False, orig=orig)["prob"])
-            insertion[k].append(_score_at_k(wrapper, x, token, edge_index, node_type, importance,
-                                            target_class, k, keep_important=True, orig=orig)["prob"])
+            deletion[k].append(_drop(scorer, order[:k].tolist(), target_class, orig_probs, orig_pred)[0])
+            insertion[k].append(_drop(scorer, order[k:].tolist(), target_class, orig_probs, orig_pred)[0])
     return RandomReference(ks, deletion, insertion, int(candidates.size), seed,
                            insertion_k0=insertion_k0)
 
@@ -386,15 +431,12 @@ def random_reference(wrapper, x, token, edge_index, node_type, target_class,
 def relation_vs_payload_contribution(wrapper, x, edge_index, edge_attr,
                                      num_relation_columns: int,
                                      target_class: int) -> dict[str, Any]:
-    """GraphXAI improvement plan item #5's second ask: how much of the edges'
-    contribution to this prediction is the relation TYPE (the one-hot block,
-    columns [0, num_relation_columns)) versus the numeric PAYLOAD (delta/
-    interval/recency/prior-encounters, every column after it)? Answered the
-    same way every other fidelity metric in this module is -- zero one block,
-    measure the probability drop -- rather than a gradient, so it needs no
-    machinery beyond the edge_attr_override hook already on the wrapper.
-    Graph-level (both blocks across every edge at once), not per-edge: the
-    question is which TYPE of edge evidence this prediction leans on, not
+    """How much of the edges' contribution to this prediction is the relation TYPE (the one-hot
+    block, columns [0, num_relation_columns)) versus the numeric PAYLOAD (delta/interval/recency/
+    prior-encounters, every column after it)? Answered by zeroing one block and measuring the
+    probability drop rather than by a gradient, so it needs no machinery beyond the
+    edge_attr_override hook of the wrapper. Graph-level (both blocks across every edge at once),
+    not per-edge: the question is which TYPE of edge evidence this prediction leans on, not
     which single edge.
     """
     if edge_index.numel() == 0:
@@ -423,16 +465,3 @@ def relation_vs_payload_contribution(wrapper, x, edge_index, edge_attr,
         "edge_count": int(edge_index.size(1)),
         "target_class": target,
     }
-
-
-def insertion_curve(wrapper, x, token, edge_index, node_type, node_importance,
-                    target_class, *, num_points: int = 5) -> dict[str, Any]:
-    """Fidelity- at increasing k (most-important-first retention); AUC over
-    k/removable_count. Lower AUC = a small amount of important evidence
-    consistently suffices to preserve the prediction.
-
-    The curve starts at its measured k = 0 point: the probability drop of the graph with every
-    removable node evicted (`k0_prob`), not a fixed 0. The AUC is the trapezoid over that
-    anchored curve."""
-    return _curve(wrapper, x, token, edge_index, node_type, node_importance,
-                 target_class, keep_important=True, num_points=num_points)

@@ -1,5 +1,5 @@
-"""Audit controls for explanations (GraphXAI improvement plan item 8) and the
-edge-dependence diagnostic for edge-mask explainers (item 3's disclosure).
+"""Audit controls for explanations and the edge-dependence diagnostic for
+edge-mask explainers.
 
 - weight randomisation (Adebayo et al., 2018): an explanation that survives
   re-drawing every weight is not explaining the model.

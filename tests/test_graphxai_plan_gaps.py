@@ -1,11 +1,12 @@
-"""GraphXAI plan: behaviours added after the first port.
+"""Explanation runner behaviours added after the first port.
 
-- item 1: cohort contract v2 (test = report fold, validation/dev = decision folds, hash-pinned to the run),
-  runner writes cohort.json, CEI-GNN is refused clearly
-- item 2: the wrapper must reproduce the model on every graph before explaining
-- item 3: an all-zero edge-mask derivative is "unsupported", not a result
-- item 4: every record carries the versioned intervention definition
-- item 5: the degree-normalised GNNExplainer reduction is opt-in, 'sum' stays default
+- cohort contract v2 (test = report fold, validation/dev = decision folds, hash-pinned to the run),
+  the runner writes cohort.json, older CEI-GNN variants are refused clearly
+- the wrapper must reproduce the model on every graph before explaining
+- an all-zero edge-mask derivative is "unsupported", not a result
+- every record carries the versioned intervention definition
+- the degree-normalised GNNExplainer reduction is opt-in, 'sum' stays default
+- ProtGNN's built-in is the model's own subgraph search, for the predicted and the true class
 """
 import json
 
@@ -75,6 +76,10 @@ def trained(tmp_path):
     return run_dir, bundle, binding, splits, runner.build_wrapper(binding, model)
 
 
+def visit_records(splits, fold="validation"):
+    return splits.visit_records([d.sample_id for d in splits[fold]])
+
+
 def test_runner_writes_a_v2_cohort_and_records_its_version(tmp_path, trained):
     run_dir, bundle, binding, _, _ = trained
     out = tmp_path / "explanations_cohort"
@@ -87,7 +92,7 @@ def test_runner_writes_a_v2_cohort_and_records_its_version(tmp_path, trained):
 
 
 def test_runner_refuses_the_older_cei_variants_clearly(trained):
-    """CEI-GNN v3 is bridged (tests/test_cei_bridge.py); his v1/v2 variants are not."""
+    """CEI-GNN v3 is bridged (tests/test_cei_bridge.py); the older v1/v2 variants are not."""
     _, bundle, binding, _, _ = trained
     other = dict(binding, method="cei_gnn_v2")
     with pytest.raises(NotImplementedError, match="not supported by this runner"):
@@ -99,7 +104,8 @@ def test_a_wrapper_that_does_not_reproduce_the_model_blocks_the_explanation(trai
     wrapper.verify = lambda *args, **kwargs: (False, 0.5)
     with pytest.raises(ValueError, match="does not reproduce the model"):
         runner.explain_subject(wrapper, splits["validation"][0], method="gsat", conv=None,
-                               steps=2, epochs=2, num_relation_columns=1)
+                               steps=2, epochs=2, num_relation_columns=1,
+                               records=visit_records(splits))
 
 
 def test_zero_edge_gradient_is_unsupported_not_a_result(monkeypatch, trained):
@@ -113,7 +119,8 @@ def test_zero_edge_gradient_is_unsupported_not_a_result(monkeypatch, trained):
 
     monkeypatch.setattr(gx, "explain_algorithms", zeroed)
     record = runner.explain_subject(wrapper, splits["validation"][0], method="gsat", conv=None,
-                                    steps=2, epochs=2, num_relation_columns=binding["num_relations"])
+                                    steps=2, epochs=2, num_relation_columns=binding["num_relations"],
+                                    records=visit_records(splits), random_repeats=2)
     gnn = record["graphxai"]["GNNExplainer"]
     assert gnn["status"] == "unsupported" and "unsupported_reason" in gnn
     assert "node_explanation" not in gnn
@@ -124,9 +131,11 @@ def test_zero_edge_gradient_is_unsupported_not_a_result(monkeypatch, trained):
 def test_records_stamp_the_wrapper_check_and_the_intervention_version(trained):
     _, _, binding, splits, wrapper = trained
     record = runner.explain_subject(wrapper, splits["validation"][0], method="gsat", conv=None,
-                                    steps=2, epochs=2, num_relation_columns=binding["num_relations"])
+                                    steps=2, epochs=2, num_relation_columns=binding["num_relations"],
+                                    records=visit_records(splits), random_repeats=2)
     assert record["wrapper_verification"]["max_abs_logit_diff"] <= 1e-5
     assert record["fidelity_v2_intervention"]["version"] == fv2.INTERVENTION_CONTRACT_VERSION
+    assert record["fidelity_v2_intervention"]["definition"] == fv2.INTERVENTION_CONTRACT
 
 
 def _gnn_importance(**kwargs):
@@ -156,17 +165,70 @@ def test_unknown_node_reduction_is_rejected():
 def test_protgnn_runner_reports_the_models_own_subgraph_or_says_why_not(tmp_path):
     run_dir = train_one(tmp_path, "run_protgnn_builtin", method="protgnn", conv=None)
     out = tmp_path / "explanations_protgnn"
-    manifest = runner.run_explanations(run_dir, out, max_subjects=4, steps=2, epochs=3)
+    manifest = runner.run_explanations(run_dir, out, max_subjects=4, steps=2, epochs=3,
+                                       random_repeats=2)
     assert manifest["method"] == "protgnn" and manifest["failed_count"] == 0, manifest["failures"]
+    bundle = runner.load_run_bundle(run_dir)
+    model, _ = runner.build_model(bundle.binding, bundle.state_dict)
+    builtin = manifest["builtin_explanation"]
+    assert builtin["class_specific"] is True
+    assert builtin["settings"] == {"rollout": model.rollout, "min_atoms": model.min_atoms,
+                                   "max_atoms": model.max_atoms, "expand_atoms": model.expand_atoms,
+                                   "c_puct": model.c_puct}
+    assert "official ProtGNN 10/5/10/10" in builtin["settings_source"]
+    projection = manifest["prototype_projection"]
+    assert {"prototypes_projected", "last_projection_epoch",
+            "epochs_trained_after_last_projection"} <= set(projection)
+    assert "protgnn/adapter.py" in manifest["code"]["source_hashes"]
     for name in manifest["record_files"]:
         record = json.loads((out / name).read_text())
-        if record["builtin_available"]:
-            detail = record["builtin_detail"]
+        assert record["builtin_class_specific"] is True
+        detail = record["builtin_detail"]
+        assert detail["kind"] == "prototype_mcts_subgraph"
+        assert detail["predicted_class"] == record["prediction_class_id"]
+        if record["builtin_status"] == "available":
             members = [i for i, v in enumerate(record["builtin_node_importance"]) if v == 1.0]
-            assert detail["kind"] == "prototype_mcts_subgraph"
             assert members == detail["subgraph_nodes"]
-            assert detail["predicted_class"] == record["prediction_class_id"]
+            assert detail["subgraph_eligible_count"] > 0
             assert "fidelity_plus" in record["fidelity_v2"]["builtin"]
+        elif record["builtin_status"] == "no_eligible_evidence":
+            # the subgraph lies wholly on structural nodes: counted, not a failure
+            assert detail["subgraph_eligible_count"] == 0
+            assert record["fidelity_v2"]["builtin"] == {"status": "no_eligible_evidence", "support": 0}
         else:
+            assert record["builtin_status"] == "unavailable"
             assert record["builtin_unavailable_reason"]
-            assert record["builtin_detail"] is None
+            assert detail["subgraph_nodes"] == []
+            assert "builtin" not in record["fidelity_v2"]
+
+
+def test_a_misclassified_protgnn_visit_carries_the_true_class_search(tmp_path):
+    """The true-class built-in of a class-specific model is its own search for that class, with
+    its detail (prototype and subgraph) recorded next to the vector."""
+    run_dir = train_one(tmp_path, "run_protgnn_true_class", method="protgnn", conv=None)
+    bundle = runner.load_run_bundle(run_dir)
+    binding = bundle.binding
+    splits = runner.rebuild_split(binding, "validation")
+    model, _ = runner.build_model(binding, bundle.state_dict)
+    wrapper = runner.build_wrapper(binding, model)
+    data = splits["validation"][0]
+    batch = runner._single_graph_batch(data)
+    x = wrapper.set_context(batch)
+    with torch.no_grad():
+        prediction = int(wrapper(x, batch.edge_index).argmax(-1))
+    other = (prediction + 1) % binding["num_classes"]
+    data.y = torch.tensor([other])                         # pretend the truth was another class
+    records = runner.VisitRecords(visit_records(splits).records, splits.encode)
+    record = runner.explain_subject(wrapper, data, method="protgnn", conv=None, steps=2, epochs=3,
+                                    num_relation_columns=binding["num_relations"], records=records,
+                                    random_repeats=2)
+    block = record["true_class_explanations"]
+    assert block["target_class"] == other
+    assert block["builtin_detail"]["explained_class"] == other
+    assert block["builtin_detail"]["search"]["settings"]["rollout"] == model.rollout
+    assert record["builtin_detail"]["explained_class"] == prediction
+    assert "fidelity_v2" not in block
+    for metrics in block["true_class_probability_change"].values():
+        if "fidelity_plus" in metrics:
+            assert metrics["fidelity_plus"]["target_class"] == other
+            assert "acc" not in metrics["fidelity_plus"]

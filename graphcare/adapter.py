@@ -177,7 +177,6 @@ class GraphCareAdapter(ClinicalMethodAdapter):
         self.classifier = nn.Linear(3 * self.hidden, self.num_classes)
 
         self.last_alpha = None
-        self.last_node_attention = None
         self.last_beta = None
         self.last_visit_weight = None
         self.last_visit_state = None
@@ -269,8 +268,20 @@ class GraphCareAdapter(ClinicalMethodAdapter):
             visit_count=visit_count,
         )
 
-    def _encode_inputs(self, clinical_batch: ClinicalBatch):
-        token_state = self.token_embedding(clinical_batch.token)
+    def embed_tokens(self, batch) -> torch.Tensor:
+        """The token-embedding rows [N, token_dim] that forward() looks up for
+        this batch; forward(token_vectors=...) accepts a replacement of exactly
+        this shape."""
+        return self.token_embedding(self._clinical_batch(batch).token)
+
+    def _encode_inputs(self, clinical_batch: ClinicalBatch, token_vectors=None):
+        if token_vectors is None:
+            token_state = self.token_embedding(clinical_batch.token)
+        elif (token_vectors.ndim != 2
+              or token_vectors.shape != (clinical_batch.x.size(0), self.token_dim)):
+            raise ValueError("token_vectors must have shape [nodes, token_dim]")
+        else:
+            token_state = token_vectors
         node_state = self.node_projection(torch.cat([
             clinical_batch.x,
             token_state,
@@ -358,11 +369,19 @@ class GraphCareAdapter(ClinicalMethodAdapter):
         )
         return alpha, beta, visit_weight, node_context, node_attention
 
-    def forward(self, batch, *, epoch: int, external_edge_mask=None) -> MethodOutput:
+    def forward(self, batch, *, epoch: int, external_edge_mask=None,
+                token_vectors=None) -> MethodOutput:
+        # Explanation hooks (the trainer never passes them; None is the
+        # training call): `external_edge_mask` scales the BAT messages,
+        # `token_vectors` [nodes, token_dim] replaces the token-embedding rows
+        # (embed_tokens).
         epoch_index(epoch)
         clinical_batch = self._clinical_batch(batch)
         visit_batch = self._visit_batch(batch, clinical_batch)
-        node_state, edge_context = self._encode_inputs(clinical_batch)
+        node_state, edge_context = self._encode_inputs(
+            clinical_batch,
+            token_vectors=token_vectors,
+        )
         non_global_mask = ~visit_batch.global_node_mask
         knowledge_index = NODE_KINDS.index("knowledge")
         direct_mask = non_global_mask & (clinical_batch.node_type != knowledge_index)
@@ -392,7 +411,8 @@ class GraphCareAdapter(ClinicalMethodAdapter):
             # adapter's, so it must be subset identically before use here, or
             # its values would land on the wrong edges once global-node edges
             # are dropped. Direct/global readout paths below never see this
-            # mask -- same disclosed-boundary caveat as GPS/VNode.
+            # mask, and neither do the global-node edges, which carry no
+            # message in this model.
             filtered_edge_mask = (
                 external_edge_mask[message_edge_mask]
                 if external_edge_mask is not None else None
@@ -444,13 +464,6 @@ class GraphCareAdapter(ClinicalMethodAdapter):
         auxiliary_loss = logits.sum() * 0.0
 
         self.last_alpha = alpha
-        # alpha is indexed over only the direct (non-global, non-knowledge)
-        # attention pairs -- not one entry per node -- so it cannot be used
-        # as a node_importance array against the full node indexing (x,
-        # token, node_type) that fidelity/GraphXAI operate over. node_attention
-        # is alpha already scattered to one value per node (dim_size=
-        # node_state.size(0)), same convention as GSAT's last_node_attention.
-        self.last_node_attention = node_attention
         self.last_beta = beta
         self.last_visit_weight = visit_weight
         self.last_visit_state = visit_state

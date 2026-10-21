@@ -1,16 +1,15 @@
-"""End-to-end tests for the item-#1 explanation runner (explain.py).
+"""End-to-end tests for the explanation runner (core/explain/runner.py).
 
-Unlike every other test file touched this session, this one does NOT stop at
-synthetic in-memory tensors: it actually invokes train.run() on tiny synthetic
-data, through the real CLI-equivalent pipeline, producing a real binding.json/
-preprocessing.json/best.pt/validation.npz on disk -- then points the runner at
-that real output directory. This is the only way to prove the reload/replay
-logic (which exists specifically to catch a mismatched reconstruction) is
-actually correct, not just plausible.
+Unlike most explanation tests, this file does NOT stop at synthetic in-memory tensors: it invokes
+train.run() on tiny synthetic data, through the real CLI-equivalent pipeline, producing a real
+binding.json/preprocessing.json/best.pt/<fold>.npz on disk -- then points the runner at that real
+output directory. This is the only way to prove the reload, split and replay guards (which exist
+to catch a mismatched reconstruction) refuse what they must and accept what they must.
 
-The default fold is the test fold (the report fold, ADR-023); validation and dev
-are decision folds. The synthetic runs default to the final protocol's shape
-(selection on validation, test scored once).
+The default fold is the test fold (the report fold); validation and dev are decision folds. The
+synthetic runs default to the final protocol's shape (selection on validation, test scored once).
+The last section explains one visit of a synthetic graph record with each of the four final methods
+(gsat, graphcare, protgnn, cei_gnn_mp2) through `explain_subject`.
 """
 import copy
 import inspect
@@ -18,10 +17,15 @@ import json
 import sys
 import types
 
+import numpy as np
 import pytest
+import torch
 
 from core import train
+from core.explain import fidelity_v2 as fv2
 from core.explain import runner as explain
+from core.explain.node_deletion import DeletionScorer
+from core.schema import sha256
 from tests.graphxai_fixtures import artifact, run_args
 
 
@@ -31,6 +35,24 @@ def train_one(tmp_path, out_name, **overrides):
     args = run_args(root, targets, canonical, out, **overrides)
     train.run(args)
     return out
+
+
+def subject_setup(run_dir, fold="test"):
+    """(binding, splits, wrapper, records) for explaining visits of one fold directly."""
+    bundle = explain.load_run_bundle(run_dir, fold)
+    splits = explain.rebuild_split(bundle.binding, fold)
+    model, _ = explain.build_model(bundle.binding, bundle.state_dict)
+    wrapper = explain.build_wrapper(bundle.binding, model)
+    records = splits.visit_records([d.sample_id for d in splits[fold]])
+    return bundle.binding, splits, wrapper, records
+
+
+def subject_kwargs(binding, records, **extra):
+    values = dict(method=binding["method"], conv=binding.get("conv"), steps=2, epochs=3,
+                  num_relation_columns=binding["num_relations"], records=records,
+                  random_repeats=4, tie_draws=3, true_class_explanations=False)
+    values.update(extra)
+    return values
 
 
 def test_black_box_runner_replays_and_explains_the_test_fold(tmp_path):
@@ -52,10 +74,11 @@ def test_black_box_runner_replays_and_explains_the_test_fold(tmp_path):
         assert record["conv"] == "edge_conditioned"
         for algo in ("GradExplainer", "IntegratedGradExplainer", "GNNExplainer"):
             assert record["graphxai"][algo]["status"] == "success", record["graphxai"][algo]
-        # The black-box baseline has no .explain(): builtin readout is correctly absent,
-        # not fabricated.
+        # The black-box baseline has no built-in readout: absent with its reason, not fabricated.
         assert record["builtin_available"] is False
+        assert record["builtin_status"] == "unavailable" and record["builtin_unavailable_reason"]
         assert record["builtin_node_importance"] is None
+        assert "builtin" not in record["fidelity_v2"]
 
 
 def test_gsat_runner_replays_and_explains(tmp_path):
@@ -76,6 +99,7 @@ def test_gsat_runner_replays_and_explains(tmp_path):
             assert record["graphxai"][algo]["status"] == "success", record["graphxai"][algo]
         # GSAT has .explain(): its own deterministic attention should be present.
         assert record["builtin_available"] is True
+        assert record["builtin_status"] in ("available", "no_eligible_evidence")
         assert len(record["builtin_node_importance"]) > 0
 
 
@@ -98,26 +122,147 @@ def test_graphcare_recency_decay_is_recovered_not_defaulted(tmp_path):
     assert manifest["method"] == "graphcare"
     assert manifest["replay_verified"] is True
     assert manifest["failed_count"] == 0, manifest["failures"]
+    written = json.loads((output / "binding.json").read_text())
+    assert written["model_run"]["effective_settings"]["recency_decay"] == 0.0116
 
 
 def test_build_model_refuses_settings_that_do_not_round_trip(tmp_path):
     """A recorded setting the rebuilt model does not report back (a name the adapter
-    does not read) must refuse, never fall back to a default silently."""
-    run_dir = train_one(tmp_path, "run_graphcare_tampered", method="graphcare", conv=None)
+    does not read), a recorded schedule value or dropout it would not rebuild: every one refuses,
+    never falls back to a default silently. The untouched binding rebuilds the whole run_config."""
+    run_dir = train_one(tmp_path, "run_graphcare_tampered", method="graphcare", conv=None,
+                        dropout=0.2)
     bundle = explain.load_run_bundle(run_dir)
+    model, _ = explain.build_model(bundle.binding, bundle.state_dict)
+    assert json.loads(json.dumps(model.run_config())) == bundle.binding["method_config"]
     binding = copy.deepcopy(bundle.binding)
     binding["method_config"]["effective_settings"]["unread_setting"] = 0.123
-    with pytest.raises(ValueError, match="effective settings differ"):
+    with pytest.raises(ValueError, match=r"run_config differs .*effective_settings.unread_setting"):
+        explain.build_model(binding, bundle.state_dict)
+    binding = copy.deepcopy(bundle.binding)
+    binding["method_config"]["native_schedule"]["patience"] += 1
+    with pytest.raises(ValueError, match=r"native_schedule.patience"):
+        explain.build_model(binding, bundle.state_dict)
+    binding = copy.deepcopy(bundle.binding)
+    binding["dropout"] = 0.0
+    with pytest.raises(ValueError, match=r"architecture.dropout"):
         explain.build_model(binding, bundle.state_dict)
 
 
+def test_protgnn_rebuild_keeps_select_after_projection(tmp_path):
+    run_dir = train_one(tmp_path, "run_protgnn_select", method="protgnn", conv=None,
+                        select_after_projection=True, warm_epochs=1, proj_epochs=1, epochs=3)
+    bundle = explain.load_run_bundle(run_dir)
+    assert bundle.binding.get("selection_start_epoch_index") is not None
+    model, _ = explain.build_model(bundle.binding, bundle.state_dict)
+    assert model.select_after_projection is True
+    assert model.selection_start_epoch() == bundle.binding["selection_start_epoch_index"]
+
+
+# ------------------------------------------------------------------ split guards
+def test_rebuild_split_returns_the_fitted_preprocessing_and_the_record_encoder(tmp_path):
+    from core.tensorize import preprocessing_state
+
+    run_dir = train_one(tmp_path, "run_split", method="gsat", conv=None)
+    bundle = explain.load_run_bundle(run_dir)
+    splits = explain.rebuild_split(bundle.binding, "test")
+    assert isinstance(splits, explain.RebuiltSplits) and "test" in splits
+    state = json.dumps(preprocessing_state(splits.preprocessing), indent=2, sort_keys=True) + "\n"
+    assert state == (run_dir / "preprocessing.json").read_text()
+    records = splits.visit_records([d.sample_id for d in splits["test"]])
+    for data in splits["test"]:
+        graph, membership = records.records[data.sample_id]
+        encoded = splits.encode(graph, membership)
+        for name in ("x", "edge_index", "edge_attr", "token", "node_type", "visit_membership_index"):
+            assert torch.equal(getattr(encoded, name), getattr(data, name)), name
+
+
+def _swap_two_test_labels(targets_path):
+    lines = targets_path.read_text().splitlines()
+    first, second = [i for i, line in enumerate(lines) if ",test," in line][:2]
+    a, b = lines[first].split(","), lines[second].split(",")
+    a[1], b[1] = b[1], a[1]
+    assert a[1] != b[1]
+    lines[first], lines[second] = ",".join(a), ",".join(b)
+    targets_path.write_text("\n".join(lines) + "\n")
+
+
+def test_a_relabelled_targets_file_is_refused(tmp_path):
+    run_dir = train_one(tmp_path, "run_relabel", method="gsat", conv=None)
+    binding = json.loads((run_dir / "binding.json").read_text())
+    from pathlib import Path
+
+    _swap_two_test_labels(Path(binding["targets_path"]))
+    with pytest.raises(ValueError, match="targets file"):
+        explain.rebuild_split(binding, "test")
+    with pytest.raises(ValueError, match="targets file"):
+        explain.run_explanations(run_dir, tmp_path / "out_relabel", max_subjects=1, steps=2, epochs=3)
+    assert not (tmp_path / "out_relabel").exists()
+
+
+def test_an_edited_graph_line_is_refused(tmp_path):
+    from pathlib import Path
+
+    run_dir = train_one(tmp_path, "run_graph_edit", method="gsat", conv=None)
+    binding = json.loads((run_dir / "binding.json").read_text())
+    graphs = Path(binding["artifact"]) / "graphs.jsonl"
+    lines = graphs.read_text().splitlines()
+    graph = json.loads(lines[-1])
+    next(n for n in graph["nodes"] if n["kind"] == "vital")["value"] += 1.0
+    lines[-1] = json.dumps(graph)
+    graphs.write_text("\n".join(lines) + "\n")
+    with pytest.raises(ValueError, match="graphs.jsonl"):
+        explain.rebuild_split(binding, "test")
+
+
+def test_a_changed_membership_sidecar_is_refused(tmp_path):
+    from pathlib import Path
+
+    from core.contracts import VISIT_MEMBERSHIP_FILENAME
+
+    run_dir = train_one(tmp_path, "run_membership_edit", method="gsat", conv=None)
+    binding = json.loads((run_dir / "binding.json").read_text())
+    sidecar = Path(binding["artifact"]) / VISIT_MEMBERSHIP_FILENAME
+    sidecar.write_text(sidecar.read_text() + "\n")
+    with pytest.raises(ValueError, match=VISIT_MEMBERSHIP_FILENAME):
+        explain.rebuild_split(binding, "test")
+
+
+def test_a_preprocessing_that_does_not_refit_to_the_recorded_hash_is_refused(tmp_path):
+    run_dir = train_one(tmp_path, "run_prep", method="gsat", conv=None)
+    binding = json.loads((run_dir / "binding.json").read_text())
+    drifted = dict(binding, token_min_count=binding["token_min_count"] + 1)
+    with pytest.raises(ValueError, match="refitted preprocessing"):
+        explain.rebuild_split(drifted, "test")
+
+
+def test_kept_classes_and_missing_recorded_hashes_are_refused(tmp_path):
+    run_dir = train_one(tmp_path, "run_kept", method="gsat", conv=None)
+    binding = json.loads((run_dir / "binding.json").read_text())
+    reordered = dict(binding, kept_label_indices=list(reversed(binding["kept_label_indices"])))
+    with pytest.raises(ValueError, match="kept classes"):
+        explain.rebuild_split(reordered, "test")
+    for key in ("targets_sha256", "artifact_graphs_sha256", "artifact_visit_membership_sha256"):
+        missing = {k: v for k, v in binding.items() if k != key}
+        with pytest.raises(ValueError, match=f"records no {key}"):
+            explain.rebuild_split(missing, "test")
+
+
+def test_a_rewired_run_has_no_deletion_records(tmp_path):
+    run_dir = train_one(tmp_path, "run_rewire_records", method="gsat", conv=None)
+    bundle = explain.load_run_bundle(run_dir)
+    splits = explain.rebuild_split(bundle.binding, "test")
+    splits._rewired = ("comorbid_with",)
+    with pytest.raises(ValueError, match="rewired"):
+        splits.visit_records([splits["test"][0].sample_id])
+
+
+# ------------------------------------------------------------------ replay guards
 def test_replay_check_refuses_a_tampered_prediction_hash(tmp_path):
     """If binding.json's recorded hash doesn't match what reloading + replaying
     best.pt actually produces, and the stored predictions of the fold do not match
     either, the runner must refuse outright, before writing any output -- never
     silently explain a model it can't verify."""
-    import numpy as np
-
     run_dir = train_one(tmp_path, "run_tamper", method="gsat", conv=None)
     binding_path = run_dir / "binding.json"
     binding = json.loads(binding_path.read_text())
@@ -134,21 +279,56 @@ def test_replay_check_refuses_a_tampered_prediction_hash(tmp_path):
     assert not output.exists() or not any(output.iterdir())
 
 
-def test_replay_falls_back_to_the_stored_predictions_when_the_hash_cannot_reproduce(tmp_path):
-    """On another machine the byte hash differs in the last float bits; the replay then
-    passes only if every row matches the stored <fold>.npz within the tolerance with
-    100% argmax agreement, and the manifest says which rule passed."""
-    run_dir = train_one(tmp_path, "run_fallback", method="gsat", conv=None)
-    binding_path = run_dir / "binding.json"
-    binding = json.loads(binding_path.read_text())
-    binding["selected_test"]["prediction_sha256"] = "0" * 64
-    binding_path.write_text(json.dumps(binding))
+def _off_by_float_noise(monkeypatch):
+    """The replayed probabilities differ from training's in the last bits (another machine)."""
+    real = explain.fold_probabilities
+    monkeypatch.setattr(explain, "fold_probabilities",
+                        lambda *a, **k: real(*a, **k) + np.float32(1e-7))
 
+
+def test_replay_falls_back_to_the_stored_predictions_when_the_hash_cannot_reproduce(tmp_path, monkeypatch):
+    """On another machine the byte hash differs in the last float bits; the replay then
+    passes only if the stored <fold>.npz is the training run's own (hash and labels) and every row
+    matches it within the tolerance with 100% argmax agreement; the manifest says which rule passed."""
+    run_dir = train_one(tmp_path, "run_fallback", method="gsat", conv=None)
+    _off_by_float_noise(monkeypatch)
     manifest = explain.run_explanations(run_dir, tmp_path / "out_fallback", max_subjects=1,
                                         steps=2, epochs=3)
     assert manifest["replay"]["mode"] == "stored_predictions_tolerance"
     assert manifest["replay"]["max_abs_diff"] <= explain.REPLAY_TOLERANCE
     assert manifest["replay"]["argmax_agreement"] == 1.0
+    assert manifest["replay"]["stored_npz_hash_verified"] is True
+    assert manifest["replay"]["stored_labels_verified"] is True
+
+
+def test_replay_refuses_a_stored_npz_that_is_not_the_training_runs(tmp_path, monkeypatch):
+    """A stored npz holding another model's probabilities -- even ones the replay would match --
+    is refused: its hash is not the recorded prediction hash."""
+    run_dir = train_one(tmp_path, "run_foreign_npz", method="gsat", conv=None)
+    bundle = explain.load_run_bundle(run_dir)
+    splits = explain.rebuild_split(bundle.binding, "test")
+    model, is_adapter = explain.build_model(bundle.binding, bundle.state_dict)
+    stored = dict(np.load(run_dir / "test.npz"))
+    replayed = explain.fold_probabilities(model, splits, "test", bundle.binding["batch_size"], is_adapter)
+    monkeypatch.setattr(explain, "fold_probabilities", lambda *a, **k: replayed)
+    stored["proba"] = (replayed + np.float32(1e-7)).astype(np.float32)   # matches the replay, not training
+    np.savez(run_dir / "test.npz", **stored)
+    binding = dict(bundle.binding, selected_test=dict(bundle.binding["selected_test"],
+                                                      prediction_sha256="1" * 64))
+    with pytest.raises(ValueError, match="not the training run's"):
+        explain.replay_check(model, splits, binding, is_method_adapter=is_adapter, fold="test",
+                             stored_npz=run_dir / "test.npz")
+
+
+def test_replay_refuses_a_stored_npz_with_other_labels(tmp_path, monkeypatch):
+    run_dir = train_one(tmp_path, "run_relabelled_npz", method="gsat", conv=None)
+    stored = dict(np.load(run_dir / "test.npz"))
+    stored["y"] = 1 - stored["y"]
+    np.savez_compressed(run_dir / "test.npz", **stored)
+    _off_by_float_noise(monkeypatch)
+    with pytest.raises(ValueError, match="labels differ"):
+        explain.run_explanations(run_dir, tmp_path / "out_relabelled_npz", max_subjects=1,
+                                 steps=2, epochs=3)
 
 
 def test_replay_reports_the_exact_hash_mode_when_it_reproduces(tmp_path):
@@ -156,6 +336,7 @@ def test_replay_reports_the_exact_hash_mode_when_it_reproduces(tmp_path):
     manifest = explain.run_explanations(run_dir, tmp_path / "out_exact", max_subjects=1,
                                         steps=2, epochs=3)
     assert manifest["replay"]["mode"] == "exact_hash"
+    assert manifest["replay"]["stored_npz_hash_verified"] is None
 
 
 def test_refuses_to_write_into_an_occupied_output_directory(tmp_path):
@@ -168,19 +349,10 @@ def test_refuses_to_write_into_an_occupied_output_directory(tmp_path):
 
 
 def test_replay_check_uses_the_trained_batch_size_not_a_hardcoded_default(tmp_path):
-    """Regression for a real bug this session found running the real pipeline
-    end to end: replay_check() used to default to a hardcoded batch_size
-    (64), independent of what training actually used. On a small fold that
-    difference was invisible (everything fit in one batch either way) -- it
-    only surfaced on a larger real run where batch count actually differed
-    between the two sizes, and GSAT's InstanceNorm layers turned out to be
-    sensitive to how graphs are grouped into a batch, not just to each
-    graph's own content. Force a tiny training batch_size (3) against the
-    existing 4-graph validation (decision) fold, which already spans
-    multiple batches at size 3 but not at the old hardcoded 64 -- proving
-    the fix reads binding['batch_size'] rather than reintroducing the
-    mismatch.
-    """
+    """The byte hash depends on the float summation order, i.e. on how graphs are grouped into
+    batches; replay_check must read binding['batch_size']. Force a tiny training batch_size (3)
+    against the 4-graph validation (decision) fold, which spans multiple batches at size 3 but not
+    at a hardcoded 64."""
     run_dir = train_one(tmp_path, "run_batchsize", method="gsat", conv=None, batch_size=3)
     binding = json.loads((run_dir / "binding.json").read_text())
     assert binding["batch_size"] == 3
@@ -252,6 +424,17 @@ def test_a_run_without_a_test_block_is_refused_for_the_test_fold(tmp_path):
         explain.load_run_bundle(run_dir, "holdout")
 
 
+def test_a_missing_run_file_or_a_changed_preprocessing_json_is_refused(tmp_path):
+    run_dir = train_one(tmp_path, "run_files", method="gsat", conv=None)
+    prep = run_dir / "preprocessing.json"
+    prep.write_text(prep.read_text() + " ")
+    with pytest.raises(ValueError, match="preprocessing.json hash"):
+        explain.load_run_bundle(run_dir)
+    prep.unlink()
+    with pytest.raises(FileNotFoundError, match="preprocessing.json missing"):
+        explain.load_run_bundle(run_dir)
+
+
 def test_gchm_runs_are_refused(tmp_path):
     run_dir = train_one(tmp_path, "run_gchm_refused", method="gsat", conv=None)
     binding_path = run_dir / "binding.json"
@@ -295,8 +478,6 @@ def test_cei_mp2_is_registered_and_dispatched_through_the_bridge(monkeypatch):
 
 
 def test_fold_probabilities_is_the_replay_loop(tmp_path):
-    import numpy as np
-    import torch
     from torch_geometric.loader import DataLoader
 
     run_dir = train_one(tmp_path, "run_fold_probabilities", method="graphcare", conv=None)
@@ -314,19 +495,19 @@ def test_fold_probabilities_is_the_replay_loop(tmp_path):
     assert replay["mode"] in ("exact_hash", "stored_predictions_tolerance")
 
 
-def _tie_fixture(tmp_path, monkeypatch, stored, replayed):
-    """replay_check on crafted stored and replayed probabilities (the forward is replaced)."""
-    import types
-
-    import numpy as np
-
+def _tie_fixture(tmp_path, monkeypatch, stored, replayed, labels=None):
+    """replay_check on crafted stored and replayed probabilities (the forward is replaced); the
+    stored npz is the 'training run's' (its hash is the recorded one, its labels the fold's)."""
     stored = np.asarray(stored, dtype=np.float64)
     ids = [f"row-{i}" for i in range(len(stored))]
-    np.savez(tmp_path / "test.npz", sample_ids=np.array(ids), proba=stored)
-    splits = {"test": [types.SimpleNamespace(sample_id=i) for i in ids]}
+    y = stored.argmax(1)
+    np.savez(tmp_path / "test.npz", sample_ids=np.array(ids), proba=stored,
+             y=y if labels is None else np.asarray(labels))
+    splits = {"test": [types.SimpleNamespace(sample_id=i, y=torch.tensor([int(c)]))
+                       for i, c in zip(ids, y)]}
     monkeypatch.setattr(explain, "fold_probabilities",
                         lambda *a, **k: np.asarray(replayed, dtype=np.float64))
-    binding = {"batch_size": 4, "selected_test": {"prediction_sha256": "0" * 64}}
+    binding = {"batch_size": 4, "selected_test": {"prediction_sha256": explain.proba_digest(stored)}}
     return lambda: explain.replay_check(None, splits, binding, is_method_adapter=True, fold="test",
                                         stored_npz=tmp_path / "test.npz")
 
@@ -366,9 +547,25 @@ def test_a_flip_on_a_tie_row_still_needs_every_row_within_the_tolerance(tmp_path
         _tie_fixture(tmp_path, monkeypatch, stored, replayed)()
 
 
-def test_manifest_records_environment_and_timing_and_records_their_seconds(tmp_path):
-    import torch
+def test_stored_ids_that_differ_from_the_fold_are_refused(tmp_path, monkeypatch):
+    stored = [[0.2, 0.8], [0.6, 0.4]]
+    replay = _tie_fixture(tmp_path, monkeypatch, stored, [[0.2 + 5e-5, 0.8 - 5e-5], [0.6, 0.4]])
+    saved = dict(np.load(tmp_path / "test.npz"))
+    saved["sample_ids"] = saved["sample_ids"][::-1].copy()
+    np.savez(tmp_path / "test.npz", **saved)
+    with pytest.raises(ValueError, match="stored sample ids or shape differ"):
+        replay()
 
+
+def test_a_stored_label_that_differs_from_the_fold_is_refused(tmp_path, monkeypatch):
+    stored = [[0.2, 0.8], [0.6, 0.4]]
+    replay = _tie_fixture(tmp_path, monkeypatch, stored, [[0.2 + 5e-5, 0.8 - 5e-5], [0.6, 0.4]],
+                          labels=[0, 0])
+    with pytest.raises(ValueError, match="labels differ"):
+        replay()
+
+
+def test_manifest_records_environment_and_timing_and_records_their_seconds(tmp_path):
     run_dir = train_one(tmp_path, "run_provenance", method="gsat", conv=None)
     output = tmp_path / "out_provenance"
     manifest = explain.run_explanations(run_dir, output, max_subjects=2, steps=2, epochs=3)
@@ -387,16 +584,10 @@ def test_manifest_records_environment_and_timing_and_records_their_seconds(tmp_p
 
 
 def test_single_graph_check_is_null_without_a_stored_row_and_never_refuses(tmp_path):
-    import numpy as np
-
     run_dir = train_one(tmp_path, "run_single_graph", method="gsat", conv=None)
-    bundle = explain.load_run_bundle(run_dir, "test")
-    splits = explain.rebuild_split(bundle.binding, "test")
-    model, _ = explain.build_model(bundle.binding, bundle.state_dict)
-    wrapper = explain.build_wrapper(bundle.binding, model)
+    binding, splits, wrapper, records = subject_setup(run_dir)
     data = splits["test"][0]
-    kwargs = dict(method="gsat", conv=None, steps=2, epochs=3, num_relation_columns=bundle.binding["num_relations"],
-                  random_repeats=0, true_class_explanations=False)
+    kwargs = subject_kwargs(binding, records, random_repeats=0)
     assert explain.explain_subject(wrapper, data, **kwargs)["single_graph_check"] is None
     far = np.array([1.0, 0.0])      # a stored row far from any single-graph forward
     record = explain.explain_subject(wrapper, data, stored_row=far, **kwargs)
@@ -405,16 +596,396 @@ def test_single_graph_check_is_null_without_a_stored_row_and_never_refuses(tmp_p
     assert record["seconds"] > 0
 
 
+def test_explain_subject_needs_the_visit_records(tmp_path):
+    run_dir = train_one(tmp_path, "run_needs_records", method="gsat", conv=None)
+    binding, splits, wrapper, records = subject_setup(run_dir)
+    kwargs = subject_kwargs(binding, None)
+    with pytest.raises(ValueError, match="visit records"):
+        explain.explain_subject(wrapper, splits["test"][0], **kwargs)
+    other = explain.VisitRecords({}, records.encode)
+    with pytest.raises(ValueError, match="no graph record"):
+        explain.explain_subject(wrapper, splits["test"][0], **subject_kwargs(binding, other))
+
+
+def test_a_record_whose_encoding_is_not_the_split_tensor_is_refused(tmp_path):
+    run_dir = train_one(tmp_path, "run_encoding_check", method="gsat", conv=None)
+    binding, splits, wrapper, records = subject_setup(run_dir)
+    data = splits["test"][0]
+    graph, membership = records.records[data.sample_id]
+    changed = copy.deepcopy(graph)
+    next(n for n in changed["nodes"] if n["kind"] == "vital")["value"] += 5.0
+    tampered = explain.VisitRecords({data.sample_id: (changed, membership)}, records.encode)
+    with pytest.raises(ValueError, match="differs from the split tensor"):
+        explain.explain_subject(wrapper, data, **subject_kwargs(binding, tampered))
+
+
 def test_prototype_projection_status_reads_the_selected_epoch(tmp_path):
-    import json as _json
     binding = {"method": "protgnn",
                "method_config": {"effective_settings": {"proj_epochs": 20, "proj_interval": 25}}}
-    for selected, projected in ((8, False), (20, False), (21, True), (27, True)):
-        (tmp_path / "result.json").write_text(_json.dumps({"selected_epoch": selected}))
+    cases = ((8, False, None, None), (20, False, None, None), (21, True, 21, 1), (27, True, 21, 7),
+             (46, True, 46, 1), (50, True, 46, 5))
+    for selected, projected, last, after in cases:
+        (tmp_path / "result.json").write_text(json.dumps({"selected_epoch": selected}))
         status = explain.prototype_projection_status(tmp_path, binding)
         assert status["prototypes_projected"] is projected
         assert status["first_projection_epoch"] == 21
+        assert status["last_projection_epoch"] == last
+        assert status["epochs_trained_after_last_projection"] == after
+        assert status["selected_epoch_source"] == "result.json"
     assert explain.prototype_projection_status(tmp_path, {"method": "gsat"}) is None
     (tmp_path / "result.json").unlink()
+    # ProtGNN without result.json: the selected epoch of the explained fold's binding block, else
+    # recorded as not available
     assert explain.prototype_projection_status(tmp_path, binding) == {
         "status": "selected_epoch_not_recorded"}
+    assert explain.prototype_projection_status(tmp_path, binding, "test") == {
+        "status": "selected_epoch_not_recorded"}
+    with_block = dict(binding, selected_test={"epoch": 22})
+    status = explain.prototype_projection_status(tmp_path, with_block, "test")
+    assert status["selected_epoch"] == 22 and status["epochs_trained_after_last_projection"] == 2
+    assert status["selected_epoch_source"] == "binding.json selected_test"
+
+
+# ------------------------------------------------------------------ records, isolation, schema
+def test_a_visit_that_raises_is_listed_in_the_failures(tmp_path, monkeypatch):
+    run_dir = train_one(tmp_path, "run_failing_visit", method="gsat", conv=None)
+    real = explain.explain_subject
+    failing = {}
+
+    def flaky(wrapper, data, **kwargs):
+        if not failing:
+            failing["id"] = str(data.sample_id)
+            raise RuntimeError("synthetic visit failure")
+        return real(wrapper, data, **kwargs)
+
+    monkeypatch.setattr(explain, "explain_subject", flaky)
+    output = tmp_path / "out_failing_visit"
+    manifest = explain.run_explanations(run_dir, output, max_subjects=3, steps=2, epochs=3,
+                                        random_repeats=2)
+    assert manifest["failed_count"] == 1 and manifest["explained_count"] == 2
+    assert manifest["failures"] == [{"sample_id": failing["id"], "error": "synthetic visit failure"}]
+    assert len(manifest["record_files"]) == 2
+    assert f"subject_{failing['id']}.json" not in manifest["record_files"]
+
+
+def test_a_random_reference_failure_does_not_lose_the_metrics(tmp_path, monkeypatch):
+    run_dir = train_one(tmp_path, "run_reference_failure", method="gsat", conv=None)
+    binding, splits, wrapper, records = subject_setup(run_dir)
+
+    def broken(*args, **kwargs):
+        raise RuntimeError("synthetic reference failure")
+
+    monkeypatch.setattr(fv2, "random_reference", broken)
+    record = explain.explain_subject(wrapper, splits["test"][0], **subject_kwargs(binding, records))
+    assert record["random_reference"]["status"] == "failed"
+    assert "synthetic reference failure" in record["random_reference"]["error"]
+    scored = [m for m in record["fidelity_v2"].values() if "fidelity_plus" in m]
+    assert scored and all("vs_random" not in m for m in scored)
+
+
+def test_one_source_failure_does_not_lose_the_others(tmp_path, monkeypatch):
+    run_dir = train_one(tmp_path, "run_source_failure", method="gsat", conv=None)
+    binding, splits, wrapper, records = subject_setup(run_dir)
+    real, calls = explain._source_metrics, []
+
+    def first_fails(*args, **kwargs):
+        calls.append(1)
+        if len(calls) == 1:
+            raise RuntimeError("synthetic source failure")
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(explain, "_source_metrics", first_fails)
+    record = explain.explain_subject(wrapper, splits["test"][0], **subject_kwargs(binding, records))
+    statuses = [m.get("status") for m in record["fidelity_v2"].values()]
+    assert statuses.count("failed") == 1 and len(statuses) > 1
+    failed = next(m for m in record["fidelity_v2"].values() if m.get("status") == "failed")
+    assert failed["error"] == "synthetic source failure"
+
+
+def test_a_source_without_eligible_evidence_is_counted_not_failed(tmp_path, monkeypatch):
+    """A built-in (or any source) with no nonzero importance on an eligible evidence node, e.g. a
+    ProtGNN subgraph that lies wholly on structural nodes, is `no_eligible_evidence`, not a failure."""
+    run_dir = train_one(tmp_path, "run_no_eligible", method="gsat", conv=None)
+    binding, splits, wrapper, records = subject_setup(run_dir)
+    data = splits["test"][0]
+    structural = fv2.removable_node_mask(data.node_type).logical_not().float().tolist()
+    monkeypatch.setattr(wrapper, "builtin_node_importance", lambda *a, **k: structural)
+    record = explain.explain_subject(wrapper, data, **subject_kwargs(binding, records))
+    assert record["builtin_status"] == "no_eligible_evidence"
+    assert record["builtin_tie_summary"] is None
+    assert record["fidelity_v2"]["builtin"] == {"status": "no_eligible_evidence", "support": 0}
+    assert record["fidelity_v2"]["GradExplainer"].get("fidelity_plus") is not None
+
+
+def test_records_carry_schema_3_and_every_source_is_scored_by_record_deletion(tmp_path):
+    run_dir = train_one(tmp_path, "run_schema", method="gsat", conv=None)
+    binding, splits, wrapper, records = subject_setup(run_dir)
+    data = splits["test"][0]
+    record = explain.explain_subject(wrapper, data, **subject_kwargs(binding, records))
+    assert record["schema_version"] == explain.RECORD_SCHEMA_VERSION == 3
+    assert {"num_visits", "builtin_class_specific", "builtin_status", "builtin_tie_summary",
+            "deletion_check", "fidelity_v2", "fidelity_v2_intervention"} <= set(record)
+    assert record["num_visits"] == int(data.num_visits.view(-1)[0])
+    assert record["builtin_class_specific"] is False
+    assert record["deletion_check"]["encoding_equals_split_tensor"] is True
+    assert record["deletion_check"]["max_abs_prob_diff"] <= 1e-6
+    intervention = record["fidelity_v2_intervention"]
+    assert intervention["version"] == fv2.INTERVENTION_CONTRACT_VERSION == 5
+    assert intervention["empty_visits"] == "dropped" and intervention["chains"] == "not relinked"
+    assert intervention["cascade"]
+    # every number is the record-level deletion scorer's (same seed, same tie draws)
+    graph, membership = records.records[data.sample_id]
+    scorer = DeletionScorer(wrapper.deletion_forward, graph, membership, records.encode, y=int(data.y))
+    seed = explain._stable_seed(1234, str(data.sample_id))
+    for name, metrics in record["fidelity_v2"].items():
+        if "fidelity_plus" not in metrics:
+            continue
+        importance = (record["builtin_node_importance"] if name == "builtin"
+                      else record["graphxai"][name]["node_explanation"]["node_importance"])
+        plus = fv2.fidelity_plus_v2(scorer, importance, record["prediction_class_id"], tie_draws=3, seed=seed)
+        assert metrics["fidelity_plus"]["prob"] == pytest.approx(plus["prob"], abs=1e-6), name
+        assert metrics["tie_summary"] == fv2.tie_summary(data.node_type, importance)
+        assert {"tied_at_cut", "tie_group_size", "tie_draws"} <= set(metrics["fidelity_plus"])
+        assert metrics["vs_random"]["fidelity_plus"]["beats_random_fraction"] <= 1.0
+    assert record["random_reference"]["status"] == "computed" and record["random_reference"]["repeats"] == 4
+
+
+def test_ig_escalates_per_visit_and_records_its_path(tmp_path):
+    run_dir = train_one(tmp_path, "run_ig_path", method="gsat", conv=None)
+    output = tmp_path / "out_ig_path"
+    manifest = explain.run_explanations(run_dir, output, max_subjects=2, steps=2, epochs=3,
+                                        ig_step_candidates=(2, 4, 8), random_repeats=2)
+    selection = manifest["clinical_ig"]["step_selection"]
+    assert selection["pilot_fold"] == "validation" and selection["pilot_graphs"] >= 1
+    assert manifest["settings"]["ig"]["step_candidates"] == [2, 4, 8]
+    for filename in manifest["record_files"]:
+        record = json.loads((output / filename).read_text())
+        # the zero-baseline IG stays in the records but is not scored
+        assert "IntegratedGradExplainerZeroBaseline" in record["graphxai"]
+        assert "IntegratedGradExplainerZeroBaseline" not in record["fidelity_v2"]
+        assert record["fidelity_v2_skipped_sources"] == ["IntegratedGradExplainerZeroBaseline"]
+        assert "fidelity_plus" in record["fidelity_v2"]["IntegratedGradExplainer"]
+        ig = record["graphxai"]["IntegratedGradExplainer"]["provenance"]
+        assert ig["start_steps"] == manifest["clinical_ig"]["steps"]
+        assert ig["steps_used"] >= ig["start_steps"] and ig["steps_used"] in (2, 4, 8)
+        assert [t["steps"] for t in ig["tried"]][-1] == ig["steps_used"]
+        assert ig["completeness_met"] == (ig["completeness_error_rel"] <= ig["tolerance"])
+        assert ig["node_reduction"] == "sum_abs_over_columns" and "ple_term" in ig
+
+
+def test_ig_pilot_takes_one_visit_per_patient():
+    visits = [types.SimpleNamespace(subject=s, sample_id=f"{s}-{i}")
+              for i, s in enumerate(["p1", "p1", "p2", "p3", "p3", "p4"])]
+    fold, rows = explain._ig_pilot_rows({"validation": visits}, 30, seed=5)
+    assert fold == "validation" and len(rows) == 4
+    assert [r.sample_id for r in rows if r.subject == "p1"] == ["p1-0"]
+    fold, rows = explain._ig_pilot_rows({"validation": visits}, 2, seed=5)
+    assert len(rows) == 2 and len({r.subject for r in rows}) == 2
+    assert inspect.signature(explain.run_explanations).parameters["ig_pilot_patients"].default == 30
+
+
+def test_defaults_follow_the_fidelity_contract():
+    params = inspect.signature(explain.run_explanations).parameters
+    assert params["fidelity_v2_curve_points"].default == fv2.CURVE_POINTS == 10
+    assert params["random_repeats"].default == fv2.RANDOM_REPEATS == 50
+    assert params["tie_draws"].default == fv2.TIE_DRAWS == 10
+    params = inspect.signature(explain.explain_subject).parameters
+    assert params["fidelity_v2_curve_points"].default == 10 and params["random_repeats"].default == 50
+
+
+def test_the_graphcare_inert_edges_and_the_method_reach_the_explainers(tmp_path, monkeypatch):
+    from core.explain import graphxai_standardized as gx
+
+    run_dir = train_one(tmp_path, "run_inert", method="graphcare", conv=None)
+    binding, splits, wrapper, records = subject_setup(run_dir)
+    seen = {}
+    real = gx.explain_algorithms
+
+    def spy(*args, **kwargs):
+        seen.update(kwargs)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(gx, "explain_algorithms", spy)
+    data = splits["test"][0]
+    explain.explain_subject(wrapper, data, **subject_kwargs(binding, records, random_repeats=0))
+    assert seen["method"] == "graphcare"
+    wrapper.set_context(explain._single_graph_batch(data))
+    assert torch.equal(seen["inert_edge_mask"], wrapper.inert_edge_mask())
+
+
+def test_manifest_and_binding_carry_settings_disclosure_code_and_the_model_run(tmp_path):
+    from comparison.explain.run import current_source_hashes
+    from comparison.explain.summarize import code_identity
+
+    run_dir = train_one(tmp_path, "run_manifest", method="gsat", conv=None)
+    output = tmp_path / "out_manifest"
+    manifest = explain.run_explanations(run_dir, output, max_subjects=1, steps=2, epochs=3,
+                                        random_repeats=2)
+    training = json.loads((run_dir / "binding.json").read_text())
+    settings = manifest["settings"]
+    assert {"curve_points", "random_repeats", "tie_draws", "gnnexplainer_epochs",
+            "gnnexplainer_seed_rule", "gnnexplainer_feature_penalty", "ig"} <= set(settings)
+    assert settings["gnnexplainer_feature_penalty"] == "mean" and settings["random_repeats"] == 2
+    assert {"tolerance", "step_candidates", "escalation"} <= set(settings["ig"])
+    assert set(manifest["disclosure"]) >= set(explain.FINAL_METHODS)
+    for block in manifest["disclosure"].values():
+        assert {"intervention", "builtin", "explainers", "caveats"} <= set(block)
+    assert any("official ProtGNN 10/5/10/10" in c for c in manifest["disclosure"]["protgnn"]["caveats"])
+    assert any("induced" in c for c in manifest["disclosure"]["protgnn"]["caveats"])
+    assert any("absence" in c for c in manifest["disclosure"]["cei_gnn_mp2"]["caveats"])
+    assert manifest["builtin_explanation"]["method"] == "gsat"
+    assert manifest["builtin_explanation"]["class_specific"] is False
+    code = manifest["code"]
+    assert code["graphxai_upstream_commit"] == "a11e65f"
+    assert len(code["vendored_graphxai_tree_sha256"]) == 64
+    assert code["git_head"] and code["git_dirty"] in (True, False, "not_a_checkout")
+    assert code["source_hashes"] == current_source_hashes()
+    assert {"protgnn/adapter.py", "gsat/adapter.py", "graphcare/adapter.py",
+            "cei/studies/cei_v3_graphxai.py", "core/explain/runner.py",
+            "comparison/explain/summarize.py"} <= set(code["source_hashes"])
+    assert not any(part.startswith("._") for key in code["source_hashes"] for part in key.split("/"))
+    assert code_identity(code) is not None
+    written = json.loads((output / "binding.json").read_text())
+    model_run = written["model_run"]
+    assert model_run["protocol"] == training["protocol"]
+    assert model_run["top_k_labels"] == training["top_k_labels"] == 2
+    assert model_run["num_classes"] == training["num_classes"]
+    assert model_run["selected_epoch"] == training["selected_test"]["epoch"]
+    assert model_run["protocol_overrides"] == training["protocol_overrides"]
+    bundle = explain.load_run_bundle(run_dir)
+    model, _ = explain.build_model(bundle.binding, bundle.state_dict)
+    rebuilt = json.loads(json.dumps(model.run_config()))
+    assert model_run["method_config_sha256"] == explain._canonical_sha256(rebuilt)
+    assert model_run["effective_settings"] == rebuilt["effective_settings"]
+    assert model_run["run_dir"] == f"{tmp_path.name}/run_manifest"
+    assert manifest["run_dir"] == model_run["run_dir"]
+    assert written["source_code"] == code["source_hashes"]
+    assert written["code"]["graphxai_upstream_commit"] == "a11e65f"
+    assert written["explainer_config"]["intervention_contract_version"] == 5
+    assert written["records"]["manifest_sha256"] == sha256(output / "explanation_manifest.json")
+
+
+def test_outputs_hold_no_absolute_path(tmp_path):
+    from core.paths import REPO_ROOT
+
+    run_dir = train_one(tmp_path, "run_paths", method="gsat", conv=None)
+    output = tmp_path / "out_paths"
+    explain.run_explanations(run_dir, output, max_subjects=2, steps=2, epochs=3, random_repeats=2)
+    forbidden = {str(tmp_path), str(tmp_path.resolve()), str(REPO_ROOT)}
+    for path in output.iterdir():
+        text = path.read_text()
+        assert not any(value in text for value in forbidden), path.name
+
+
+def test_the_relative_path_helper_and_the_path_scrubber():
+    assert explain._relative_run_path("/runs/top10/gsat_seed1234") == "top10/gsat_seed1234"
+    scrubbed = explain._without_local_paths({"v3_state": "/a/b/K4.json", "k": 4, "items": ["/x/y.json", "z"]})
+    assert scrubbed == {"v3_state": "K4.json", "k": 4, "items": ["y.json", "z"]}
+
+
+def test_source_hashes_skip_copy_leftovers_and_caches(tmp_path, monkeypatch):
+    root = tmp_path / "repo"
+    (root / "core" / "__pycache__").mkdir(parents=True)
+    (root / "core" / "a.py").write_text("x = 1\n")
+    monkeypatch.setattr(explain, "REPO_ROOT", root)
+    monkeypatch.setattr(explain, "CODE_ROOTS", ("core",))
+    before = explain.explanation_source_hashes()
+    (root / "core" / "._a.py").write_bytes(b"\x00\x05\x16\x07")
+    (root / "core" / "__pycache__" / "a.py").write_text("y = 2\n")
+    assert explain.explanation_source_hashes() == before == {"core/a.py": sha256(root / "core" / "a.py")}
+
+
+def test_the_vendored_tree_hash_skips_copy_leftovers(tmp_path, monkeypatch):
+    tree = tmp_path / "graphxai"
+    (tree / "explainers").mkdir(parents=True)
+    (tree / "explainers" / "grad.py").write_text("g = 1\n")
+    monkeypatch.setattr(explain, "VENDORED_GRAPHXAI", tree)
+    before = explain.vendored_graphxai_tree_sha256()
+    (tree / "explainers" / "._grad.py").write_bytes(b"\x00")
+    assert explain.vendored_graphxai_tree_sha256() == before
+    (tree / "explainers" / "grad.py").write_text("g = 2\n")
+    assert explain.vendored_graphxai_tree_sha256() != before
+
+
+def test_git_state_outside_a_checkout(tmp_path, monkeypatch):
+    monkeypatch.setattr(explain, "REPO_ROOT", tmp_path)
+    assert explain._git_state() == {"git_head": "not_a_checkout", "git_dirty": "not_a_checkout"}
+
+
+# ------------------------------------------------------------------ the four final methods
+FOUR_METHODS = ("gsat", "graphcare", "protgnn", "cei_gnn_mp2")
+
+
+@pytest.fixture(scope="module")
+def four_setups(tmp_path_factory):
+    from tests import test_node_deletion as nd
+
+    graph, membership = nd.record("four-1")
+    prep = nd.preprocessing([graph])
+    models = {name: nd.build_model(name, prep, tmp_path_factory.mktemp(name)) for name in FOUR_METHODS}
+    return models, prep, graph, membership
+
+
+def _four_wrapper(name, model, prep):
+    from core.method_base import relation_count
+    from core.tensorize import ALL_RELATIONS, PAYLOAD_WIDTH, node_feature_layout, triple_count
+
+    binding = {"method": name, "conv": None, "node_dim": len(node_feature_layout(prep)),
+               "edge_dim": len(ALL_RELATIONS) + PAYLOAD_WIDTH,
+               "vocabulary_size": len(prep["vocabulary"]), "num_meta_relations": triple_count(prep),
+               "num_relations": relation_count(None)}
+    return explain.build_wrapper(binding, model)
+
+
+@pytest.mark.parametrize("name", FOUR_METHODS)
+def test_each_final_method_is_explained_through_explain_subject(four_setups, name):
+    from core.tensorize import ALL_RELATIONS, encode_graph, node_feature_layout
+
+    models, prep, graph, membership = four_setups
+    model = models[name]
+    encode = lambda g, m: encode_graph(g, prep, m)
+    data = encode(graph, membership)
+    data.subject = "person-four"
+    wrapper = _four_wrapper(name, model, prep)
+    x = wrapper.set_context(explain._single_graph_batch(data))
+    with torch.no_grad():
+        prediction = int(wrapper(x, data.edge_index).argmax(-1))
+    true_class = (prediction + 1) % 3                 # a misclassified visit: the true class is explained too
+    data.y = torch.tensor([true_class])
+    records = explain.VisitRecords({data.sample_id: (graph, membership)}, encode)
+    ig = {"layout": node_feature_layout(prep), "steps": 8, "tolerance": 0.05, "candidates": (8, 16),
+          "feature_spec": wrapper.ig_feature_spec(), "feature_provenance": wrapper.ig_feature_provenance(),
+          "step_selection": {}, "bank": None, "reference_draws": 0, "keep_zero_baseline": True, "seed": 1}
+    record = explain.explain_subject(
+        wrapper, data, method=name, conv=None, steps=2, epochs=3,
+        num_relation_columns=len(ALL_RELATIONS), records=records, ig=ig, random_repeats=3, tie_draws=3)
+
+    assert record["schema_version"] == 3 and record["prediction_class_id"] == prediction
+    assert record["wrapper_verification"]["max_abs_logit_diff"] <= 1e-5
+    assert record["deletion_check"]["max_abs_prob_diff"] <= 1e-6
+    assert record["builtin_class_specific"] is (name in ("protgnn", "cei_gnn_mp2"))
+    assert record["builtin_status"] in ("available", "unavailable", "no_eligible_evidence")
+    for source, payload in record["graphxai"].items():
+        assert payload["status"] in ("success", "failed", "unsupported"), (source, payload)
+        if payload["status"] == "success" and source not in explain.FIDELITY_SKIPPED_SOURCES:
+            entry = record["fidelity_v2"][source]
+            assert "fidelity_plus" in entry or entry.get("status") in ("no_eligible_evidence", "failed")
+    ig_provenance = record["graphxai"]["IntegratedGradExplainer"]["provenance"]
+    assert {"steps_used", "completeness_met", "ple_term", "node_reduction"} <= set(ig_provenance)
+    if name == "cei_gnn_mp2":
+        from core.explain.cei_bridge import PLE_TERM_IG
+
+        assert ig_provenance["ple_term"] == PLE_TERM_IG
+    # the deletion scorer of the record scores the built-in as the runner did
+    if record["builtin_status"] == "available":
+        assert "fidelity_plus" in record["fidelity_v2"]["builtin"]
+    # the true class: probability change only, and the class-specific built-in's own detail
+    block = record["true_class_explanations"]
+    assert block["target_class"] == true_class
+    assert "fidelity_v2" not in block
+    for metrics in block["true_class_probability_change"].values():
+        if "fidelity_plus" in metrics:
+            assert "acc" not in metrics["fidelity_plus"] and "acc" not in metrics["fidelity_minus"]
+            assert metrics["fidelity_plus"]["target_class"] == true_class
+    if name in ("protgnn", "cei_gnn_mp2") and block["builtin_detail"] is not None:
+        assert block["builtin_detail"]["explained_class"] == true_class

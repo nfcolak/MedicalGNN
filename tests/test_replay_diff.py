@@ -119,7 +119,7 @@ def test_dump_has_no_ids_and_is_identical_across_two_calls(graphcare_run, tmp_pa
               if n and not isinstance(m, (torch.nn.ModuleList, torch.nn.ModuleDict))}
     assert called <= names
     assert set(batch["last"]) == {
-        "last_alpha", "last_beta", "last_visit_weight", "last_node_context", "last_node_attention",
+        "last_alpha", "last_beta", "last_visit_weight", "last_node_context",
         "last_visit_state", "last_graph_state", "last_direct_state", "last_global_state"}
     fingerprint = batch["last"]["last_graph_state"]
     assert set(fingerprint) == {"shape", "dtype", "sum", "abs_sum", "min", "max", "projection"}
@@ -233,3 +233,91 @@ def test_stored_ids_that_differ_from_the_rebuilt_fold_are_refused(graphcare_run,
     with pytest.raises(ValueError, match="sample ids differ"):
         replay_diff.main(["--run-dir", str(run_dir), "--out", str(tmp_path / "r.json")])
     assert not (tmp_path / "r.json").exists()
+
+
+# ---- the runner's replay rule, applied to the same numbers ----------------------------------------------------------
+
+def shifted_replay(monkeypatch, delta):
+    """Make the replay differ from the stored predictions: the first probability moves by `delta`."""
+    real = runner.fold_probabilities
+
+    def shifted(*args, **kwargs):
+        proba = real(*args, **kwargs).copy()
+        proba[0, 0] += delta
+        return proba.astype(np.float32)
+
+    monkeypatch.setattr(runner, "fold_probabilities", shifted)
+
+
+def test_the_runner_rule_is_reported_and_exact_on_this_machine(graphcare_run, tmp_path):
+    rule = run_tool(graphcare_run, tmp_path)["runner_rule"]
+    assert rule == {"tolerance": runner.REPLAY_TOLERANCE, "stored_npz_hash_verified": True,
+                    "stored_labels_match": True, "argmax_flips_total": 0, "argmax_flips_tie": 0,
+                    "would_pass": True, "mode": "exact_hash"}
+
+
+def test_a_replay_within_the_tolerance_of_a_verified_stored_npz_passes_the_runner_rule(graphcare_run, tmp_path,
+                                                                                       monkeypatch):
+    shifted_replay(monkeypatch, 5e-6)
+    report = run_tool(graphcare_run, tmp_path)
+    assert report["exact_hash_match"] is False and report["max_abs_diff"] == pytest.approx(5e-6, abs=1e-7)
+    assert report["runner_rule"]["would_pass"] is True
+    assert report["runner_rule"]["mode"] == "stored_predictions_tolerance"
+
+
+def test_a_replay_beyond_the_tolerance_is_refused_by_the_runner_rule(graphcare_run, tmp_path, monkeypatch):
+    shifted_replay(monkeypatch, 1e-3)
+    rule = run_tool(graphcare_run, tmp_path)["runner_rule"]
+    assert rule["would_pass"] is False and rule["mode"] == "refused"
+
+
+def test_the_tool_reads_the_runners_tolerance(graphcare_run, tmp_path, monkeypatch):
+    shifted_replay(monkeypatch, 5e-6)
+    monkeypatch.setattr(runner, "REPLAY_TOLERANCE", 1e-9)
+    rule = run_tool(graphcare_run, tmp_path)["runner_rule"]
+    assert rule["tolerance"] == 1e-9 and rule["would_pass"] is False
+
+
+def test_a_stored_npz_that_is_not_the_recorded_run_is_refused_by_the_runner_rule(graphcare_run, tmp_path,
+                                                                                 monkeypatch):
+    shifted_replay(monkeypatch, 5e-6)
+    tampered = tmp_path / "tampered_run"
+    shutil.copytree(graphcare_run, tampered)
+    stored = dict(np.load(tampered / "test.npz"))
+    stored["proba"] = stored["proba"].copy()
+    stored["proba"][1, 0] += 1e-7          # inside the tolerance, but no longer the recorded predictions
+    np.savez(tampered / "test.npz", **stored)
+    rule = run_tool(tampered, tmp_path)["runner_rule"]
+    assert rule["stored_npz_hash_verified"] is False and rule["would_pass"] is False
+    relabelled = tmp_path / "relabelled_run"
+    shutil.copytree(graphcare_run, relabelled)
+    stored = dict(np.load(relabelled / "test.npz"))
+    stored["y"] = (stored["y"] + 1) % stored["proba"].shape[1]
+    np.savez(relabelled / "test.npz", **stored)
+    rule = run_tool(relabelled, tmp_path, name="relabelled.json")["runner_rule"]
+    assert rule["stored_npz_hash_verified"] is True and rule["stored_labels_match"] is False
+    assert rule["would_pass"] is False
+
+
+def make_stored(tmp_path, proba, y):
+    path = tmp_path / "stored.npz"
+    np.savez(path, proba=proba, y=np.array(y))
+    return np.load(path)
+
+
+def test_an_argmax_flip_is_accepted_only_on_a_stored_tie(tmp_path):
+    from types import SimpleNamespace
+
+    stored_proba = np.array([[0.5000, 0.5000 - 1e-5, 0.0], [0.7, 0.2, 0.1]], dtype=np.float32)
+    rows = [SimpleNamespace(y=torch.tensor([0])), SimpleNamespace(y=torch.tensor([0]))]
+    binding = {"selected_test": {"prediction_sha256": runner.proba_digest(stored_proba)}}
+    stored = make_stored(tmp_path, stored_proba, [0, 0])
+    flipped_on_tie = stored_proba.copy()
+    flipped_on_tie[0] = [0.5000 - 1e-5 + 3e-6, 0.5000 - 3e-6, 0.0]       # row 0 flips, its stored gap is 1e-5
+    rule = replay_diff.replay_rule(stored, flipped_on_tie, rows, binding, "test", exact=False)
+    assert (rule["argmax_flips_total"], rule["argmax_flips_tie"], rule["would_pass"]) == (1, 1, True)
+    flipped_off_tie = stored_proba.copy()
+    flipped_off_tie[1] = [0.2, 0.7, 0.1]                                  # a real flip far outside the tolerance
+    rule = replay_diff.replay_rule(stored, flipped_off_tie, rows, binding, "test", exact=False)
+    assert (rule["argmax_flips_total"], rule["argmax_flips_tie"], rule["would_pass"]) == (1, 0, False)
+    assert replay_diff.replay_rule(stored, flipped_off_tie, rows, binding, "test", exact=True)["would_pass"] is True

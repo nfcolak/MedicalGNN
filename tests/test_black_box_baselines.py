@@ -1,7 +1,7 @@
 """Black-box baselines (clinical_gnn with --conv edge_conditioned | hgt) under
 the GraphXAI runner: post-hoc explainers only, through PyG's own mask hook.
 
-The point of these tests is the plan's "applied exactly once per edge": the mask
+The point of these tests is the rule "applied exactly once per edge": the mask
 must reach every message, and must reach it once, not zero times and not twice.
 """
 import inspect
@@ -62,8 +62,11 @@ def test_runner_explains_the_baseline_end_to_end(run, tmp_path):
     assert manifest["explained_count"] >= 1
     for name in manifest["record_files"]:
         record = json.loads((out / name).read_text())
-        assert record["builtin_available"] is False
+        assert record["schema_version"] == runner.RECORD_SCHEMA_VERSION
+        assert record["builtin_available"] is False and record["builtin_status"] == "unavailable"
+        assert record["builtin_unavailable_reason"]
         assert record["wrapper_verification"]["max_abs_logit_diff"] <= 1e-5
+        assert record["deletion_check"]["encoding_equals_split_tensor"] is True
         for algo in ("GradExplainer", "IntegratedGradExplainer"):
             assert record["graphxai"][algo]["status"] == "success"
         gnn = record["graphxai"]["GNNExplainer"]

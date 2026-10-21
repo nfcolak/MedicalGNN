@@ -1,4 +1,5 @@
-"""ProtGNN built-in explanation metadata: projection counts after a reload."""
+"""ProtGNN built-in explanation: projection counts after a reload, and the subgraph search is
+the one that projects the prototypes."""
 
 from __future__ import annotations
 
@@ -81,6 +82,38 @@ def test_untouched_model_does_not_claim_zero_projected():
     detail = _detail(_fresh_model())
     assert detail["prototypes_projected_onto_training_subgraphs"] is None
     assert detail["prototypes_unmatched"] is None
+
+
+def _search_model(**settings):
+    torch.manual_seed(5)
+    kwargs = _kwargs()
+    kwargs["args"] = method_args(**settings)
+    return ProtGNNAdapter(**kwargs).eval()
+
+
+def _larger_batch(node_count=9):
+    return Batch.from_data_list([synthetic_graph(
+        sample_id="larger", label=0, node_count=node_count, num_visits=1,
+        membership=[0] * node_count, global_mask=[False] * node_count)])
+
+
+@pytest.mark.parametrize("target_class", [None, 0, 1])
+def test_explain_detail_coalition_is_the_projection_search_for_the_chosen_prototype(target_class):
+    """The built-in subgraph is `_mcts_project` -- the search that projects the prototypes
+    during training -- run on this graph's candidate for the chosen prototype."""
+    model = _search_model(rollout=3, min_atoms=3, max_atoms=6, expand_atoms=8, c_puct=5.0)
+    batch = _larger_batch()
+    detail = model.explain_detail(batch, target_class)
+    with torch.no_grad():
+        node_state, _, graph_index = model._node_and_graph_embeddings(batch)
+        candidate = model._projection_candidate(batch, 0, node_state, graph_index)
+        _, similarity, coalition = model._mcts_project(
+            candidate, model.prototype_vectors[detail["prototype_index"]])
+    assert detail["subgraph_nodes"] == list(coalition)
+    assert detail["subgraph_similarity"] == similarity
+    if target_class is not None:
+        assert detail["explained_class"] == target_class
+        assert int(model.prototype_class_ids[detail["prototype_index"]]) == target_class
 
 
 def _main_class():

@@ -1,4 +1,4 @@
-"""GraphXAI plan, Phase B: measurement fixes.
+"""GraphXAI measurement fixes.
 
 B1 eligible evidence nodes, support cap, sparsity   B2 random-removal reference
 B3 clinical IG baseline + completeness              B4 weight-randomisation / stability
@@ -21,7 +21,8 @@ from core.explain import audit, fidelity_v2 as fv2, ig_clinical, runner
 from core.explain import graphxai_standardized as gx
 from core.schema import sha256
 from tests.test_explain_runner import train_one
-from tests.test_fidelity_v2 import WRAPPERS, seven_node_graph
+from tests.test_fidelity_v2 import (THREE_REMOVABLE, W12, WRAPPERS, CountingScorer, ToyScorer,
+                                    seven_node_graph, toy_metrics)
 from tests.graphxai_fixtures import Tiny
 
 
@@ -34,28 +35,28 @@ def _wrapped(name="gsat"):
     return graph, wrapper, x, target
 
 
+def _counting():
+    """Scorer over the seven-node graph's node kinds: eligible nodes 2 (complaint), 3 (measurement),
+    5 (vital); the class-1 probability falls as eligible nodes are deleted."""
+    return CountingScorer(THREE_REMOVABLE)
+
+
 def test_k_is_capped_at_the_explanations_own_support():
-    graph, wrapper, x, target = _wrapped()
     importance = np.zeros(7)
-    importance[[2, 3]] = [1.0, 0.5]          # 2 of the 3 eligible nodes (2 complaint, 3 measurement, 5 vital)
-    plus = fv2.fidelity_plus_v2(wrapper, x, graph.token, graph.edge_index, graph.node_type,
-                                importance, target, k=3)
+    importance[[2, 3]] = [1.0, 0.5]          # 2 of the 3 eligible nodes
+    plus = fv2.fidelity_plus_v2(_counting(), importance, 1, k=3)
     assert plus["k"] == 2 and plus["k_requested"] == 3 and plus["support_count"] == 2
 
 
 def test_a_dense_explanation_is_not_capped():
-    graph, wrapper, x, target = _wrapped()
-    plus = fv2.fidelity_plus_v2(wrapper, x, graph.token, graph.edge_index, graph.node_type,
-                                np.full(7, 0.3), target, k=3)
+    plus = fv2.fidelity_plus_v2(_counting(), np.full(7, 0.3), 1, k=3)
     assert plus["k"] == 3 == plus["k_requested"]
 
 
 def test_curve_spans_the_support_and_reports_a_width_normalised_change():
-    graph, wrapper, x, target = _wrapped()
     importance = np.zeros(7)
     importance[[2, 5]] = [1.0, 0.7]
-    curve = fv2.deletion_curve(wrapper, x, graph.token, graph.edge_index, graph.node_type,
-                               importance, target, num_points=3)
+    curve = fv2.deletion_curve(_counting(), importance, 1, num_points=3)
     assert max(curve["k_values"]) <= 2 and curve["support_count"] == 2
     assert curve["explained_fraction"] == pytest.approx(max(curve["k_values"]) / 3)
     assert curve["mean_change"] == pytest.approx(curve["auc"] / curve["explained_fraction"])
@@ -73,51 +74,38 @@ def test_sparsity_is_computed_on_eligible_nodes_only():
 
 # ------------------------------------------------------------------ B2 random reference
 def test_random_reference_uses_the_same_removal_path_so_full_removal_matches_exactly():
-    graph, wrapper, x, target = _wrapped()
-    reference = fv2.random_reference(wrapper, x, graph.token, graph.edge_index, graph.node_type,
-                                     target, [1, 3], repeats=6, seed=7)
-    everything = fv2.fidelity_plus_v2(wrapper, x, graph.token, graph.edge_index, graph.node_type,
-                                      np.full(7, 1.0), target, k=3)["prob"]
+    scorer = ToyScorer(W12[:3], node_type=torch.tensor(THREE_REMOVABLE[2:4] + THREE_REMOVABLE[5:6]))
+    reference = fv2.random_reference(scorer, 1, [1, 3], repeats=6, seed=7)
+    everything = fv2.fidelity_plus_v2(scorer, np.full(3, 1.0), 1, k=3)["prob"]
     # at k = all eligible nodes, the order cannot matter: every random draw must equal it
     assert np.allclose(reference.deletion[3], everything, atol=1e-6)
 
 
 def test_an_oracle_explanation_beats_the_random_average():
-    graph, wrapper, x, target = _wrapped()
-    args = (wrapper, x, graph.token, graph.edge_index, graph.node_type)
-    single = {}
-    for node in (2, 3, 5):
-        importance = np.zeros(7); importance[node] = 1.0
-        single[node] = fv2.fidelity_plus_v2(*args, importance, target, k=1)["prob"]
-    best = max(single, key=single.get)
-    oracle = np.full(7, 1e-3); oracle[best] = 1.0
-    reference = fv2.random_reference(*args, target, [1, 2, 3], repeats=40, seed=3)
-    plus = fv2.fidelity_plus_v2(*args, oracle, target, k=1)
-    comparison = reference.compare(
-        fidelity_plus=plus,
-        fidelity_minus=fv2.fidelity_minus_v2(*args, oracle, target, k=1),
-        deletion_curve=fv2.deletion_curve(*args, oracle, target, num_points=3),
-        insertion_curve=fv2.insertion_curve(*args, oracle, target, num_points=3))
+    scorer = ToyScorer([0.2, 2.0, 0.6])                  # deleting node 1 moves the logit the most
+    oracle = np.array([1e-3, 1.0, 2e-3])
+    reference = fv2.random_reference(scorer, 1, [1, 2, 3], repeats=40, seed=3)
+    metrics = toy_metrics(scorer, oracle, num_points=3, k=1)
+    comparison = reference.compare(**metrics)
     assert comparison["fidelity_plus"]["difference"] >= -1e-9   # the best single node >= the average one
     assert 0.0 <= comparison["fidelity_plus"]["beats_random_fraction"] <= 1.0
 
 
 def test_comparing_at_a_k_the_reference_never_computed_is_refused_clearly():
-    graph, wrapper, x, target = _wrapped()
-    args = (wrapper, x, graph.token, graph.edge_index, graph.node_type)
-    reference = fv2.random_reference(*args, target, [1], repeats=3, seed=1)
+    scorer = _counting()
+    reference = fv2.random_reference(scorer, 1, [1], repeats=3, seed=1)
     importance = np.full(7, 0.4)
     with pytest.raises(ValueError, match="not computed at k="):
         reference.compare(
-            fidelity_plus=fv2.fidelity_plus_v2(*args, importance, target, k=2),
-            fidelity_minus=fv2.fidelity_minus_v2(*args, importance, target, k=1),
-            deletion_curve=fv2.deletion_curve(*args, importance, target, num_points=3),
-            insertion_curve=fv2.insertion_curve(*args, importance, target, num_points=3))
+            fidelity_plus=fv2.fidelity_plus_v2(scorer, importance, 1, k=2),
+            fidelity_minus=fv2.fidelity_minus_v2(scorer, importance, 1, k=1),
+            deletion_curve=fv2.deletion_curve(scorer, importance, 1, num_points=3),
+            insertion_curve=fv2.insertion_curve(scorer, importance, 1, num_points=3))
 
 
 def test_random_reference_is_deterministic_in_its_seed():
-    graph, wrapper, x, target = _wrapped()
-    args = (wrapper, x, graph.token, graph.edge_index, graph.node_type, target, [1, 2])
+    scorer = ToyScorer(W12)
+    args = (scorer, 1, [1, 2])
     a = fv2.random_reference(*args, repeats=5, seed=11)
     b = fv2.random_reference(*args, repeats=5, seed=11)
     c = fv2.random_reference(*args, repeats=5, seed=12)
@@ -282,13 +270,49 @@ def test_run_report_reads_a_real_runs_saved_probabilities(tmp_path):
     assert 0.0 <= report["macro"]["auroc"] <= 1.0 and "auroc_patient_equal" in report["macro"]
 
 
+def test_run_report_defaults_to_the_test_fold_and_labels_validation_as_a_decision_fold(tmp_path):
+    run_dir = train_one(tmp_path, "run_auc_fold", method="gsat", conv=None)
+    default = discrimination.run_report(run_dir)
+    assert default["fold"] == "test" and default["fold_role"] == "report fold"
+    assert default == discrimination.run_report(run_dir, "test")
+    validation = discrimination.run_report(run_dir, "validation")
+    assert validation["fold"] == "validation" and validation["fold_role"] == "decision fold"
+    # each report is read from its own fold's file
+    for fold, report in (("test", default), ("validation", validation)):
+        saved = np.load(run_dir / f"{fold}.npz", allow_pickle=False)
+        assert report["rows"] == int(saved["y"].size)
+
+
+def test_run_report_refuses_an_unknown_fold_and_a_fold_the_run_never_scored(tmp_path):
+    run_dir = train_one(tmp_path, "run_auc_refuse", method="gsat", conv=None)
+    with pytest.raises(ValueError, match="fold must be one of"):
+        discrimination.run_report(run_dir, "dev")
+    (run_dir / "test.npz").unlink()
+    with pytest.raises(FileNotFoundError, match="never scored test"):
+        discrimination.run_report(run_dir)
+
+
 def test_discrimination_cli_refuses_to_overwrite(tmp_path, monkeypatch):
     run_dir = train_one(tmp_path, "run_auc2", method="gsat", conv=None)
     out = tmp_path / "auc.json"
     monkeypatch.setattr("sys.argv", ["x", "--run", str(run_dir), "--out", str(out)])
     discrimination.main()
     assert out.exists()
+    assert json.loads(out.read_text())["fold"] == "test"      # default fold is written into the output
     with pytest.raises(FileExistsError):
+        discrimination.main()
+
+
+def test_discrimination_cli_fold_option_writes_the_fold_into_the_output(tmp_path, monkeypatch):
+    run_dir = train_one(tmp_path, "run_auc3", method="gsat", conv=None)
+    out = tmp_path / "auc_validation.json"
+    monkeypatch.setattr("sys.argv", ["x", "--run", str(run_dir), "--out", str(out), "--fold", "validation"])
+    discrimination.main()
+    written = json.loads(out.read_text())
+    assert written["fold"] == "validation" and written["fold_role"] == "decision fold"
+    monkeypatch.setattr("sys.argv", ["x", "--run", str(run_dir), "--out", str(tmp_path / "x.json"),
+                                     "--fold", "dev"])
+    with pytest.raises(SystemExit):
         discrimination.main()
 
 
@@ -314,7 +338,7 @@ def test_patient_sampling_is_order_independent_complete_per_patient_and_seeded()
 # ------------------------------------------------------------------ runner-level, real trained models
 @pytest.fixture
 def trained(tmp_path):
-    run_dir = train_one(tmp_path, "run_phase_b", method="gsat", conv=None)
+    run_dir = train_one(tmp_path, "run_measure", method="gsat", conv=None)
     bundle = runner.load_run_bundle(run_dir)
     binding = bundle.binding
     splits = runner.rebuild_validation_split(binding)
@@ -429,18 +453,20 @@ def test_a_misclassified_patient_also_gets_the_true_class_explained(trained):
     data.y = torch.tensor([other])                         # pretend the truth was another class
     record = runner.explain_subject(wrapper, data, method="gsat", conv=None, steps=2, epochs=3,
                                     num_relation_columns=binding["num_relations"],
-                                    random_repeats=2)
+                                    random_repeats=2,
+                                    records=splits.visit_records([data.sample_id]))
     block = record["true_class_explanations"]
     assert block["target_class"] == other and record["explained_target"] == "predicted_class"
     assert block["graphxai"]["GNNExplainer"]["status"] == "unsupported"
     assert block["graphxai"]["GradExplainer"]["status"] == "success"
     assert "node_explanation" not in block["graphxai"]["GradExplainer"]   # v1 block targets the prediction
     assert all(m["fidelity_plus"]["target_class"] == other
-               for m in block["fidelity_v2"].values() if "fidelity_plus" in m)
+               for m in block["true_class_probability_change"].values() if "fidelity_plus" in m)
     data.y = torch.tensor([prediction])                    # a correct patient gets no such block
     assert "true_class_explanations" not in runner.explain_subject(
         wrapper, data, method="gsat", conv=None, steps=2, epochs=3,
-        num_relation_columns=binding["num_relations"], random_repeats=0)
+        num_relation_columns=binding["num_relations"], random_repeats=0,
+        records=splits.visit_records([data.sample_id]))
 
 
 def test_explain_algorithms_can_target_another_class_except_gnnexplainer():

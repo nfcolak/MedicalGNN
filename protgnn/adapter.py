@@ -238,7 +238,16 @@ class ProtGNNAdapter(ClinicalMethodAdapter):
             "source": "not_recorded_in_checkpoint",
         }
 
-    def _node_and_graph_embeddings(self, batch, edge_mask=None):
+    def embed_tokens(self, batch) -> torch.Tensor:
+        """The token-embedding rows [N, token_dim] that forward() looks up for
+        this batch; forward(token_vectors=...) accepts a replacement of exactly
+        this shape."""
+        token = getattr(batch, "token", None)
+        if token is None:
+            raise ValueError("ProtGNN requires token")
+        return self.token_embedding(token.long())
+
+    def _node_and_graph_embeddings(self, batch, edge_mask=None, token_vectors=None):
         x = getattr(batch, "x", None)
         token = getattr(batch, "token", None)
         node_type = getattr(batch, "node_type", None)
@@ -285,9 +294,14 @@ class ProtGNNAdapter(ClinicalMethodAdapter):
         if edge_triple.numel() and (edge_triple.min() < 0 or
                                     edge_triple.max() >= self.num_triples):
             raise ValueError("edge_triple index is outside the fitted meta-relation vocabulary")
+        if token_vectors is not None and (
+                token_vectors.ndim != 2
+                or token_vectors.shape != (x.size(0), self.token_dim)):
+            raise ValueError("token_vectors must have shape [nodes, token_dim]")
 
         node_state = self.node_encoder(torch.cat(
-            [x, self.token_embedding(token.long())], dim=-1))
+            [x, self.token_embedding(token.long())
+             if token_vectors is None else token_vectors], dim=-1))
         node_state = self.input_norm(node_state + self.node_type_embedding(node_type.long()))
         node_state = F.gelu(node_state)
         edge_context = (self.relation_embedding(edge_relation.long())
@@ -327,10 +341,15 @@ class ProtGNNAdapter(ClinicalMethodAdapter):
             raise FloatingPointError("ProtGNN produced a non-finite diagnostic")
         return result
 
-    def forward(self, batch, *, epoch: int, external_edge_mask=None) -> MethodOutput:
+    def forward(self, batch, *, epoch: int, external_edge_mask=None,
+                token_vectors=None) -> MethodOutput:
         del epoch  # The shared epoch hook owns phase changes and projection.
+        # Explanation hooks (the trainer never passes them; None is the
+        # training call): `external_edge_mask` weights every layer's messages
+        # and degrees, `token_vectors` [nodes, token_dim] replaces the
+        # token-embedding rows (embed_tokens).
         _, graph_embedding, _ = self._node_and_graph_embeddings(
-            batch, edge_mask=external_edge_mask
+            batch, edge_mask=external_edge_mask, token_vectors=token_vectors
         )
         activations, distances = self._prototype_activations(graph_embedding)
         logits = self.prototype_classifier(activations)

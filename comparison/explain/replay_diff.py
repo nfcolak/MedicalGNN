@@ -10,7 +10,10 @@ Three modes, none of which writes next to the run directory or records an identi
    explanation runner) and compares every row with the run's stored `<fold>.npz`: row count, max and mean absolute
    difference, argmax agreement, rows over 1e-4, a histogram of the per-row max difference in decades from 1e-8 to
    1e-1, whether the byte hash of the predictions matches, and the environment (torch, python, platform, machine,
-   thread count).
+   thread count). `runner_rule` repeats the explanation runner's own replay rule on these numbers (the byte hash, or
+   the stored predictions hashing to the recorded value, matching labels, the runner's tolerance, argmax flips only on
+   stored ties) and says whether the runner would accept this replay; it reads `runner.REPLAY_TOLERANCE`, so the two
+   cannot drift apart.
 2. Dump (`--dump`): for the first `--max-batches` batches, fingerprints of the batch tensors before the forward, of the
    inputs and outputs of EVERY module (leaves and containers, in call order) through forward hooks, and of every tensor
    attribute named `last_*` on the model after the forward. A fingerprint is shape, dtype, sum, abs-sum, min, max and
@@ -91,6 +94,34 @@ def default_loader(run_dir, fold: str):
 
 # ---- 1. agreement report -------------------------------------------------------------------------------------------
 
+def replay_rule(stored, proba: np.ndarray, rows, binding: dict[str, Any], fold: str, exact: bool) -> dict[str, Any]:
+    """The facts the runner's replay rule decides on, read the way the runner reads them.
+
+    The runner accepts a replay when the byte hash of the replayed predictions equals the recorded one, or, when it
+    does not reproduce on this machine, when the stored `<fold>.npz` is itself the recorded run (its predictions hash
+    to the recorded value and its labels equal the labels of the rebuilt fold) and every row of the replay lies within
+    `runner.REPLAY_TOLERANCE` of it with an argmax flip only on a row whose stored top-two gap is below twice that
+    tolerance. `would_pass` applies exactly that; this tool changes nothing in the run directory."""
+    tolerance = runner.REPLAY_TOLERANCE
+    stored_proba = stored["proba"].astype(np.float64)
+    stored_hash_ok = runner.proba_digest(stored["proba"]) == binding[runner.FOLD_BLOCK[fold]]["prediction_sha256"]
+    labels = np.array([int(d.y.view(-1)[0]) for d in rows])
+    labels_ok = "y" in stored.files and np.array_equal(np.asarray(stored["y"]).reshape(-1), labels)
+    max_diff = float(np.abs(stored_proba - proba.astype(np.float64)).max()) if stored_proba.size else 0.0
+    flipped = stored_proba.argmax(1) != proba.argmax(1) if len(stored_proba) else np.zeros(0, dtype=bool)
+    top_two = np.sort(stored_proba, axis=1)[:, -2:] if stored_proba.shape[1:] and stored_proba.shape[1] > 1 \
+        else np.zeros((len(stored_proba), 2))
+    tie = (top_two[:, 1] - top_two[:, 0]) < 2 * tolerance
+    flips_total, flips_tie = int(flipped.sum()), int((flipped & tie).sum())
+    within = max_diff <= tolerance and flips_total == flips_tie
+    return {"tolerance": tolerance, "stored_npz_hash_verified": bool(stored_hash_ok),
+            "stored_labels_match": bool(labels_ok), "argmax_flips_total": flips_total,
+            "argmax_flips_tie": flips_tie,
+            "would_pass": bool(exact or (stored_hash_ok and labels_ok and within)),
+            "mode": "exact_hash" if exact else ("stored_predictions_tolerance"
+                                                 if stored_hash_ok and labels_ok and within else "refused")}
+
+
 def agreement_report(model, splits, binding, run_dir: Path, fold: str, *, is_method_adapter: bool) -> dict[str, Any]:
     stored_path = Path(run_dir) / f"{fold}.npz"
     if not stored_path.is_file():
@@ -106,6 +137,8 @@ def agreement_report(model, splits, binding, run_dir: Path, fold: str, *, is_met
         raise ValueError(f"stored proba shape {stored_proba.shape} differs from the replay {proba.shape}")
     diff = np.abs(stored_proba - proba.astype(np.float64))
     row_max = diff.max(axis=1) if diff.size else np.zeros(0)
+    exact = runner.proba_digest(proba) == binding[runner.FOLD_BLOCK[fold]]["prediction_sha256"]
+    rule = replay_rule(stored, proba, splits[fold], binding, fold, exact)
     edges = (0.0,) + HISTOGRAM_EDGES + (math.inf,)
     histogram = {}
     for low, high in zip(edges[:-1], edges[1:]):
@@ -122,7 +155,8 @@ def agreement_report(model, splits, binding, run_dir: Path, fold: str, *, is_met
         "argmax_agreement": float((stored_proba.argmax(1) == proba.argmax(1)).mean()) if len(ids) else 1.0,
         "rows_over_1e-4": int((row_max > OVER_THRESHOLD).sum()),
         "abs_diff_histogram": histogram,
-        "exact_hash_match": runner.proba_digest(proba) == binding[runner.FOLD_BLOCK[fold]]["prediction_sha256"],
+        "exact_hash_match": exact,
+        "runner_rule": rule,
     }
 
 
@@ -358,7 +392,8 @@ def main(argv=None, *, loader=None) -> int:
         dump["method"] = report["method"]
         _write_new(args.dump, dump)
     print(json.dumps({k: report[k] for k in ("method", "fold", "rows", "max_abs_diff", "argmax_agreement",
-                                             "rows_over_1e-4", "exact_hash_match")}))
+                                             "rows_over_1e-4", "exact_hash_match")}
+                     | {"runner_rule_would_pass": report["runner_rule"]["would_pass"]}))
     return 0
 
 

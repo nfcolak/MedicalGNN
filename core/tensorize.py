@@ -91,8 +91,8 @@ def relation_vocabulary(edge_direction='forward'):
 def reversible_edge_pairs(edge_relation) -> list[tuple[int, int]]:
     """(forward_index, reverse_index) for every reverse edge `encode_graph`
     appended under `edge_direction='bidirectional'` -- one pair per clinical
-    fact that is otherwise represented twice (GraphXAI improvement plan item
-    #5: "do not count reverse edges as separate evidence").
+    fact that is otherwise represented twice (explanations must not count a
+    reverse edge as separate evidence).
 
     `encode_graph` appends reverse edges strictly after the forward block, in
     the same relative order as their forward counterparts appear among the

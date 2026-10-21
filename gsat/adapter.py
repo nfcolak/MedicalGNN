@@ -119,10 +119,11 @@ class _ClinicalGIN(nn.Module):
         )
         self.classifier = nn.Linear(self.hidden, self.num_classes)
 
-    def encode_inputs(self, clinical_batch):
+    def encode_inputs(self, clinical_batch, token_vectors=None):
         node_state = self.node_encoder(torch.cat([
             clinical_batch.x,
-            self.token_embedding(clinical_batch.token),
+            self.token_embedding(clinical_batch.token)
+            if token_vectors is None else token_vectors,
         ], dim=-1))
         node_state = self.input_norm(
             node_state + self.node_type_embedding(clinical_batch.node_type)
@@ -135,8 +136,11 @@ class _ClinicalGIN(nn.Module):
         )
         return node_state, edge_context
 
-    def get_emb(self, clinical_batch, edge_attention=None):
-        node_state, edge_context = self.encode_inputs(clinical_batch)
+    def get_emb(self, clinical_batch, edge_attention=None, token_vectors=None):
+        node_state, edge_context = self.encode_inputs(
+            clinical_batch,
+            token_vectors=token_vectors,
+        )
         for layer in self.layers:
             node_state = layer(
                 node_state,
@@ -160,9 +164,13 @@ class _ClinicalGIN(nn.Module):
         )
         return self.classifier(pooled)
 
-    def forward(self, clinical_batch, edge_attention=None):
+    def forward(self, clinical_batch, edge_attention=None, token_vectors=None):
         return self.predict_from_emb(
-            self.get_emb(clinical_batch, edge_attention=edge_attention),
+            self.get_emb(
+                clinical_batch,
+                edge_attention=edge_attention,
+                token_vectors=token_vectors,
+            ),
             clinical_batch,
         )
 
@@ -320,6 +328,19 @@ class GSATAdapter(ClinicalMethodAdapter):
             if was_training:
                 self.train()
 
+    def embed_tokens(self, batch) -> torch.Tensor:
+        """The token-embedding rows [N, token_dim] that forward() looks up for
+        this batch (both passes use the same rows); forward(token_vectors=...)
+        accepts a replacement of exactly this shape."""
+        return self.predictor.token_embedding(self._clinical_batch(batch).token)
+
+    def _check_token_vectors(self, token_vectors, clinical_batch):
+        if token_vectors is not None and (
+            token_vectors.ndim != 2
+            or token_vectors.shape != (clinical_batch.x.size(0), self.token_dim)
+        ):
+            raise ValueError("token_vectors must have shape [nodes, token_dim]")
+
     def r_for_epoch(self, epoch: int) -> float:
         epoch = epoch_index(epoch)
         return max(
@@ -341,10 +362,29 @@ class GSATAdapter(ClinicalMethodAdapter):
         source, target = edge_index
         return node_attention[source] * node_attention[target]
 
-    def forward(self, batch, *, epoch: int, external_edge_mask=None) -> MethodOutput:
+    def forward(self, batch, *, epoch: int, external_edge_mask=None,
+                token_vectors=None) -> MethodOutput:
         epoch = epoch_index(epoch)
         clinical_batch = self._clinical_batch(batch)
-        extractor_embeddings = self.predictor.get_emb(clinical_batch)
+        # Explanation hooks; the trainer never passes them, and with both None
+        # every call below is the training call. `external_edge_mask` (one
+        # value per edge) scales every message of the shared GIN in BOTH
+        # passes, once per pass: in the extraction pass that sets the node
+        # attention and, multiplied with the lifted attention, in the
+        # prediction pass. A mask value of 0 is therefore the same as deleting
+        # that edge from the graph. `token_vectors` [nodes, token_dim] replaces
+        # the token-embedding rows (embed_tokens) in both passes.
+        if external_edge_mask is not None and (
+            external_edge_mask.ndim != 1
+            or external_edge_mask.numel() != clinical_batch.edge_index.size(1)
+        ):
+            raise ValueError("external_edge_mask must contain one value per edge")
+        self._check_token_vectors(token_vectors, clinical_batch)
+        extractor_embeddings = self.predictor.get_emb(
+            clinical_batch,
+            edge_attention=external_edge_mask,
+            token_vectors=token_vectors,
+        )
         attention_logits = self.extractor(
             extractor_embeddings,
             clinical_batch.batch_index,
@@ -354,23 +394,15 @@ class GSATAdapter(ClinicalMethodAdapter):
             attention,
             clinical_batch.edge_index,
         )
-        # Post-hoc explainers (e.g. GraphXAI's GNNExplainer) have no PyG
-        # `MessagePassing` module to attach a mask to here (`_ClinicalGINLayer`
-        # aggregates by hand). `external_edge_mask` is the explicit substitute:
-        # it multiplies into the SAME channel GSAT's own attention already
-        # scales messages by, exactly once, so a post-hoc mask and GSAT's
-        # built-in attention compose rather than silently not applying at all.
-        # None (the trainer's only call shape) preserves prior behavior exactly.
         self.last_node_attention = attention
         self.last_edge_attention = edge_attention
         if external_edge_mask is not None:
-            if (external_edge_mask.ndim != 1
-                    or external_edge_mask.numel() != edge_attention.numel()):
-                raise ValueError(
-                    "external_edge_mask must contain one value per edge"
-                )
             edge_attention = edge_attention * external_edge_mask
-        logits = self.predictor(clinical_batch, edge_attention=edge_attention)
+        logits = self.predictor(
+            clinical_batch,
+            edge_attention=edge_attention,
+            token_vectors=token_vectors,
+        )
 
         r = self.r_for_epoch(epoch)
         probability = attention.clamp(1e-6, 1.0 - 1e-6)

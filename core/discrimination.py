@@ -1,13 +1,16 @@
 """AUROC / AUPRC for a finished run, from the probabilities it already saved.
 
 The task description asks for clinical predictive quality as AUROC/AUPRC; the run
-reports accuracy / F1 / top-k only. `validation.npz` holds the probabilities and
+reports accuracy / F1 / top-k only. `<fold>.npz` holds the probabilities and
 labels, so nothing is retrained. One-vs-rest per class, macro-averaged over the
 classes that are defined on this fold (at least one positive and one negative), both
 plain and patient-equal (each visit weighted 1 / that patient's evaluated visits, the
 same weighting as the run's own headline metric).
 
-    python3 -m core.discrimination --run <run dir> --out <NEW json path>
+The default fold is test, the report fold. Validation is allowed and is labelled in the
+output as a decision fold (to be used for choices, never reported as a result).
+
+    python3 -m core.discrimination --run <run dir> --out <NEW json path> [--fold test|validation]
 """
 from __future__ import annotations
 
@@ -57,24 +60,32 @@ def discrimination_report(proba: np.ndarray, y: np.ndarray, subjects=None) -> di
     }
 
 
-def run_report(run_dir) -> dict:
-    path = Path(run_dir) / "validation.npz"
+FOLD_ROLES = {"test": "report fold", "validation": "decision fold"}
+
+
+def run_report(run_dir, fold: str = "test") -> dict:
+    if fold not in FOLD_ROLES:
+        raise ValueError(f"fold must be one of {sorted(FOLD_ROLES)}, not {fold!r}")
+    path = Path(run_dir) / f"{fold}.npz"
     if not path.is_file():
-        raise FileNotFoundError(f"{path} missing (a run that never scored validation has no AUROC to report)")
+        raise FileNotFoundError(f"{path} missing (a run that never scored {fold} has no AUROC to report)")
     data = np.load(path, allow_pickle=False)
-    return discrimination_report(data["proba"], data["y"], data["subjects"])
+    report = discrimination_report(data["proba"], data["y"], data["subjects"])
+    return {"fold": fold, "fold_role": FOLD_ROLES[fold], **report}
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--run", required=True, type=Path)
     parser.add_argument("--out", required=True, type=Path)
+    parser.add_argument("--fold", choices=sorted(FOLD_ROLES), default="test",
+                        help="test (default, the report fold) or validation (a decision fold)")
     args = parser.parse_args()
     if args.out.exists():
         raise FileExistsError(f"refusing to overwrite {args.out}")
-    report = run_report(args.run)
+    report = run_report(args.run, args.fold)
     args.out.write_text(json.dumps(report, indent=2) + "\n")
-    print(json.dumps(report["macro"]))
+    print(json.dumps({"fold": report["fold"], "fold_role": report["fold_role"], **report["macro"]}))
 
 
 if __name__ == "__main__":

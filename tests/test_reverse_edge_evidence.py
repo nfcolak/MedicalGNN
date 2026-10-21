@@ -1,4 +1,4 @@
-"""GraphXAI improvement plan item #5: do not count a reverse edge as separate
+"""Reverse edges and edge payloads: do not count a reverse edge as separate
 evidence from its forward counterpart, and report relation-type vs numeric
 payload contribution separately.
 
@@ -6,7 +6,7 @@ Two independent pieces, tested independently:
 - `reversible_edge_pairs` (tensorize.py): a pure function identifying which
   edges are forward/reverse pairs of the same clinical fact, from
   `edge_relation` alone.
-- `aggregate_reverse_edge_pairs` (shared/lib/graphxai_standardized.py): the
+- `aggregate_reverse_edge_pairs` (core/explain/graphxai_standardized.py): the
   mean-collapse applied to GNNExplainer's edge mask before node reduction.
 - `relation_vs_payload_contribution` (fidelity_v2.py): the zero-and-measure
   decomposition, exercised against a real adapter.

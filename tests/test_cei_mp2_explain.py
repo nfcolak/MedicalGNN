@@ -18,8 +18,10 @@ from core.explain import graphxai_standardized as gx
 from cei.options import DEFAULTS
 from core.explain import runner
 from core.explain.cei_bridge import (
-    CEI_METHODS, INTERVENTION_SCOPES, CEIGraphXAIWrapper, build_cei_model,
+    CEI_METHODS, EDGE_MASK_SCOPES, CEIGraphXAIWrapper, build_cei_model,
 )
+from cei.studies.cei_v3_graphxai import message_passing_rows
+from core.explain.fidelity_v2 import removable_node_mask
 from core.registry import METHOD_REGISTRY
 from tests.test_cei_gnn_v3_core import (
     CLASSES, EDGE_DIM, HIDDEN, K, LAYOUT, NODE_DIM, NUM_TOKENS, TOKEN_DIM, TRIPLES, _graph,
@@ -78,6 +80,12 @@ def _mp2_adapter(tmp_path, *, dropout=0.0, weights=None, perturb=True, **options
 
 def _batch(graph=None):
     return Batch.from_data_list([graph if graph is not None else _mp2_graph()])
+
+
+def _full(adapter, batch, x):
+    """[x | the batch's node-type vectors]: the network's own continuous row."""
+    with torch.no_grad():
+        return torch.cat((x, adapter.continuous_inputs(batch)[:, NODE_DIM + TOKEN_DIM:]), dim=-1)
 
 
 @pytest.fixture
@@ -193,9 +201,9 @@ def test_a_fractional_mask_reaches_the_stack_and_the_edge_rows_exactly_once(mp2,
         del stack.forward
     assert len(seen) == 1 and torch.equal(seen[0], mask)        # not mask * mask
     reference = copy.deepcopy(adapter)
-    reference.network.set_edge_mask(mask)                        # his public hook, independent
+    reference.network.set_edge_mask(mask)                  # the network's public hook, independent
     with torch.no_grad():
-        expected = reference.forward_continuous(x, edges, batch)
+        expected = reference.forward_continuous(_full(adapter, batch, x), edges, batch)
     assert torch.allclose(got, expected, atol=1e-6), (got, expected)
     with torch.no_grad():
         assert not torch.allclose(got, wrapper(x, edges), atol=1e-6)
@@ -224,18 +232,62 @@ def test_the_builtin_is_the_exact_ledger_accounting_with_neighbourhood_rows(mp2)
     with torch.no_grad():
         logits = wrapper(x, batch.edge_index)
     prediction = int(logits.argmax(-1))
-    assert importance.shape == (8,) and (importance >= 0).all()
+    assert isinstance(importance, list) and len(importance) == 8 and min(importance) >= 0
     assert detail['explained_class'] == prediction
     assert detail['accounting_logit_abs_diff'] < 1e-5
     assert set(detail['ledger_block_totals']) == set(wrapper.adapter.network.ledger_keys())
     signed = torch.tensor(detail['signed_node_contributions'])
     rebuilt = signed.sum() + detail['bias'] + detail['fixed_absence_contribution']
     assert abs(float(rebuilt) - float(logits[0, prediction])) < 1e-5
-    assert detail['intervention_scope'] == INTERVENTION_SCOPES['cei_gnn_mp2']
+    assert torch.allclose(signed.abs(), torch.tensor(importance))
+    assert detail['edge_mask_scope'] == EDGE_MASK_SCOPES['cei_gnn_mp2']
     other = (prediction + 1) % CLASSES
     redirected = wrapper.builtin_node_importance(x, batch.edge_index, target_class=other)
     assert wrapper.builtin_detail()['explained_class'] == other
-    assert not torch.allclose(importance, redirected)
+    assert importance != redirected
+
+
+def test_the_builtin_records_the_protected_mass_and_the_negative_eligible_nodes(mp2):
+    _, wrapper, batch, x = mp2
+    wrapper.builtin_node_importance(x, batch.edge_index)
+    detail = wrapper.builtin_detail()
+    signed = torch.tensor(detail['signed_node_contributions'])
+    eligible = removable_node_mask(batch.node_type)
+    assert detail['structural_abs_share'] == pytest.approx(
+        float(signed.abs()[~eligible].sum() / signed.abs().sum()))
+    assert 0.0 < detail['structural_abs_share'] < 1.0
+    negative = int(((signed < 0) & eligible).sum())
+    assert detail['negative_eligible_count'] == negative
+    assert detail['eligible_node_count'] == int(eligible.sum())
+    assert detail['negative_eligible_share'] == pytest.approx(negative / int(eligible.sum()))
+    assert 'absolute signed contribution' in detail['ranking']
+
+
+def test_under_the_final_dual_feed_only_the_neighbourhood_rows_read_the_message_state(mp2):
+    adapter, wrapper, batch, x = mp2
+    wrapper.builtin_node_importance(x, batch.edge_index)
+    text = wrapper.builtin_detail()['message_passing_rows']
+    assert text == message_passing_rows(adapter.network)
+    assert text.startswith('node, edge and pair rows read the encoder state h0; the '
+                           'neighbourhood (nbr) rows read the message state')
+    assert 'per-graph gate denominators' in text
+
+    def rows(network):
+        clinical, membership, visit_graph = adapter._read(batch)
+        with torch.no_grad():
+            return network.forward_continuous(network.continuous_inputs(clinical),
+                                              clinical.edge_index, clinical, membership,
+                                              return_parts=True, visit_graph=visit_graph)
+
+    perturbed = copy.deepcopy(adapter.network)
+    generator = torch.Generator().manual_seed(5)
+    with torch.no_grad():
+        for parameter in perturbed.mp_stack.parameters():
+            parameter.add_(0.5 * torch.randn(parameter.shape, generator=generator))
+    before, after = rows(adapter.network), rows(perturbed)
+    for key in ('node_contributions', 'edge_contributions', 'pair_contributions'):
+        assert torch.equal(before[key], after[key]), key
+    assert (before['nbr_contributions'] - after['nbr_contributions']).abs().max() > 1e-3
 
 
 def test_a_non_additive_ledger_has_no_builtin(tmp_path):
@@ -260,20 +312,12 @@ def test_the_three_graphxai_algorithms_run_on_mp2_and_leave_no_mask_behind(mp2):
     assert adapter.network.edge_aggregator._edge_mask is None     # the checkpoint copy is untouched
 
 
-def test_the_whole_subject_pipeline_runs_on_mp2(mp2):
-    _, wrapper, _, _ = mp2
-    data = _mp2_graph()
-    data.sample_id, data.subject = 'mp2-1', 'p1'
-    ig = {'layout': LAYOUT, 'steps': 4, 'tolerance': 0.05, 'step_selection': {}, 'bank': None,
-          'reference_draws': 0, 'keep_zero_baseline': True, 'seed': 1,
-          'feature_spec': wrapper.ig_feature_spec()}
-    record = runner.explain_subject(wrapper, data, method='cei_gnn_mp2', conv=None, steps=2,
-                                    epochs=3, num_relation_columns=15, ig=ig, random_repeats=3)
-    assert record['builtin_available'] is True
-    assert record['builtin_detail']['accounting_logit_abs_diff'] < 1e-4
-    for algorithm in gx.ALGORITHMS:
-        assert record['graphxai'][algorithm]['status'] == 'success'
-    assert record['wrapper_verification']['max_abs_logit_diff'] <= 1e-5
+def test_deletion_forward_is_the_adapters_own_forward_on_one_graph(mp2):
+    adapter, wrapper, batch, _ = mp2
+    graph = _without(_mp2_graph(), (PLAIN,))
+    with torch.no_grad():
+        assert torch.equal(wrapper.deletion_forward(graph), adapter(_batch(graph), epoch=0).logits)
+        assert torch.equal(wrapper.deletion_forward(_mp2_graph()), adapter(batch, epoch=0).logits)
 
 
 # ------------------------------------------------------------------ build_cei_model
@@ -372,7 +416,7 @@ def test_build_cei_model_loads_the_checkpoint_strictly(mp2):
 
 def test_the_wrapper_refuses_a_method_that_is_not_the_adapters(mp2):
     adapter, wrapper, *_ = mp2
-    assert wrapper.intervention_scope == INTERVENTION_SCOPES['cei_gnn_mp2']
+    assert wrapper.edge_mask_scope == EDGE_MASK_SCOPES['cei_gnn_mp2']
     with pytest.raises(ValueError, match='does not match'):
         CEIGraphXAIWrapper(adapter, method='cei_gnn_v3')
     with pytest.raises(ValueError, match='CEI explanation supports'):

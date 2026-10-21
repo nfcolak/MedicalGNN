@@ -16,13 +16,19 @@ non-zero exit status on the first failing run and writes `<out>/driver_manifest.
 
 --keep-going continues after a failing run (exit status 1 if any run failed). --resume skips planned runs whose folder
 already holds `explanation_manifest.json` (recorded as `skipped_existing`), keeps the previous driver manifest as
-`driver_manifest.<its started_at>.json` and refuses an interrupted run folder or any file outside the plan.
+`driver_manifest.<its started_at>.json` and refuses an interrupted run folder or any file outside the plan. A finished
+folder is skipped only if it belongs to the current plan: its manifest and `binding.json` must name the same fold,
+cohort sample size, method and run (`top<K>/<method>_seed<seed>`), and its recorded `code.source_hashes` must equal the
+hashes of the code roots of this checkout (every `.py` under the training code roots, keyed `<root>/<relative path>`,
+names starting `._` skipped); one difference refuses the resume with the folder's name. `--allow-mixed-code` skips only
+the code comparison (the summary then needs its own `--allow-mixed-code`).
 --jobs N runs up to N runner processes at once, each with OMP_NUM_THREADS and MKL_NUM_THREADS = max(1, cpus // N).
 Every `driver_manifest.json` entry carries `seconds`, `started_at`, `status` (ok, failed, skipped_existing) and
 `max_rss_mb` (peak memory of the child, null when unknown).
 
 Before anything is printed or executed, every selected run's `binding.json` is checked: `protocol` is `fair_v10t`,
-`top_k_labels` equals K, `final_eval` is `test` and `method` matches the run-dir prefix. One mismatch stops the driver.
+`top_k_labels` equals K, `final_eval` is `test`, `method` matches the run-dir prefix, `protocol_overrides` is an empty
+list and `seed` is recorded and equals the planned seed. One mismatch stops the driver.
 
 Layout of the outputs: `<out>/top<K>/<method>_seed<seed>/` holds the runner's files (`cohort.json`,
 `subject_<sample_id>.json`, `explanation_manifest.json`, `binding.json`); `comparison.explain.summarize` reads it.
@@ -86,18 +92,37 @@ def check_out(out):
         raise SystemExit(f'--out must be a new or empty directory: {shown(out)}')
 
 
-def check_binding(run_dir, k, method):
-    """The run's binding.json must be a final fair_v10t run of this K and method; returns its seed."""
+def check_binding(run_dir, k, method, seed):
+    """The run's binding.json must be a final fair_v10t run of this K, method and seed with no protocol override."""
     path = run_dir / 'binding.json'
     if not path.is_file():
         raise SystemExit(f'{shown(run_dir)}: binding.json missing')
     binding = json.loads(path.read_text())
     expected = {'protocol': PROTOCOL, 'top_k_labels': k, 'final_eval': FINAL_EVAL,
-                'method': BINDING_METHOD[method]}
+                'method': BINDING_METHOD[method], 'protocol_overrides': [], 'seed': seed}
     for key, want in expected.items():
-        if binding.get(key) != want:
-            raise SystemExit(f'{shown(run_dir)}: binding {key} is {binding.get(key)!r}, expected {want!r}')
-    return binding.get('seed')
+        if key not in binding:
+            raise SystemExit(f'{shown(run_dir)}: binding carries no {key}, expected {want!r}')
+        if binding[key] != want:
+            raise SystemExit(f'{shown(run_dir)}: binding {key} is {binding[key]!r}, expected {want!r}')
+    return binding['seed']
+
+
+def current_source_hashes():
+    """sha256 of every `.py` under the training code roots of this checkout, keyed `<root>/<relative path>`.
+
+    Names starting `._` (copy-tool leftovers) are skipped. The runner records the same mapping under
+    `code.source_hashes` in its manifest. Loaded lazily: planning needs no hashing."""
+    from core.paths import CODE_ROOTS
+    from core.schema import sha256
+    hashes = {}
+    for root in CODE_ROOTS:
+        base = REPO / root
+        for path in sorted(base.rglob('*.py')):
+            if '__pycache__' in path.parts or path.name.startswith('._'):
+                continue
+            hashes[f'{root}/{path.relative_to(base).as_posix()}'] = sha256(path)
+    return hashes
 
 
 def plan_runs(runs, ks, methods, seeds, fold, sample_patients, out):
@@ -109,9 +134,7 @@ def plan_runs(runs, ks, methods, seeds, fold, sample_patients, out):
             for seed in seeds:
                 name = f'{method}_seed{seed}'
                 run_dir = runs / f'top{k}' / name
-                seed_bound = check_binding(run_dir, k, method)
-                if seed_bound is not None and seed_bound != seed:
-                    raise SystemExit(f'{shown(run_dir)}: binding seed is {seed_bound!r}, expected {seed}')
+                check_binding(run_dir, k, method, seed)
                 target = out / f'top{k}' / name
                 command = [sys.executable, '-m', 'core.explain.runner', '--run-dir', str(run_dir),
                            '--output', str(target), '--fold', fold, '--sample-patients', str(sample_patients)]
@@ -160,11 +183,46 @@ def write_manifest(out, args, entries, results, complete, started_at=None):
     return manifest
 
 
-def check_resume_out(out, entries):
+def check_finished(entry, folder, manifest, *, fold, sample_patients, hashes):
+    """A finished folder must belong to the current plan: fold, sample size, method, run name and code.
+
+    `hashes` is the code mapping of this checkout, or None to skip the code comparison."""
+    name = shown(folder)
+    binding_path = folder / 'binding.json'
+    if not binding_path.is_file():
+        raise SystemExit(f'--resume: {name} holds no binding.json; move it away and run again')
+    binding = json.loads(binding_path.read_text())
+    model_run = binding.get('model_run') or {}
+    sampling = (binding.get('cohort') or {}).get('sampling') or {}
+    run_name = '/'.join(Path(str(model_run.get('run_dir', ''))).parts[-2:])
+    found = {'fold': manifest.get('fold'), 'fold_role': manifest.get('fold_role'),
+             'sample size': sampling.get('sample_patients'), 'method': manifest.get('method'),
+             'run': run_name, 'seed': model_run.get('seed'), 'top_k_labels': model_run.get('top_k_labels')}
+    planned = {'fold': fold, 'fold_role': FOLD_ROLE[fold], 'sample size': sample_patients,
+               'method': BINDING_METHOD[entry['method']], 'run': entry['run'], 'seed': entry['seed'],
+               'top_k_labels': entry['k']}
+    for key, want in planned.items():
+        if found[key] != want:
+            raise SystemExit(f'--resume: {name} was written for {key} {found[key]!r}, the plan says {want!r}; '
+                             'move it away and run again')
+    if hashes is not None:
+        recorded = (manifest.get('code') or {}).get('source_hashes')
+        if not isinstance(recorded, dict) or not recorded:
+            raise SystemExit(f'--resume: {name} records no code hashes (code.source_hashes); '
+                             'move it away and run again')
+        if recorded != hashes:
+            changed = sorted(key for key in set(recorded) | set(hashes) if recorded.get(key) != hashes.get(key))
+            raise SystemExit(f'--resume: {name} was written by other code than this checkout '
+                             f'({len(changed)} files differ, e.g. {", ".join(changed[:3])}); move it away and '
+                             'run again, or pass --allow-mixed-code to accept it')
+
+
+def check_resume_out(out, entries, *, fold, sample_patients, hashes):
     """Under --resume the output folder may be filled, but only by planned run folders and driver manifests.
 
-    Returns the planned runs that are finished (hold `explanation_manifest.json`); an interrupted run folder is
-    refused with its name (the user moves it; nothing is deleted)."""
+    Returns the planned runs that are finished (hold `explanation_manifest.json`) and belong to the plan; an
+    interrupted run folder or a finished one of another plan is refused with its name (the user moves it; nothing
+    is deleted)."""
     out = Path(out)
     if out.exists() and not out.is_dir():
         raise SystemExit(f'--out must be a directory: {shown(out)}')
@@ -189,6 +247,7 @@ def check_resume_out(out, entries):
             raise SystemExit(f'--resume: {shown(folder)} holds no {RUN_MANIFEST} (interrupted run); '
                              'move it away and run again')
         finished[e['output']] = json.loads((folder / RUN_MANIFEST).read_text())
+        check_finished(e, folder, finished[e['output']], fold=fold, sample_patients=sample_patients, hashes=hashes)
     return finished
 
 
@@ -276,6 +335,8 @@ def main(argv=None, *, executor=run_command):
     parser.add_argument('--resume', action='store_true',
                         help='skip planned runs that already hold an explanation manifest')
     parser.add_argument('--jobs', type=int, default=1, help='runner processes at once (default 1)')
+    parser.add_argument('--allow-mixed-code', action='store_true',
+                        help='with --resume: accept finished runs written by other code than this checkout')
     args = parser.parse_args(argv)
     args.ks = parse_list(args.ks, int, 'ks')
     args.methods = parse_list(args.methods, str, 'methods')
@@ -289,7 +350,11 @@ def main(argv=None, *, executor=run_command):
     if not runs.is_absolute():
         runs = REPO / runs
     entries = plan_runs(runs, args.ks, args.methods, args.seeds, args.fold, args.sample_patients, args.out)
-    finished = check_resume_out(args.out, entries) if args.resume else {}
+    finished = {}
+    if args.resume:
+        hashes = None if args.allow_mixed_code else current_source_hashes()
+        finished = check_resume_out(args.out, entries, fold=args.fold, sample_patients=args.sample_patients,
+                                    hashes=hashes)
 
     if args.plan or not args.execute:
         print(f'fold {args.fold} ({FOLD_ROLE[args.fold]} fold), protocol {PROTOCOL}, {len(entries)} runs')
