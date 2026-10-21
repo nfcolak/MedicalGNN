@@ -209,6 +209,44 @@ def test_token_vectors_of_the_wrong_shape_are_refused(method):
         _logits(model, batch, token_vectors=torch.zeros(len(KINDS) - 1, TOKEN_DIM))
 
 
+def _embedding_module(model, method):
+    return model.predictor.token_embedding if method == 'gsat' else model.token_embedding
+
+
+@pytest.mark.parametrize('method', METHODS)
+def test_token_vectors_equal_editing_the_embedding_rows(method):
+    """`token_vectors` replace the lookup in every pass: the forward with v equals the forward of
+    a copy whose embedding rows of this graph's tokens are set to v (GSAT: logits and the node
+    attention of the extraction pass), and the gradient with respect to v is the gradient with
+    respect to those rows."""
+    import copy
+
+    model = _model(method)
+    batch = _graph()
+    assert len(set(batch.token.tolist())) == batch.token.numel()     # one token per node
+    generator = torch.Generator().manual_seed(11)
+    vectors = (model.embed_tokens(batch).detach()
+               + 0.3 * torch.randn((batch.token.numel(), TOKEN_DIM), generator=generator))
+    edited = copy.deepcopy(model)
+    with torch.no_grad():
+        _embedding_module(edited, method).weight[batch.token] = vectors
+    assert torch.equal(_logits(model, batch, token_vectors=vectors), _logits(edited, batch))
+    if method == 'gsat':
+        _logits(model, batch, token_vectors=vectors)
+        hooked = model.last_node_attention.clone()
+        _logits(edited, batch)
+        assert torch.equal(hooked, edited.last_node_attention)
+        _logits(model, batch)
+        assert not torch.equal(hooked, model.last_node_attention)    # v moved the attention
+
+    leaf = vectors.clone().requires_grad_(True)
+    model(batch, epoch=0, token_vectors=leaf).logits[0, 0].backward()
+    weight = _embedding_module(edited, method).weight
+    edited.zero_grad(set_to_none=True)
+    edited(batch, epoch=0).logits[0, 0].backward()
+    assert torch.equal(leaf.grad, weight.grad[batch.token])
+
+
 @pytest.mark.parametrize('method', METHODS)
 def test_token_vectors_carry_gradients_to_the_logits(method):
     model = _model(method)

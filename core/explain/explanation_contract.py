@@ -284,8 +284,10 @@ def build_node_explanation(
     """Compute the one shared standardized node-explanation metric schema.
 
     The v1 fidelity (x-row zeroing, core/explain/fidelity.py) is computed only with
-    `v1_fidelity=True` (the v1 record schema and the historical CEI screen); new explanation
-    records score removal with fidelity_v2 node deletion and carry no v1 numbers."""
+    `v1_fidelity=True` (the v1 record schema and the historical CEI screens); new explanation
+    records score removal with fidelity_v2 node deletion and carry no v1 numbers. The v1
+    validators (`validate_explanation_record`, `write_standardized_explanations`) require the
+    v1 fidelity, so a v1 record is built with `v1_fidelity=True`."""
     if x.ndim != 2 or x.size(0) < 1:
         raise ValueError("x must contain at least one node-feature row.")
     with torch.no_grad():
@@ -396,6 +398,12 @@ def validate_explanation_record(
         raise ValueError("explanation record subject_id must be a non-empty string.")
     explanation = record["node_explanation"]
     if not isinstance(explanation, Mapping) or set(explanation) != set(EXPLANATION_METRIC_KEYS):
+        missing = sorted({"fidelity_plus", "fidelity_minus"} - set(explanation or ()))
+        if isinstance(explanation, Mapping) and missing:
+            raise ValueError(
+                f"node explanation metric schema mismatch: the v1 record schema carries the v1 "
+                f"fidelity ({', '.join(missing)} missing); build v1 records with "
+                f"build_node_explanation(..., v1_fidelity=True)")
         raise ValueError("node explanation metric schema mismatch.")
     target = explanation.get("target")
     if target != {

@@ -40,7 +40,8 @@ Built-in explanations (the trained model's own):
   the search that projected the prototypes) with the model's own settings; the node vector is
   that subgraph's binary mask. One search per visit and class. Class-specific.
 - graphcare: the node attention of the last layer from a fresh unmasked eval forward,
-  sum over membership pairs (v, n) of `last_visit_weight` (alpha * beta). Class-agnostic.
+  sum over membership pairs (v, n) of `last_visit_weight` (alpha * beta), then the float64 mean
+  over the nodes with the same visit set (equal visit sets tie exactly). Class-agnostic.
 """
 from __future__ import annotations
 
@@ -70,7 +71,13 @@ PROTGNN_EXPLANATION_STYLE = ("per-prediction subgraph nearest to the explained c
                              "most-contributing prototype (ProtGNN+ style)")
 GRAPHCARE_VALUE_DEPENDENCE = (
     "the value depends only on the node's visit set (alpha_projection is linear; the node term "
-    "cancels in the softmax over visits)")
+    "cancels in the softmax over visits); float32 rounding makes the values of one multi-visit "
+    "set differ slightly, so every node gets the float64 mean of its visit set "
+    "(max_within_visit_set_spread)")
+PROTGNN_SUBGRAPH_SIZE_NOTE = (
+    "the subgraph has at most max_atoms nodes (structural hubs included); only its eligible "
+    "evidence nodes are deleted, so its k is at most that count; subgraph_eligible_count is "
+    "recorded per visit")
 GSAT_EDGE_ATTENTION_RULE = "att[source] * att[target] (the lifted attention of the prediction pass)"
 
 
@@ -81,6 +88,43 @@ def _tie_stats(node_type, importance) -> dict:
     except ValueError:
         return {"distinct_values_eligible": None, "largest_tie_group_eligible": None,
                 "constant_over_eligible": None}
+
+
+def set_keyword_mask(model, mask, edge_index) -> None:
+    """PyG `set_masks` for a caller's mask tensor, keeping its autograd graph.
+
+    After GNNExplainer, `clear_masks` leaves `_edge_mask` registered as a (None) parameter, and
+    `set_masks` would then wrap a plain tensor in a new Parameter: a leaf with no path back to
+    the caller's tensor. Such cleared registrations are dropped first, so the mask installed is
+    the caller's tensor itself."""
+    from torch_geometric.nn import MessagePassing
+
+    for module in model.modules():
+        if (isinstance(module, MessagePassing) and "_edge_mask" in module._parameters
+                and module._parameters["_edge_mask"] is None):
+            del module._parameters["_edge_mask"]
+    set_masks(model, mask, edge_index, apply_sigmoid=False)
+
+
+def _per_visit_set_mean(attention, membership):
+    """(float64 attention, largest spread): every node with membership pairs gets the float64 mean
+    of the float32 values of the nodes with the same visit set (the sorted visit ordinals of its
+    pairs), so equal visit sets tie exactly; nodes without a pair keep their value (0). The spread
+    is the largest max - min inside one visit set before the mean."""
+    canonical = attention.to(torch.float64)
+    visits_of: dict[int, list[int]] = {}
+    for visit, node in zip(membership[0].tolist(), membership[1].tolist()):
+        visits_of.setdefault(int(node), []).append(int(visit))
+    members_of: dict[tuple, list[int]] = {}
+    for node, visits in visits_of.items():
+        members_of.setdefault(tuple(sorted(visits)), []).append(node)
+    spread = 0.0
+    for members in members_of.values():
+        index = torch.tensor(sorted(members), dtype=torch.long, device=canonical.device)
+        values = canonical[index]
+        spread = max(spread, float((values.max() - values.min()).item()))
+        canonical[index] = values.mean()
+    return canonical, spread
 
 
 class _ContextWrapper(nn.Module):
@@ -356,6 +400,7 @@ class ClinicalGraphXAIWrapper(_ContextWrapper):
             "settings_source": self._protgnn_settings_source(settings),
             "subgraph_scoring": PROTGNN_SUBGRAPH_SCORING,
             "explanation_style": PROTGNN_EXPLANATION_STYLE,
+            "subgraph_size": PROTGNN_SUBGRAPH_SIZE_NOTE,
             "states_scored": scored[0],
             "root_coalition": roots[0] if roots else [],
         }
@@ -454,7 +499,7 @@ class ClinicalGNNGraphXAIWrapper(ClinicalGraphXAIWrapper):
         view = self._batch_with(x, edge_index, edge_attr=edge_attr_override)
         installed = removal_mask is not None
         if installed:
-            set_masks(self.adapter, removal_mask, edge_index.long(), apply_sigmoid=False)
+            set_keyword_mask(self.adapter, removal_mask, edge_index.long())
         try:
             return self._call_adapter(view)
         finally:
@@ -504,8 +549,9 @@ class GraphCareGraphXAIWrapper(_ContextWrapper):
 
     def _attention_pass(self):
         """Node attention of the last layer from a fresh unmasked eval forward on the raw batch:
-        node_attention[n] = sum over membership pairs (v, n) of last_visit_weight (alpha * beta);
-        a global node has no membership pair and gets 0."""
+        node_attention[n] = sum over membership pairs (v, n) of last_visit_weight (alpha * beta),
+        replaced by the float64 mean over the nodes with the same visit set; a global node has no
+        membership pair and gets 0. Returns (attention, beta, max_within_visit_set_spread)."""
         if self._context is None:
             raise RuntimeError("call set_context(batch) before asking for the built-in explanation")
         self._call_adapter(self._raw_context)
@@ -517,22 +563,24 @@ class GraphCareGraphXAIWrapper(_ContextWrapper):
         attention = torch.zeros(node_count, dtype=visit_weight.dtype, device=visit_weight.device)
         if membership.numel():
             attention.index_add_(0, membership[1].to(visit_weight.device), visit_weight)
-        return attention, beta
+        attention, spread = _per_visit_set_mean(attention, membership)
+        return attention, beta, spread
 
     @torch.no_grad()
     def builtin_node_importance(self, x, edge_index, batch=None, target_class=None):
         """GraphCare's own node attention of the last layer (`_attention_pass`), as a list of
         floats. Class-agnostic: `target_class` is ignored."""
         del x, edge_index, batch, target_class
-        attention, _ = self._attention_pass()
+        attention, _, _ = self._attention_pass()
         return [float(value) for value in attention]
 
     @torch.no_grad()
     def builtin_detail(self, target_class=None):
-        """The visit attention behind the built-in: beta per visit, the visit count and the tie
-        statistics over the eligible nodes."""
+        """The visit attention behind the built-in: beta per visit, the visit count, the largest
+        float32 spread inside one visit set before the per-set mean, and the tie statistics over
+        the eligible nodes."""
         del target_class
-        attention, beta = self._attention_pass()
+        attention, beta, spread = self._attention_pass()
         return {
             "kind": "graphcare_visit_attention",
             "layer": "last",
@@ -543,5 +591,6 @@ class GraphCareGraphXAIWrapper(_ContextWrapper):
             "beta": [float(value) for value in beta],
             "node_attention": [float(value) for value in attention],
             "value_depends_on": GRAPHCARE_VALUE_DEPENDENCE,
+            "max_within_visit_set_spread": spread,
             **_tie_stats(self._context.node_type, attention),
         }

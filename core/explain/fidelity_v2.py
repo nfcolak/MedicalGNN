@@ -1,11 +1,12 @@
-"""Fidelity by deleting evidence nodes from the graph (intervention contract version 5).
+"""Fidelity by deleting evidence nodes from the graph (intervention contract version 6).
 
 `core/explain/fidelity.py` (v1) "removes" a node by zeroing its `x` row; contract versions 2-4 of
 this module also set its token to the pad id and masked its edges. In both the node kept its type,
 its visit membership and its share of every pooled mean, so the model still saw it. Here a node is
 removed by deleting it from the raw graph record and re-encoding the record with the run's own
 preprocessing (`core/explain/node_deletion.py`): the score is the model's own forward on the graph
-it would have been given without that evidence. Every metric takes a `DeletionScorer` of one visit.
+it would have been given with that evidence deleted (not a rebuild of the graph without the events: see
+the two decided departures in INTERVENTION_CONTRACT). Every metric takes a `DeletionScorer` of one visit.
 
 Eligible evidence nodes are complaints, vitals, measurements (lab results) and prior diagnoses.
 Patient and visit (scaffolding) and analyte and knowledge nodes (concepts derived from the evidence)
@@ -29,21 +30,33 @@ import torch
 
 from core import NODE_KINDS
 
-INTERVENTION_CONTRACT_VERSION = 5
+INTERVENTION_CONTRACT_VERSION = 6
 INTERVENTION_CONTRACT = (
     "evidence removal = node deletion in the graph record: the selected evidence nodes and every edge "
     "touching them are deleted from the raw graph record, which is re-encoded with the run's own fitted "
     "preprocessing and scored by the model's own forward (no masks, no wrapper). Eligible evidence "
     "nodes: complaint, vital, measurement (lab result), diagnosis (prior). Patient, visit, analyte and "
-    "knowledge nodes are never selected. Cascade: an analyte goes when no kept measurement has an "
+    "knowledge nodes are never selected. Combo threshold states follow combo provenance: the "
+    "medical:indicates edges of one (state node, rule_id) of a combo rule form a group, and deleting any "
+    "anchor of a group deletes the whole group; when the deleted node was the latest index value of a "
+    "combo token, the rule is evaluated again on the next-latest value with the graph builder's own rule "
+    "check and the threshold table of the graph artifact, and a rule that fires again gets its edges "
+    "back; when the record lacks an input of that check the group is deleted without re-evaluation and "
+    "the record names the input; without a threshold table a group whose anchors carry different tokens "
+    "counts as a combo and is never re-evaluated. Cascade: an analyte goes when no kept measurement has an "
     "instance_of edge to it, a knowledge node goes when no kept non-knowledge node is linked to it "
     "(repeated until nothing changes); then every node left without an edge goes (patient and index "
     "visit excepted), as in source masking. Membership pairs of deleted nodes go and every surviving "
     "analyte or knowledge node takes the visits of its surviving anchors (an analyte: its measurements' "
     "visits, prior labs included; a knowledge node: its anchors' visits), as if the removed evidence had "
-    "never been recorded; prior visits left without a node are dropped and the remaining visits "
-    "renumbered in order (the index visit is always kept). Edges are not relinked: deleting a middle measurement of a trajectory leaves the chain "
-    "broken. Nodes are ranked by |importance|, so a signed explanation ranks a node that votes against "
+    "never been recorded; prior visits the deletion emptied are dropped, a prior visit already empty in "
+    "the record is kept, and the remaining visits are renumbered in order (the index visit is always "
+    "kept). This is the record with the nodes deleted, not the record the graph builder would produce "
+    "without the events, in two decided ways: prior labs of an analyte whose index labs are all deleted "
+    "stay, with the analyte and its knowledge nodes (the builder pulls prior history only for analytes "
+    "measured at the index visit), and edges are not relinked: a baseline_of edge is not re-anchored to "
+    "the next index lab or the previous prior lab, and deleting a middle measurement of a trajectory "
+    "leaves the chain broken. Nodes are ranked by |importance|, so a signed explanation ranks a node that votes against "
     "the class by its magnitude. k is capped at the explanation's own support (nodes with nonzero "
     "importance). Ties: when the cut at k falls inside a group of equal |importance|, the metric is the "
     "mean over seeded random orders inside that group (tie_draws, default 10; every distinct choice when "
@@ -52,8 +65,9 @@ INTERVENTION_CONTRACT = (
     "measured k = 0 value (every eligible node deleted, with its cascade), the deletion curve from "
     "(0, 0). Random reference: random deletion orders (default 50) through the same operator; a draw "
     "equal to the source counts as half beaten; SD with ddof 1. Not comparable with fidelity v1 "
-    "(core/explain/fidelity.py) or with contract versions 2-4 (features zeroed and edges masked, the "
-    "node itself kept)."
+    "(core/explain/fidelity.py), with contract versions 2-4 (features zeroed and edges masked, the "
+    "node itself kept) or with version 5 (combo states kept while any component was left, every "
+    "prior visit without a node dropped)."
 )
 STRUCTURAL_NODE_KINDS = ("patient", "visit", "knowledge", "analyte")
 EVIDENCE_NODE_KINDS = tuple(kind for kind in NODE_KINDS if kind not in STRUCTURAL_NODE_KINDS)

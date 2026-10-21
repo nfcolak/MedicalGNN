@@ -140,3 +140,34 @@ def test_state_dict_keys_match_main_branch_class():
     assert list(current.state_dict()) == list(reference.state_dict())
     assert list(_projected_model().state_dict()) == list(reference.state_dict())
     reference.load_state_dict(current.state_dict(), strict=True)
+
+
+def _search_wrapper(model, batch):
+    from core.explain.graphxai_wrapper import ClinicalGraphXAIWrapper
+    from core.tensorize import ALL_RELATIONS
+
+    wrapper = ClinicalGraphXAIWrapper(
+        model, method="protgnn", node_dim=NODE_DIM, edge_dim=EDGE_DIM, num_tokens=NUM_TOKENS,
+        num_triples=NUM_TRIPLES, num_relations=len(ALL_RELATIONS))
+    wrapper.set_context(batch)
+    return wrapper
+
+
+@pytest.mark.parametrize("node_count", [6, 9, 12])
+def test_the_subgraph_size_disclosure_holds_by_construction(node_count):
+    """The disclosed size of the built-in subgraph is a bound of the search (at most max_atoms
+    nodes, so at most that many deleted evidence nodes), not a measured property of a cohort."""
+    from core.explain.graphxai_wrapper import PROTGNN_SUBGRAPH_SIZE_NOTE
+    from core.explain.runner import method_disclosure
+
+    model = _search_model(rollout=3, min_atoms=3, max_atoms=6, expand_atoms=8, c_puct=5.0)
+    detail = _search_wrapper(model, _larger_batch(node_count)).builtin_detail()
+    assert detail["search"]["subgraph_size"] == PROTGNN_SUBGRAPH_SIZE_NOTE
+    assert "at most max_atoms" in PROTGNN_SUBGRAPH_SIZE_NOTE
+    assert "usually" not in PROTGNN_SUBGRAPH_SIZE_NOTE
+    assert len(detail["subgraph_nodes"]) <= model.max_atoms
+    assert detail["subgraph_eligible_count"] == len(detail["subgraph_nodes_eligible"])
+    assert detail["subgraph_eligible_count"] <= len(detail["subgraph_nodes"])
+    caveats = method_disclosure("protgnn", epochs=50)["caveats"]
+    assert PROTGNN_SUBGRAPH_SIZE_NOTE in caveats
+    assert not any("usually" in caveat for caveat in caveats)

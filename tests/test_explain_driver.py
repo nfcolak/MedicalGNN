@@ -10,12 +10,15 @@ import pytest
 from comparison.explain import run as driver
 
 HASHES = {'core/a.py': 'hash-a', 'comparison/explain/run.py': 'hash-b'}
+TREE = 'tree-' + '0' * 59
 
 
 @pytest.fixture(autouse=True)
 def checkout_hashes(monkeypatch):
-    """The code mapping of 'this checkout' (the real one is hashed from disk and is covered below)."""
+    """The code mapping and vendored tree hash of 'this checkout' (the real ones are hashed from disk and are covered
+    below)."""
     monkeypatch.setattr(driver, 'current_source_hashes', lambda: dict(HASHES))
+    monkeypatch.setattr(driver, 'current_vendored_tree', lambda: TREE)
 
 
 def make_runs(root, ks=(10,), methods=('gsat', 'cei_mp2'), seeds=(1234, 7), **overrides):
@@ -51,7 +54,7 @@ def test_plan_prints_one_command_per_run_and_executes_nothing(tmp_path, capsys):
 
 
 def test_default_plan_is_the_36_final_runs(tmp_path, capsys):
-    """C5: 3 K x 4 methods x 3 seeds, each (K, method, seed) once, GCHM-PNA absent."""
+    """3 K x 4 methods x 3 seeds, each (K, method, seed) once, GCHM-PNA absent."""
     runs = make_runs(tmp_path / 'runs', ks=driver.DEFAULT_KS, methods=driver.DEFAULT_METHODS,
                      seeds=driver.DEFAULT_SEEDS)
     assert driver.main(['--runs', str(runs), '--out', str(tmp_path / 'out'), '--plan']) == 0
@@ -227,7 +230,7 @@ def test_without_keep_going_keeps_stop_message(tmp_path, capsys):
 
 
 def finished_run(out, name, explained=7, failed=1, *, fold='test', sample=500, method=None, run_name=None,
-                 hashes=None, seed=None, binding=True):
+                 hashes=None, seed=None, binding=True, tree=TREE):
     """A finished folder as the runner writes it; every keyword changes one thing the resume check compares."""
     folder = out / name
     folder.mkdir(parents=True)
@@ -235,7 +238,8 @@ def finished_run(out, name, explained=7, failed=1, *, fold='test', sample=500, m
     driver_method, driver_seed = short.rsplit('_seed', 1)
     manifest = {'method': method or driver.BINDING_METHOD[driver_method], 'fold': fold,
                 'fold_role': driver.FOLD_ROLE[fold], 'explained_count': explained, 'failed_count': failed,
-                'code': {'source_hashes': dict(HASHES if hashes is None else hashes)}}
+                'code': {'source_hashes': dict(HASHES if hashes is None else hashes),
+                         'vendored_graphxai_tree_sha256': tree}}
     (folder / 'explanation_manifest.json').write_text(json.dumps(manifest))
     if binding:
         (folder / 'binding.json').write_text(json.dumps({
@@ -311,10 +315,12 @@ def test_resume_keeps_stop_at_first_failure(tmp_path):
     ({'hashes': {'core/a.py': 'old', 'comparison/explain/run.py': 'hash-b'}},
      r'written by other code than this checkout \(1 files differ, e\.g\. core/a\.py\)'),
     ({'hashes': {}}, r'records no code hashes'),
+    ({'tree': 'other-tree-hash'}, r'gsat_seed1234 was written with another vendored GraphXAI tree \(other-tree-h'),
+    ({'tree': None}, r'another vendored GraphXAI tree \(None'),
     ({'binding': False}, r'holds no binding\.json'),
 ])
 def test_resume_refuses_a_finished_folder_that_does_not_belong_to_the_plan(tmp_path, change, match):
-    """C4: a stale folder written for another fold, sample or code was accepted as skipped_existing with exit 0."""
+    """A stale folder written for another fold, sample, code or vendored tree is refused, never skipped."""
     runs = make_runs(tmp_path / 'runs', methods=('gsat',), seeds=(1234, 7))
     out = tmp_path / 'out'
     out.mkdir()
@@ -343,7 +349,7 @@ def test_allow_mixed_code_skips_only_the_code_comparison(tmp_path):
     runs = make_runs(tmp_path / 'runs', methods=('gsat',), seeds=(1234, 7))
     out = tmp_path / 'out'
     out.mkdir()
-    finished_run(out, 'top10/gsat_seed1234', hashes={'core/a.py': 'old'})
+    finished_run(out, 'top10/gsat_seed1234', hashes={'core/a.py': 'old'}, tree='old-tree')
     seen = []
     assert driver.main(args(runs, out, '--execute', '--resume', '--allow-mixed-code', methods='gsat'),
                        executor=lambda c, e: seen.append(name_of(c)) or 0) == 0
@@ -354,6 +360,72 @@ def test_allow_mixed_code_skips_only_the_code_comparison(tmp_path):
     with pytest.raises(SystemExit, match='fold'):
         driver.main(args(runs, out2, '--execute', '--resume', '--allow-mixed-code', methods='gsat'),
                     executor=lambda c, e: 0)
+
+
+def test_every_patient_plan_resumes_and_its_header_reads_like_the_runner(tmp_path):
+    """--sample-patients 0 (every patient): the runner records null; the header says null too and a resume accepts
+    the finished folder. A negative size is refused before anything runs."""
+    runs = make_runs(tmp_path / 'runs', methods=('gsat',), seeds=(1234, 7))
+    out = tmp_path / 'out'
+    commands = []
+    assert driver.main(args(runs, out, '--execute', '--sample-patients', '0', methods='gsat'),
+                       executor=lambda c, e: commands.append(c) or 0) == 0
+    assert all(c[c.index('--sample-patients') + 1] == '0' for c in commands)
+    assert load(out)['sample_patients'] is None
+    out2 = tmp_path / 'out2'
+    out2.mkdir()
+    finished_run(out2, 'top10/gsat_seed1234', sample=None)
+    seen = []
+    assert driver.main(args(runs, out2, '--execute', '--resume', '--sample-patients', '0', methods='gsat'),
+                       executor=lambda c, e: seen.append(name_of(c)) or 0) == 0
+    assert seen == ['top10/gsat_seed7'] and load(out2)['sample_patients'] is None
+    with pytest.raises(SystemExit, match='--sample-patients: must be 0'):
+        driver.main(args(runs, tmp_path / 'out3', '--plan', '--sample-patients', '-1', methods='gsat'))
+
+
+def test_resume_with_out_a_file_is_refused(tmp_path):
+    runs = make_runs(tmp_path / 'runs', methods=('gsat',), seeds=(1234,))
+    out = tmp_path / 'out'
+    out.write_text('x')
+    with pytest.raises(SystemExit, match='--out must be a directory: out'):
+        driver.main(args(runs, out, '--execute', '--resume', methods='gsat', seeds='1234'), executor=lambda c, e: 0)
+
+
+def test_resume_keeps_earlier_driver_manifests_and_dates_one_without_started_at(tmp_path):
+    """A kept earlier manifest (`driver_manifest.<stamp>.json`) is no stray file; a previous manifest without
+    `started_at` is kept under the time of its last change."""
+    runs = make_runs(tmp_path / 'runs', methods=('gsat',), seeds=(1234,))
+    out = tmp_path / 'out'
+    out.mkdir()
+    (out / 'driver_manifest.2026-10-20T08-00-00Z.json').write_text('{}')
+    previous = out / 'driver_manifest.json'
+    previous.write_text(json.dumps({'runs': []}))
+    os.utime(previous, (1792022400, 1792022400))      # 2026-10-15T00:00:00Z
+    assert driver.main(args(runs, out, '--execute', '--resume', methods='gsat', seeds='1234'),
+                       executor=lambda c, e: 0) == 0
+    assert load(out, 'driver_manifest.2026-10-15T00-00-00Z.json') == {'runs': []}
+    assert load(out, 'driver_manifest.2026-10-20T08-00-00Z.json') == {}
+    assert load(out)['complete'] is True
+
+
+def test_resume_refuses_to_overwrite_a_kept_manifest_of_the_same_stamp(tmp_path):
+    runs = make_runs(tmp_path / 'runs', methods=('gsat',), seeds=(1234,))
+    out = tmp_path / 'out'
+    out.mkdir()
+    (out / 'driver_manifest.json').write_text(json.dumps({'started_at': '2026-10-21T10:00:00Z', 'runs': []}))
+    (out / 'driver_manifest.2026-10-21T10-00-00Z.json').write_text('{"kept": true}')
+    calls = []
+    with pytest.raises(SystemExit, match=r'driver_manifest\.2026-10-21T10-00-00Z\.json already exists'):
+        driver.main(args(runs, out, '--execute', '--resume', methods='gsat', seeds='1234'),
+                    executor=lambda c, e: calls.append(c) or 0)
+    assert calls == [] and load(out, 'driver_manifest.2026-10-21T10-00-00Z.json') == {'kept': True}
+
+
+def test_current_vendored_tree_is_the_runners_hash(monkeypatch):
+    monkeypatch.undo()
+    from core.explain.runner import vendored_graphxai_tree_sha256
+
+    assert driver.current_vendored_tree() == vendored_graphxai_tree_sha256()
 
 
 def test_plan_with_resume_also_refuses_a_stale_folder(tmp_path):

@@ -78,7 +78,8 @@ def explain_graph(adapter, graph, *, steps=32, epochs=50) -> dict:
 
     try:
         result = explain_algorithms(
-            wrapper, features, graph.edge_index, batch=_batch_of(graph), steps=steps, epochs=epochs
+            wrapper, features, graph.edge_index, batch=_batch_of(graph), steps=steps, epochs=epochs,
+            v1_fidelity=True,
         )
     except Exception as exc:
         raise GraphXAIExplanationError(str(exc)) from exc

@@ -68,7 +68,7 @@ def test_cohort_v2_validate_detects_tampering():
 
 @pytest.fixture
 def trained(tmp_path):
-    run_dir = train_one(tmp_path, "run_plan_gaps", method="gsat", conv=None)
+    run_dir = train_one(tmp_path, "run_contracts", method="gsat", conv=None)
     bundle = runner.load_run_bundle(run_dir)
     binding = bundle.binding
     splits = runner.rebuild_split(binding, "validation")

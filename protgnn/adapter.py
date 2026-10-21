@@ -92,8 +92,8 @@ class _RelationPayloadLayer(nn.Module):
             source, target = edge_index
             messages = self.message_mlp(torch.cat(
                 [node_state[source], node_state[target], edge_context], dim=-1))
-            # `edge_mask` (e.g. GraphXAI's GNNExplainer, via the `edge_mask`
-            # hook on the owning adapter's own forward) scales both the
+            # `edge_mask` (e.g. GraphXAI's GNNExplainer, via the owning
+            # adapter's `forward(external_edge_mask=...)`) scales both the
             # message numerator AND its degree-normalisation weight, exactly
             # once -- not just the numerator -- so a masked-to-zero edge is
             # truly removed from the mean rather than merely diluting it, and

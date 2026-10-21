@@ -1,10 +1,12 @@
-"""Fidelity by node deletion (core/explain/fidelity_v2.py, intervention contract version 5).
+"""Fidelity by node deletion (core/explain/fidelity_v2.py, intervention contract version 6).
 
 Two kinds of scorer: hand-computable toy scorers (an additive logit, a counting model) for the
 metric arithmetic, ties, the random reference and the width check, and the real node-deletion scorer
 of the four final methods (gsat, graphcare, protgnn, cei_gnn_mp2) on the synthetic graph record of
-tests/test_node_deletion.py for the end-to-end path and node-order invariance.
+tests/test_node_deletion.py for the end-to-end path and node-order invariance, and on its patients
+built by the graph builder for the combo threshold states.
 """
+import csv
 import math
 from itertools import combinations
 
@@ -14,10 +16,11 @@ import torch
 
 from core import NODE_KINDS
 from core.explain import fidelity_v2 as fv2
-from core.explain.node_deletion import DeletionScorer
+from core.explain.node_deletion import DeletionScorer, load_combo_rules
+from core.schema import THRESHOLD_COLUMNS, read_thresholds, sha256
 from tests.graphxai_fixtures import NODE_DIM, NUM_TOKENS, NUM_TRIPLES, EDGE_DIM, method_args, synthetic_graph
-from tests.test_node_deletion import (METHODS, P, build_model, encoder, model_forward, preprocessing,
-                                      record)
+from tests.test_node_deletion import (METHODS, P, PATIENTS, RULES, build_model, build_patient, decided_visits,
+                                      encoder, model_forward, preprocessing, record, source_events)
 
 PATIENT_KIND = NODE_KINDS.index("patient")
 VISIT_KIND = NODE_KINDS.index("visit")
@@ -94,16 +97,23 @@ def test_removable_node_mask_excludes_structural_and_concept_kinds():
     assert set(fv2.EVIDENCE_NODE_KINDS) == {"complaint", "measurement", "vital", "diagnosis"}
 
 
-def test_contract_version_five_states_the_operator_ties_reference_and_ranking():
-    assert fv2.INTERVENTION_CONTRACT_VERSION == 5
+def test_contract_version_six_states_the_operator_ties_reference_and_ranking():
+    assert fv2.INTERVENTION_CONTRACT_VERSION == 6
     text = fv2.INTERVENTION_CONTRACT
     for phrase in ("node deletion in the graph record", "re-encoded with the run's own fitted preprocessing",
-                   "model's own forward", "Cascade", "instance_of", "prior visits left without a node are dropped",
+                   "model's own forward", "Cascade", "instance_of",
+                   "prior visits the deletion emptied are dropped", "already empty in the record is kept",
                    "takes the visits of its surviving anchors", "as if the removed evidence had never been recorded",
+                   "Combo threshold states follow combo provenance", "(state node, rule_id)",
+                   "deletes the whole group", "evaluated again on the next-latest value",
+                   "threshold table of the graph artifact", "names the input", "never re-evaluated",
+                   "not the record the graph builder would produce", "prior labs of an analyte whose index "
+                   "labs are all deleted stay", "baseline_of edge is not re-anchored",
                    "not relinked", "chain broken", "ranked by |importance|", "against the class",
                    "Ties", "tie_draws, default 10", "up to 10 points", "every eligible node deleted",
-                   "default 50", "half beaten", "ddof 1", "contract versions 2-4"):
+                   "default 50", "half beaten", "ddof 1", "contract versions 2-4", "version 5"):
         assert phrase in text, phrase
+    assert "with that evidence deleted" in fv2.__doc__
     assert "RISE" in fv2.__doc__ and "ROAR" not in fv2.__doc__
     for gone in ("_evict", "_edge_mask_for_eviction", "PAD_TOKEN_ID"):
         assert not hasattr(fv2, gone), gone
@@ -435,7 +445,51 @@ def test_node_storage_order_leaves_every_number_unchanged(models, name, kind):
     assert tie["constant_over_eligible"] == (kind == "constant")
 
 
-# ------------------------------------------------------------------ kept for tests/test_graphxai_phase_b.py
+# ------------------------------------------------------------------ against the graph builder
+@pytest.fixture(scope="module")
+def builder_setup(tmp_path_factory):
+    """The builder patients of tests/test_node_deletion.py, their threshold table and fitted
+    preprocessing."""
+    path = tmp_path_factory.mktemp("thresholds") / "thresholds.csv"
+    with path.open("w", newline="") as stream:
+        writer = csv.DictWriter(stream, fieldnames=THRESHOLD_COLUMNS)
+        writer.writeheader()
+        writer.writerows(RULES)
+    rows = read_thresholds(path)
+    graphs = {name: build_patient(name, rows) for name in PATIENTS}
+    return rows, load_combo_rules(path, sha256(path), level_source="csv"), graphs, preprocessing(
+        [graph for graph, _ in graphs.values()])
+
+
+@pytest.mark.parametrize("name", METHODS)
+@pytest.mark.parametrize("patient, token, value", [("P2", "vital:heartrate", None),    # SIRS by one combo
+                                                   ("P1", "vital:resprate", None),     # SIRS by two combos
+                                                   ("P1", "lab:GLU", 280.0),           # latest value
+                                                   ("P2", "lab:GLU", 200.0)])          # combo appears
+def test_a_fidelity_point_is_the_drop_on_the_builders_graph_without_the_node(builder_setup, tmp_path, name,
+                                                                             patient, token, value):
+    """fidelity+ of an explanation that names one combo component is the model's drop on the graph the
+    builder makes without that event (decided visit rule applied), for the four methods."""
+    rows, rules, graphs, prep = builder_setup
+    graph, membership = graphs[patient]
+    model = build_model(name, prep, tmp_path, graph=graph)
+    scorer = DeletionScorer(model_forward(model), graph, membership, encoder(prep), y=0, combo_rules=rules)
+    (position,) = [i for i, n in enumerate(graph["nodes"]) if n["token"] == token and n["kind"] != "analyte"
+                   and (value is None or n.get("value") == value)]
+    importance = np.zeros(len(graph["nodes"]))
+    importance[position] = 1.0
+    orig = scorer.probs(())
+    target = int(orig.argmax())
+    rebuilt = decided_visits(membership, build_patient(patient, rows, source_events(patient, graph, [position])))
+    with torch.no_grad():
+        expected = torch.softmax(model_forward(model)(encoder(prep)(*rebuilt)), dim=-1)
+    plus = fv2.fidelity_plus_v2(scorer, importance, target)
+    assert plus["k"] == 1
+    assert plus["prob"] == pytest.approx(float(orig[0, target] - expected[0, target]), abs=1e-6)
+    assert scorer.last_info["combos"]["source"] == "threshold_table" and scorer.last_info["selected"] == 1
+
+
+# ------------------------------------------------------------------ kept for tests/test_graphxai_measurement.py
 def seven_node_graph():
     """node_type cycles 0..6 (patient, visit, complaint, measurement, analyte, vital, knowledge) over
     7 nodes; membership pairs cover nodes 0-5, node 6 is the sole global node."""

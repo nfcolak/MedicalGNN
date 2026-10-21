@@ -1,9 +1,14 @@
-"""GraphXAI measurement fixes.
+"""GraphXAI measurement: the metric building blocks and the runner outputs that carry them.
 
-B1 eligible evidence nodes, support cap, sparsity   B2 random-removal reference
-B3 clinical IG baseline + completeness              B4 weight-randomisation / stability
-B5 edge dependence                                  B6 binding.json + dated dirs
-B7 AUROC/AUPRC                                      sampling + true-class explanations
+- eligible evidence nodes, support cap, sparsity
+- random-removal reference
+- clinical IG baseline and completeness
+- weight randomisation and stability controls
+- edge dependence
+- binding.json and dated output directories
+- AUROC / AUPRC
+- patient sampling and true-class explanations
+- built-in settings fixed before the full runs
 
 Where a check could pass vacuously it uses a case with a known answer (an oracle
 ordering, a linear model whose IG is exact, a model whose weights we know changed).
@@ -26,7 +31,7 @@ from tests.test_fidelity_v2 import (THREE_REMOVABLE, W12, WRAPPERS, CountingScor
 from tests.graphxai_fixtures import Tiny
 
 
-# ------------------------------------------------------------------ B1 eligibility / cap / sparsity
+# ------------------------------------------------------------------ eligibility / cap / sparsity
 def _wrapped(name="gsat"):
     graph = seven_node_graph()
     wrapper, x = WRAPPERS[name](graph)
@@ -72,7 +77,7 @@ def test_sparsity_is_computed_on_eligible_nodes_only():
     assert sparse["support_count"] == 1 and sparse["mass90_sparsity"] > result["mass90_sparsity"]
 
 
-# ------------------------------------------------------------------ B2 random reference
+# ------------------------------------------------------------------ random reference
 def test_random_reference_uses_the_same_removal_path_so_full_removal_matches_exactly():
     scorer = ToyScorer(W12[:3], node_type=torch.tensor(THREE_REMOVABLE[2:4] + THREE_REMOVABLE[5:6]))
     reference = fv2.random_reference(scorer, 1, [1, 3], repeats=6, seed=7)
@@ -113,7 +118,7 @@ def test_random_reference_is_deterministic_in_its_seed():
     assert any(not np.array_equal(a.deletion[k], c.deletion[k]) for k in a.ks)
 
 
-# ------------------------------------------------------------------ B3 clinical IG
+# ------------------------------------------------------------------ clinical IG
 LAYOUT = list(NODE_KINDS) + ["scaled_value", "has_value", "context.age", "context.age.has_value",
                               "context.gender:<missing>", "context.gender:<unknown>",
                               "context.gender=\"F\""]
@@ -194,7 +199,7 @@ def test_reference_bank_draws_real_rows_of_the_same_token_and_kind_else_falls_ba
     assert drawn[1].tolist() == [-1.0, -1.0]                  # unknown token: fallback
 
 
-# ------------------------------------------------------------------ B4 audit controls
+# ------------------------------------------------------------------ audit controls
 def test_weight_randomisation_changes_every_weight_leaves_buffers_and_original_alone():
     model = torch.nn.Sequential(torch.nn.Linear(3, 4), torch.nn.LayerNorm(4))
     model.register_buffer("structure", torch.arange(3))
@@ -226,7 +231,7 @@ def test_perturbation_touches_only_measured_values():
     assert torch.equal(perturbed[:, :audit.VALUE_COLUMN], x[:, :audit.VALUE_COLUMN])
 
 
-# ------------------------------------------------------------------ B5 edge dependence
+# ------------------------------------------------------------------ edge dependence
 def test_edge_dependence_is_zero_for_a_model_that_never_reads_edges_and_reports_edge_count():
     class NoEdges(torch.nn.Module):
         def forward(self, x, edge_index, batch=None, edge_mask=None, **kw):
@@ -240,7 +245,7 @@ def test_edge_dependence_is_zero_for_a_model_that_never_reads_edges_and_reports_
     assert audit.edge_dependence(NoEdges(), x, torch.empty((2, 0), dtype=torch.long), 0)["status"] == "not_applicable"
 
 
-# ------------------------------------------------------------------ B7 AUROC / AUPRC
+# ------------------------------------------------------------------ AUROC / AUPRC
 def test_discrimination_is_one_for_perfect_scores_and_chance_for_uninformative_ones():
     y = np.array([0, 1, 2, 0, 1, 2, 0, 1, 2])
     perfect = np.eye(3)[y]
@@ -371,10 +376,10 @@ def test_clinical_ig_replaces_the_zero_baseline_and_keeps_it_for_comparison(tmp_
                                        ig_step_candidates=(2, 4, 8), random_repeats=0)
     record = json.loads((out / manifest["record_files"][0]).read_text())
     ig = record["graphxai"]["IntegratedGradExplainer"]["provenance"]
-    assert ig["baseline"] == "not_recorded" and ig["steps"] in (2, 4, 8)
+    assert ig["baseline"] == "not_recorded" and ig["steps_used"] in (2, 4, 8) and "steps" not in ig
     assert {"completeness_error_rel", "completeness_met", "target_logit_change"} <= set(ig)
     assert "IntegratedGradExplainerZeroBaseline" in record["graphxai"]
-    assert manifest["clinical_ig"]["steps"] == ig["steps"]
+    assert manifest["clinical_ig"]["steps"] == ig["start_steps"]
     assert manifest["clinical_ig"]["step_selection"]["worst_relative_error_by_steps"]
 
 
@@ -502,7 +507,7 @@ def test_protgnn_builtin_can_explain_a_chosen_class(tmp_path):
         assert int(model.prototype_class_ids[detail["prototype_index"]]) == target
 
 
-# ------------------------------------------------------------------ explain-decisions (2026-10-21)
+# ------------------------------------------------------------------ built-in settings fixed before the full runs
 def _gnnexplainer_importance(wrapped, seed):
     graph, wrapper, x, _ = wrapped
     batch = torch.zeros(x.size(0), dtype=torch.long)

@@ -161,9 +161,10 @@ def explain_algorithms(wrapper, x, edge_index, *, batch, steps=32, epochs=50,
     """GradExplainer, the vendored (zero-baseline) IntegratedGradExplainer and GNNExplainer.
 
     `seed` (optional) fixes GNNExplainer's random mask initialisation: the connectivity
-    pre-check and the optimisation run inside one `torch.random.fork_rng()`, the optimisation
-    after `torch.manual_seed(seed)`, so the same visit gives the same explanation and the
-    caller's global torch RNG stream is left untouched (also with `seed=None`).
+    pre-check and the optimisation run inside one fork of the CPU generator
+    (`torch.random.fork_rng(devices=[])`), the optimisation after that generator is seeded with
+    `seed`, so the same visit gives the same explanation and the caller's torch RNG streams (CPU
+    and accelerator) are left untouched (also with `seed=None`).
 
     `inert_edge_mask` (bool [E], e.g. the GraphCare wrapper's edges with a global endpoint,
     which the model never reads) excludes those edges from GNNExplainer's node reduction; their
@@ -276,7 +277,10 @@ def explain_algorithms(wrapper, x, edge_index, *, batch, steps=32, epochs=50,
                         ex._clear_masks()
                         os.environ['GNNEXP_EPOCHS'] = str(epochs)
                         if seed is not None:
-                            torch.manual_seed(int(seed))
+                            # The CPU generator only (the one forked above, which the vendored
+                            # mask initialisation draws from): torch.manual_seed would also
+                            # reseed every CUDA/MPS generator of the caller.
+                            torch.random.default_generator.manual_seed(int(seed))
                         exp = ex.get_explanation_graph(features,edge_index,forward_kwargs={'batch':batch})
                 finally:
                     ex._clear_masks()

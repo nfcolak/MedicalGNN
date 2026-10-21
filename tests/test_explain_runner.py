@@ -24,7 +24,7 @@ import torch
 from core import train
 from core.explain import fidelity_v2 as fv2
 from core.explain import runner as explain
-from core.explain.node_deletion import DeletionScorer
+from core.explain.node_deletion import ENCODED_FIELDS, DeletionScorer, encoding_differences
 from core.schema import sha256
 from tests.graphxai_fixtures import artifact, run_args
 
@@ -172,9 +172,9 @@ def test_rebuild_split_returns_the_fitted_preprocessing_and_the_record_encoder(t
     records = splits.visit_records([d.sample_id for d in splits["test"]])
     for data in splits["test"]:
         graph, membership = records.records[data.sample_id]
-        encoded = splits.encode(graph, membership)
-        for name in ("x", "edge_index", "edge_attr", "token", "node_type", "visit_membership_index"):
-            assert torch.equal(getattr(encoded, name), getattr(data, name)), name
+        # every encoded field (x, edges, edge metadata, tokens, types, membership, visit count, global
+        # mask), not a subset; the builder-record variant is below
+        assert encoding_differences(splits.encode(graph, membership), data) == []
 
 
 def _swap_two_test_labels(targets_path):
@@ -246,6 +246,26 @@ def test_kept_classes_and_missing_recorded_hashes_are_refused(tmp_path):
         missing = {k: v for k, v in binding.items() if k != key}
         with pytest.raises(ValueError, match=f"records no {key}"):
             explain.rebuild_split(missing, "test")
+
+
+def test_every_rebuilt_fold_is_checked_against_its_recorded_hash(tmp_path):
+    """A split argument recorded differently from what training used (here the sample seed, which
+    draws the bounded train fold) leaves the explained fold and the fixture's preprocessing unchanged,
+    but the train fold the IG reference bank is drawn from changes: refused by its recorded hash."""
+    run_dir = train_one(tmp_path, "run_fold_hashes", method="gsat", conv=None)
+    binding = json.loads((run_dir / "binding.json").read_text())
+    assert {"train", "validation", "test"} <= set(binding["split_sample_ids_sha256"])
+    explain.rebuild_split(binding, "test")
+    shifted = dict(binding, sample_seed=(binding.get("sample_seed") or binding["seed"]) + 99)
+    with pytest.raises(ValueError, match=r"rebuilt train split's sample-ID hash .*\['train'\]"):
+        explain.rebuild_split(shifted, "test")
+    # a fold training did not record (an older binding) is not invented; the explained one must be
+    partial = copy.deepcopy(binding)
+    del partial["split_sample_ids_sha256"]["train"]
+    explain.rebuild_split(partial, "test")
+    del partial["split_sample_ids_sha256"]["test"]
+    with pytest.raises(ValueError, match=r"split_sample_ids_sha256\['test'\]"):
+        explain.rebuild_split(partial, "test")
 
 
 def test_a_rewired_run_has_no_deletion_records(tmp_path):
@@ -730,9 +750,21 @@ def test_records_carry_schema_3_and_every_source_is_scored_by_record_deletion(tm
     assert record["deletion_check"]["encoding_equals_split_tensor"] is True
     assert record["deletion_check"]["max_abs_prob_diff"] <= 1e-6
     intervention = record["fidelity_v2_intervention"]
-    assert intervention["version"] == fv2.INTERVENTION_CONTRACT_VERSION == 5
-    assert intervention["empty_visits"] == "dropped" and intervention["chains"] == "not relinked"
+    assert intervention["version"] == fv2.INTERVENTION_CONTRACT_VERSION == 6
+    assert intervention["empty_visits"] == explain.EMPTY_VISIT_TEXT
+    assert "emptied are dropped" in intervention["empty_visits"]
+    assert "empty in the record are kept" in intervention["empty_visits"]
+    assert intervention["chains"].startswith("not relinked") and "baseline_of" in intervention["chains"]
+    assert "prior labs of an analyte" in intervention["departures_from_a_rebuild"]
+    assert "baseline_of edge is not re-anchored" in intervention["departures_from_a_rebuild"]
+    assert "(state node, rule_id)" in intervention["combos"]
     assert intervention["cascade"]
+    # the fixture artifact has no threshold layer: the deletion's fallback combo rule, recorded
+    assert intervention["combo_source"]["source"] == "distinct_anchor_tokens"
+    assert record["deletion_check"]["combo_source"] == intervention["combo_source"]
+    deletions = record["deletion_check"]["deletions"]
+    assert deletions["sets_scored"] > 0 and deletions["visits_originally_empty"] == 0
+    assert deletions["not_reevaluated"] == [] and deletions["sets_with_combo_groups_deleted"] == 0
     # every number is the record-level deletion scorer's (same seed, same tie draws)
     graph, membership = records.records[data.sample_id]
     scorer = DeletionScorer(wrapper.deletion_forward, graph, membership, records.encode, y=int(data.y))
@@ -769,8 +801,41 @@ def test_ig_escalates_per_visit_and_records_its_path(tmp_path):
         assert ig["start_steps"] == manifest["clinical_ig"]["steps"]
         assert ig["steps_used"] >= ig["start_steps"] and ig["steps_used"] in (2, 4, 8)
         assert [t["steps"] for t in ig["tried"]][-1] == ig["steps_used"]
+        assert "steps" not in ig        # start count and count used have their own keys
         assert ig["completeness_met"] == (ig["completeness_error_rel"] <= ig["tolerance"])
         assert ig["node_reduction"] == "sum_abs_over_columns" and "ple_term" in ig
+
+
+def test_both_ig_payloads_name_the_step_count_they_ran_with_steps_used(monkeypatch):
+    """An escalated visit (start 8, ran with 32): the main and the real-patient payloads both carry
+    the count IG ran with as `steps_used`, and no key `steps` that could mean the start count."""
+    nodes, columns = 4, 3
+    calls = {}
+
+    def until_complete(wrapper, x, edge_index, baseline, target, *, start_steps, candidates, tolerance):
+        calls["start"] = start_steps
+        return torch.ones(nodes, columns), {"steps_used": 32, "completeness_met": True,
+                                            "completeness_error_rel": 0.01, "tolerance": tolerance,
+                                            "tried": [{"steps": 8}, {"steps": 16}, {"steps": 32}]}
+
+    def expected_gradients(wrapper, x, edge_index, token, node_type, bank, baseline, target, steps, **_):
+        calls["refs_steps"] = steps
+        return torch.ones(nodes, columns), {"draws": 1, "mean_relative_error": 0.0}
+
+    monkeypatch.setattr(explain.ig_clinical, "not_recorded_baseline", lambda x, *a, **k: torch.zeros_like(x))
+    monkeypatch.setattr(explain.ig_clinical, "integrated_gradients_until_complete", until_complete)
+    monkeypatch.setattr(explain.ig_clinical, "expected_gradients", expected_gradients)
+    batch = types.SimpleNamespace(edge_index=torch.zeros(2, 0, dtype=torch.long),
+                                  node_type=torch.zeros(nodes, dtype=torch.long),
+                                  token=torch.zeros(nodes, dtype=torch.long))
+    ig = {"layout": [], "steps": 8, "candidates": (8, 16, 32), "tolerance": 0.05, "bank": object(),
+          "reference_draws": 1, "seed": 3, "step_selection": {}, "explain_predicted": False}
+    payloads = explain._clinical_ig_payloads(types.SimpleNamespace(), torch.ones(nodes, columns), batch,
+                                             torch.zeros(nodes, dtype=torch.long), 0, ig)
+    main, refs = payloads["main"]["provenance"], payloads["refs"]["provenance"]
+    assert calls == {"start": 8, "refs_steps": 32}
+    assert main["start_steps"] == 8 and main["steps_used"] == 32 and "steps" not in main
+    assert refs["steps_used"] == main["steps_used"] and "steps" not in refs
 
 
 def test_ig_pilot_takes_one_visit_per_patient():
@@ -861,7 +926,14 @@ def test_manifest_and_binding_carry_settings_disclosure_code_and_the_model_run(t
     assert manifest["run_dir"] == model_run["run_dir"]
     assert written["source_code"] == code["source_hashes"]
     assert written["code"]["graphxai_upstream_commit"] == "a11e65f"
-    assert written["explainer_config"]["intervention_contract_version"] == 5
+    assert written["explainer_config"]["intervention_contract_version"] == 6
+    assert manifest["intervention_contract_version"] == 6
+    assert manifest["combo_source"] == written["explainer_config"]["combo_source"]
+    assert manifest["combo_source"]["source"] == "distinct_anchor_tokens"
+    for block in manifest["disclosure"].values():
+        text = block["intervention"]
+        assert "version 6" in text and "(state node, rule_id)" in text
+        assert explain.EMPTY_VISIT_TEXT in text and explain.DEPARTURES_TEXT in text
     assert written["records"]["manifest_sha256"] == sha256(output / "explanation_manifest.json")
 
 
@@ -910,6 +982,201 @@ def test_the_vendored_tree_hash_skips_copy_leftovers(tmp_path, monkeypatch):
 def test_git_state_outside_a_checkout(tmp_path, monkeypatch):
     monkeypatch.setattr(explain, "REPO_ROOT", tmp_path)
     assert explain._git_state() == {"git_head": "not_a_checkout", "git_dirty": "not_a_checkout"}
+
+
+# ------------------------------------------------------------------ builder records and the threshold table
+def builder_artifact(base, count=24, test_rows=4):
+    """An artifact whose graph records come from the graph builder itself
+    (`build_graph_with_visit_membership` on the fake event store of tests/test_node_deletion.py):
+    prior visits (one of them empty in the record), analytes with prior labs and a baseline edge, prior
+    diagnoses, knowledge nodes, threshold states and combo states (SIRS through one and through two
+    combos, qSOFA, DKA on the later of two glucose labs), with the threshold table copied next to the
+    graphs and named, with its sha256 and level source, in the manifest as the graph build does."""
+    import csv
+    from datetime import datetime
+
+    from core.contracts import VISIT_MEMBERSHIP_CONTRACT_VERSION, VISIT_MEMBERSHIP_FILENAME
+    from core.schema import THRESHOLD_COLUMNS, read_thresholds
+    from data.s4_graph.graph import build_graph_with_visit_membership
+    from tests import test_node_deletion as nd
+
+    root = base / "artifact"
+    root.mkdir(parents=True)
+    table = root / "thresholds.csv"
+    with table.open("w", newline="") as stream:
+        writer = csv.DictWriter(stream, fieldnames=THRESHOLD_COLUMNS)
+        writer.writeheader()
+        writer.writerows(nd.RULES)
+    rules = read_thresholds(table)
+    splits = ["train"] * (count - 4 - test_rows) + ["validation"] * 4 + ["test"] * test_rows
+    graphs, rows = [], []
+    for i, split in enumerate(splits):
+        spec = nd.PATIENTS[("P1", "P2", "P3")[i % 3]]
+        sample = {"sample_id": f"bv-{i:02d}", "subject_id": "s1", "stay_id": "I",
+                  "cutoff": datetime(2020, 7, 1, 2), "split": split}
+        graph, membership = build_graph_with_visit_membership(
+            nd.FakeStore(spec), sample, nd.KNOWLEDGE_TRIPLES, nd.COMPLAINT_VOCABULARY,
+            nd.FakeDiagnoses(spec["diagnoses"]), thresholds=rules)
+        graphs.append(graph)
+        rows.append(membership)
+    graphs_path, membership_path = root / "graphs.jsonl", root / VISIT_MEMBERSHIP_FILENAME
+    graphs_path.write_text("".join(json.dumps(g, default=str) + "\n" for g in graphs))
+    membership_path.write_text("".join(json.dumps(m) + "\n" for m in rows))
+    labels = [f"synthetic_label_{i}" for i in range(train.NUM_CLASSES)]
+    canonical = base / "canonical.json"
+    canonical.write_text(json.dumps({"classes": labels}))
+    manifest = {"status": "completed", "schema_version": "clinical_graph_v2",
+                "logic_contract_version": "clinical_graph_logic_v2", "temporal_clean": False,
+                "graphs_sha256": sha256(graphs_path), "inherited_cohort_sha256": "synthetic",
+                "visit_membership_contract_version": VISIT_MEMBERSHIP_CONTRACT_VERSION,
+                "visit_membership_file": VISIT_MEMBERSHIP_FILENAME, "visit_membership_rows": count,
+                "visit_membership_sha256": sha256(membership_path), "level_source": "csv",
+                "thresholds": {"file": "thresholds.csv", "sha256": sha256(table), "rows": len(rules)},
+                "limitations": ["Synthetic fixture; not a research result."]}
+    (root / "manifest.json").write_text(json.dumps(manifest))
+    targets = base / "targets.csv"
+    targets.write_text("sample_id,target,split,subject_id\n" + "".join(
+        f"bv-{i:02d},{i % 2},{split},person-{i:02d}\n" for i, split in enumerate(splits)))
+    (base / "binding_manifest.json").write_text(json.dumps(
+        {"status": "completed", "labels": labels, "cohort_sha256": "synthetic",
+         "label_policy_version": "primary_dx_v3", "artifact_files": {"targets.csv": sha256(targets)}}))
+    return root, targets, canonical
+
+
+@pytest.fixture(scope="module")
+def builder_run(tmp_path_factory):
+    base = tmp_path_factory.mktemp("builder_run")
+    root, targets, canonical = builder_artifact(base)
+    out = base / "run_builder"
+    train.run(run_args(root, targets, canonical, out, method="gsat", conv=None))
+    return out, root
+
+
+def test_the_record_encoder_is_the_split_tensor_on_builder_records(builder_run):
+    """Multi-visit builder records of a rebuilt run: the record encoder gives the split tensor on
+    every encoded field, for the test and the validation fold, and each visit's deletion scorer (built
+    through VisitRecords.scorer, which checks the same) scores the untouched record exactly as the
+    adapter scores the split tensor."""
+    from torch_geometric.data import Batch
+
+    run_dir, _ = builder_run
+    bundle = explain.load_run_bundle(run_dir)
+    model, _ = explain.build_model(bundle.binding, bundle.state_dict)
+    wrapper = explain.build_wrapper(bundle.binding, model)
+    assert len(ENCODED_FIELDS) == 11
+    visit_counts = set()
+    for fold in ("test", "validation"):
+        splits = explain.rebuild_split(bundle.binding, fold)
+        records = splits.visit_records([d.sample_id for d in splits[fold]])
+        for data in splits[fold]:
+            graph, membership = records.records[data.sample_id]
+            assert encoding_differences(splits.encode(graph, membership), data) == [], data.sample_id
+            scorer = records.scorer(wrapper.deletion_forward, data)
+            with torch.no_grad():
+                adapter = torch.softmax(model.eval()(Batch.from_data_list([data]), epoch=0).logits, -1)
+            assert torch.equal(scorer.probs(()), adapter)
+            visit_counts.add(int(data.num_visits.view(-1)[0]))
+    assert max(visit_counts) > 1 and min(visit_counts) == 1     # prior visits and a single visit
+
+
+def test_the_artifact_threshold_table_reaches_every_deletion(builder_run, tmp_path):
+    run_dir, root = builder_run
+    binding = json.loads((run_dir / "binding.json").read_text())
+    splits = explain.rebuild_split(binding, "test")
+    source = splits.combo_source
+    assert source["source"] == "threshold_table" and source["sha256_checked"] is True
+    assert source["path"] == "thresholds.csv" and source["sha256"] == sha256(root / "thresholds.csv")
+    assert source["level_source"] == binding["level_source"] == "csv"
+    assert source["combo_rules"] == 4 and source["combo_rows"] == 8
+    records = splits.visit_records([d.sample_id for d in splits["test"]])
+    assert records.combo_rules is splits.combo_rules
+
+    output = tmp_path / "out_builder"
+    manifest = explain.run_explanations(run_dir, output, steps=2, epochs=3, random_repeats=2,
+                                        tie_draws=2, ig_step_candidates=(2, 4), clinical_ig=False)
+    assert manifest["failed_count"] == 0, manifest["failures"]
+    assert manifest["combo_source"] == source
+    written = json.loads((output / "binding.json").read_text())
+    assert written["explainer_config"]["combo_source"] == source
+    totals = {"groups": 0, "refired": 0, "visits_dropped": 0, "originally_empty": 0}
+    for filename in manifest["record_files"]:
+        record = json.loads((output / filename).read_text())
+        assert record["deletion_check"]["combo_source"] == source
+        assert record["fidelity_v2_intervention"]["combo_source"] == source
+        deletions = record["deletion_check"]["deletions"]
+        assert deletions["not_reevaluated"] == []          # the builder records hold every input
+        totals["groups"] += deletions["sets_with_combo_groups_deleted"]
+        totals["refired"] += deletions["sets_with_rules_refired"]
+        totals["visits_dropped"] += deletions["sets_with_visits_dropped"]
+        totals["originally_empty"] += deletions["visits_originally_empty"]
+    # combo groups deleted, a combo fired again on the next-latest value, emptied visits dropped and
+    # a visit empty in the record counted
+    assert all(value > 0 for value in totals.values()), totals
+
+
+def test_a_threshold_table_that_is_not_the_artifacts_is_refused(builder_run, tmp_path):
+    run_dir, root = builder_run
+    binding = json.loads((run_dir / "binding.json").read_text())
+    table = root / "thresholds.csv"
+    original = table.read_bytes()
+    try:
+        table.write_bytes(original.replace(b",90,", b",91,"))
+        assert table.read_bytes() != original
+        with pytest.raises(ValueError, match="threshold table thresholds.csv has sha256"):
+            explain.rebuild_split(binding, "test")
+        with pytest.raises(ValueError, match="threshold table"):
+            explain.run_explanations(run_dir, tmp_path / "out_table", max_subjects=1, steps=2, epochs=3)
+        assert not (tmp_path / "out_table").exists()
+    finally:
+        table.write_bytes(original)
+    with pytest.raises(ValueError, match="level_source"):
+        explain.rebuild_split(dict(binding, level_source="row-range"), "test")
+
+
+def test_artifact_combo_rules_without_a_threshold_layer_or_a_recorded_hash(tmp_path):
+    artifact = tmp_path / "artifact"
+    artifact.mkdir()
+    (artifact / "manifest.json").write_text(json.dumps({"status": "completed"}))
+    assert explain.artifact_combo_rules({"artifact": str(artifact)}) is None
+    assert explain.recorded_combo_source(None)["source"] == "distinct_anchor_tokens"
+    from tests import test_node_deletion as nd
+    import csv
+    from core.schema import THRESHOLD_COLUMNS
+
+    with (artifact / "rules.csv").open("w", newline="") as stream:
+        writer = csv.DictWriter(stream, fieldnames=THRESHOLD_COLUMNS)
+        writer.writeheader()
+        writer.writerows(nd.RULES)
+    (artifact / "manifest.json").write_text(json.dumps({"thresholds": {"file": "rules.csv"}}))
+    rules = explain.artifact_combo_rules({"artifact": str(artifact)})
+    described = explain.recorded_combo_source(rules)
+    assert described["sha256_checked"] is False and described["sha256"] == sha256(artifact / "rules.csv")
+    assert described["path"] == "rules.csv" and described["level_source"] == "csv"
+
+
+def test_builtin_explanation_of_cei_and_sources_without_eligible_support(four_setups):
+    """The CEI manifest block, and a visit whose every source has zero importance on the eligible
+    nodes: no random reference is drawn and every source is no_eligible_evidence."""
+    from core.tensorize import encode_graph
+
+    models, prep, graph, membership = four_setups
+    wrapper = _four_wrapper("cei_gnn_mp2", models["cei_gnn_mp2"], prep)
+    block = explain.builtin_explanation({"method": "cei_gnn_mp2"}, wrapper)
+    assert block["method"] == "cei_gnn_mp2" and block["class_specific"] is True
+    assert block["settings"] == {"ranking": "|signed contribution|"}
+
+    encode = lambda g, m: encode_graph(g, prep, m)
+    data = encode(graph, membership)
+    wrapper.set_context(explain._single_graph_batch(data))
+    scorer = DeletionScorer(wrapper.deletion_forward, graph, membership, encode)
+    eligible = fv2.removable_node_mask(scorer.node_type)
+    only_protected = np.where(eligible, 0.0, 1.0)
+    results, reference = explain._evaluate_sources(
+        scorer, {"a": np.zeros(len(eligible)), "b": only_protected}, 0,
+        curve_points=4, random_repeats=3, tie_draws=2, seed=1)
+    assert reference == {"status": "no_eligible_evidence", "repeats": 3, "seed": 1}
+    assert results == {"a": {"status": "no_eligible_evidence", "support": 0},
+                       "b": {"status": "no_eligible_evidence", "support": 0}}
 
 
 # ------------------------------------------------------------------ the four final methods

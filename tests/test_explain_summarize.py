@@ -43,7 +43,7 @@ SETTINGS = {'curve_points': 10, 'random_repeats': 50, 'tie_draws': 10, 'gnnexpla
             'ig': {'tolerance': 0.05, 'step_candidates': [8, 16, 32], 'steps_chosen': 16}}
 
 
-def make_record(index, fidelity, extra=None, *, schema=3, version=5):
+def make_record(index, fidelity, extra=None, *, schema=3, version=6):
     record = {'schema_version': schema, 'sample_id': f'secret{index}', 'subject_id': f'patient{index}',
               'builtin_status': 'available', 'builtin_tie_summary': None,
               'graphxai': {n: gx_payload(n, e) for n, e in fidelity.items() if n != 'builtin'},
@@ -55,7 +55,7 @@ def make_record(index, fidelity, extra=None, *, schema=3, version=5):
 
 
 def write_run(root, k, name, visits, *, method='cei_gnn_mp2', fold='test', failed=0, role=None, final_eval='test',
-              version=5, binding_version='same', record_versions=None, schema=3, protocol='fair_v10t', code='A',
+              version=6, binding_version='same', record_versions=None, schema=3, protocol='fair_v10t', code='A',
               settings=None, disclosure=None, projection=None, sample=500, overrides=(), model_k=None,
               model_seed=None, replay='exact_hash', with_code=True, with_disclosure=True):
     """visits: a fidelity dict per record, or (fidelity dict, extra record keys)."""
@@ -250,7 +250,7 @@ def test_markdown_leads_with_the_width_matched_difference_and_has_direction_note
             'one_minus_support_fraction', 'deletion_mean_change_vs_random', 'insertion_auc_vs_random'} <= set(cells)
     assert text.count('Direction: higher is better for fidelity_plus') == 1      # one note per K table
     assert 'lower is better for fidelity_minus' in text and 'negative insertion difference' in text
-    assert 'intervention contract v5' in text
+    assert 'intervention contract v6' in text
     monkeypatch.setattr(summarize, 'HEADLINE_CURVE', 'mean_change')
     out = run_main(tmp_path / 'in', tmp_path, 'mean')
     header = next(line for line in (out / 'summary.md').read_text().splitlines() if line.startswith('| method'))
@@ -261,32 +261,32 @@ def test_markdown_leads_with_the_width_matched_difference_and_has_direction_note
     assert first_metric < cells.index('fidelity_plus') < cells.index('deletion_mean_change') < cells.index('deletion_auc')
     csv_columns = next(csv.reader(open(out / 'summary.csv')))
     assert {'deletion_auc_mean', 'deletion_mean_change_mean', 'explained_fraction_mean'} <= set(csv_columns)
-    assert json.loads((out / 'summary.json').read_text())['intervention_contract_version'] == 5
+    assert json.loads((out / 'summary.json').read_text())['intervention_contract_version'] == 6
 
 
 def test_missing_contract_version_is_refused_and_names_the_run(tmp_path):
-    write_run(tmp_path / 'record', 10, 'gsat_seed7', ONE, method='gsat', version=None, binding_version=5)
+    write_run(tmp_path / 'record', 10, 'gsat_seed7', ONE, method='gsat', version=None, binding_version=6)
     with pytest.raises(SystemExit, match=r'gsat_seed7.*no intervention contract version'):
         summarize.collect(tmp_path / 'record')
-    write_run(tmp_path / 'binding', 10, 'gsat_seed7', ONE, method='gsat', version=5, binding_version=None)
+    write_run(tmp_path / 'binding', 10, 'gsat_seed7', ONE, method='gsat', version=6, binding_version=None)
     with pytest.raises(SystemExit, match=r'gsat_seed7.*binding.*no intervention contract version'):
         summarize.collect(tmp_path / 'binding')
 
 
 def test_disagreeing_versions_are_refused(tmp_path):
     visits = ONE * 2
-    write_run(tmp_path / 'records', 10, 'gsat_seed7', visits, method='gsat', record_versions=[4, 5], binding_version=5)
-    with pytest.raises(SystemExit, match=r'gsat_seed7.*records disagree.*4, 5'):
+    write_run(tmp_path / 'records', 10, 'gsat_seed7', visits, method='gsat', record_versions=[5, 6], binding_version=6)
+    with pytest.raises(SystemExit, match=r'gsat_seed7.*records disagree.*5, 6'):
         summarize.collect(tmp_path / 'records')
-    write_run(tmp_path / 'binding', 10, 'gsat_seed7', visits, method='gsat', version=5, binding_version=4)
-    with pytest.raises(SystemExit, match=r'gsat_seed7.*record contract version 5 does not match its binding \(4\)'):
+    write_run(tmp_path / 'binding', 10, 'gsat_seed7', visits, method='gsat', version=6, binding_version=5)
+    with pytest.raises(SystemExit, match=r'gsat_seed7.*record contract version 6 does not match its binding \(5\)'):
         summarize.collect(tmp_path / 'binding')
 
 
-@pytest.mark.parametrize('version', [3, 4, 6])
-def test_only_contract_version_5_is_read(tmp_path, version):
+@pytest.mark.parametrize('version', [3, 4, 5, 7])
+def test_only_contract_version_6_is_read(tmp_path, version):
     write_run(tmp_path, 10, 'gsat_seed7', ONE, method='gsat', version=version)
-    with pytest.raises(SystemExit, match=rf'gsat_seed7.*version {version}.*only version 5'):
+    with pytest.raises(SystemExit, match=rf'gsat_seed7.*version {version}.*only version 6'):
         summarize.collect(tmp_path)
 
 
@@ -345,9 +345,9 @@ def test_a_complete_driver_run_needs_no_flag_and_writes_no_left_out_table(tmp_pa
     assert len(runs) == 2
 
 
-# ------------------------------------------------------------------ G6-F1: every missing source is counted
+# ------------------------------------------------------------------ every missing source is counted
 def graphcare_with_gaps(root):
-    """C1: GNNExplainer succeeds on visit 0, is unsupported on 1 and failed on 2; the built-in is unavailable on all."""
+    """GNNExplainer succeeds on visit 0, is unsupported on 1 and failed on 2; the built-in is unavailable on all."""
     unavailable = {'builtin_status': 'unavailable', 'builtin_unavailable_reason': 'no eligible attention'}
     visits = [
         ({'GradExplainer': source(.1, .1, .1, .1, .5), 'GNNExplainer': source(.4, .1, .1, .1, .5)}, unavailable),
@@ -449,7 +449,7 @@ def test_the_builtin_tie_summary_of_the_record_fills_the_tie_columns(tmp_path):
     assert row['constant_importance_share'] == 1.0 and row['largest_tie_group_mean'] == 4.0
 
 
-# ------------------------------------------------------------------ G6-F2/F3: caveats, code, settings
+# ------------------------------------------------------------------ caveats, code, settings
 PROJECTED = {'selected_epoch': 21, 'first_projection_epoch': 21, 'prototypes_projected': True,
              'last_projection_epoch': 21, 'epochs_trained_after_last_projection': 0}
 
@@ -504,7 +504,7 @@ def test_runs_without_code_hashes_or_disclosure_are_refused(tmp_path):
 
 
 def test_mixed_code_hashes_and_cohort_samples_are_refused_unless_allowed(tmp_path):
-    """C2: two runs with other code and another cohort sample were summarised into one row without a word."""
+    """Two runs with other code and another cohort sample are never summarised into one row without a word."""
     write_run(tmp_path / 'in', 10, 'gsat_seed1234', ONE, method='gsat', code='A', sample=500)
     write_run(tmp_path / 'in', 10, 'gsat_seed7', ONE, method='gsat', code='B', sample=10)
     with pytest.raises(SystemExit, match=r'refusing to mix explanation code.*top10/gsat_seed1234.*top10/gsat_seed7'):
@@ -542,7 +542,7 @@ def test_mixed_explainer_settings_are_refused_but_the_chosen_ig_step_count_is_no
         summarize.collect(tmp_path / 'tolerance')
 
 
-# ------------------------------------------------------------------ G6-F4: protocol, K and seed from the bindings
+# ------------------------------------------------------------------ protocol, K and seed from the bindings
 def test_protocol_comes_from_the_bindings_when_there_is_no_driver_header(tmp_path):
     build(tmp_path / 'in')
     out = run_main(tmp_path / 'in', tmp_path)
@@ -573,6 +573,17 @@ def test_binding_without_protocol_k_seed_or_with_overrides_is_refused(tmp_path):
     write_run(tmp_path / 'overrides', 10, 'gsat_seed7', ONE, method='gsat', overrides=['--lr 0.1'])
     with pytest.raises(SystemExit, match='protocol_overrides must be an empty list'):
         summarize.collect(tmp_path / 'overrides')
+    # a training binding without the key gives null in the runner's binding: unknown overrides are not final
+    for name, edit in (('null', lambda m: m.update(protocol_overrides=None)),
+                       ('absent', lambda m: m.pop('protocol_overrides'))):
+        root = tmp_path / name
+        write_run(root, 10, 'gsat_seed7', ONE, method='gsat')
+        path = root / 'top10' / 'gsat_seed7' / 'binding.json'
+        binding = json.loads(path.read_text())
+        edit(binding['model_run'])
+        path.write_text(json.dumps(binding))
+        with pytest.raises(SystemExit, match=r'gsat_seed7.*protocol_overrides must be an empty list, not None'):
+            summarize.collect(root)
 
 
 def test_mixed_protocols_and_a_driver_protocol_that_disagrees_are_refused(tmp_path):
@@ -586,9 +597,9 @@ def test_mixed_protocols_and_a_driver_protocol_that_disagrees_are_refused(tmp_pa
         summarize.collect(tmp_path / 'driver')
 
 
-# ------------------------------------------------------------------ G6-F6: run set against the driver plan
+# ------------------------------------------------------------------ run set against the driver plan
 def test_a_planned_run_without_a_folder_is_refused(tmp_path):
-    """C6: the driver says two runs ok, one folder is missing."""
+    """The driver says two runs ok, one folder is missing."""
     write_run(tmp_path, 10, 'gsat_seed1234', ONE, method='gsat')
     driver_manifest(tmp_path, [(10, 'gsat', 1234, 0), (10, 'gsat', 7, 0)])
     with pytest.raises(SystemExit, match=r'folder is missing: top10/gsat_seed7'):
@@ -610,6 +621,20 @@ def test_a_cohort_sample_other_than_the_plan_is_refused(tmp_path):
         summarize.collect(tmp_path)
 
 
+def test_an_every_patient_driver_plan_is_summarised(tmp_path):
+    """The driver's --sample-patients 0 (header null, or 0 in an older header) and the runner's null are one size."""
+    for header in (None, 0):
+        root = tmp_path / f'every_{header}'
+        write_run(root, 10, 'gsat_seed1234', ONE, method='gsat', sample=None)
+        driver_manifest(root, [(10, 'gsat', 1234, 0)], sample=header)
+        assert len(summarize.collect(root)[0]) == 1
+    root = tmp_path / 'every_vs_500'
+    write_run(root, 10, 'gsat_seed1234', ONE, method='gsat', sample=500)
+    driver_manifest(root, [(10, 'gsat', 1234, 0)], sample=None)
+    with pytest.raises(SystemExit, match=r'cohort sample differs from the driver plan \(every patient\)'):
+        summarize.collect(root)
+
+
 def test_without_a_driver_header_the_markdown_says_the_run_set_was_not_checked(tmp_path):
     write_run(tmp_path / 'in', 10, 'gsat_seed7', ONE, method='gsat')
     out = run_main(tmp_path / 'in', tmp_path)
@@ -625,6 +650,107 @@ def test_a_row_with_fewer_runs_than_planned_is_flagged(tmp_path):
     row = json.loads((out / 'summary.json').read_text())['rows'][0]
     assert (row['runs'], row['runs_planned']) == (1, 2)
     assert '| 1 of 2 |' in (out / 'summary.md').read_text()
+
+
+# ------------------------------------------------------------------ the difference to random and the other guards
+def edit_json(path, change):
+    value = json.loads(path.read_text())
+    change(value)
+    path.write_text(json.dumps(value))
+
+
+def test_the_difference_to_random_counts_the_visits_it_rests_on(tmp_path):
+    """One visit's random reference failed: its metrics carry no `*_vs_random`, so the headline is a mean over the
+    other visits; the row says over how many and the markdown marks the headline cells."""
+    failed = {'random_reference': {'status': 'failed', 'repeats': 50, 'seed': 1, 'error': 'boom'}}
+    computed = {'random_reference': {'status': 'computed', 'repeats': 50, 'seed': 1}}
+    write_run(tmp_path / 'in', 10, 'gsat_seed7', [
+        ({'GradExplainer': source(.2, .1, .3, .2, .5, vs=.1)}, dict(computed, builtin_status='unavailable')),
+        ({'GradExplainer': source(.4, .1, .3, .2, .5, vs=.3)}, dict(computed, builtin_status='unavailable')),
+        ({'GradExplainer': source(.6, .1, .3, .2, .5)}, dict(failed, builtin_status='unavailable'))], method='gsat')
+    out = run_main(tmp_path / 'in', tmp_path)
+    data = json.loads((out / 'summary.json').read_text())
+    row = {r['source']: r for r in data['rows']}['GradExplainer']
+    assert (row['visits_explained'], row['visits_vs_random']) == (3, 2)
+    assert row['random_reference_missing'] == ['failed']
+    assert row['fidelity_plus_mean'] == pytest.approx(0.4)                 # over all three visits
+    assert row['deletion_mean_change_vs_random_mean'] == pytest.approx(0.2)  # over the two with a reference
+    paired = {r['source']: r for r in data['paired_rows']}['GradExplainer']
+    assert (paired['paired_visits'], paired['visits_vs_random']) == (3, 2)
+    assert 'visits_vs_random' in next(csv.reader(open(out / 'summary.csv')))
+    text = (out / 'summary.md').read_text()
+    assert '| with random reference |' in text and '0.2000 *' in text
+    assert '`*`: the difference to random of these rows rests on fewer visits than the other columns ' \
+           '(random reference failed): gsat GradExplainer 2 of 3.' in text
+    # a full row is not marked
+    write_run(tmp_path / 'full', 10, 'gsat_seed7', [
+        ({'GradExplainer': source(.2, .1, .3, .2, .5, vs=.1)}, dict(computed, builtin_status='unavailable'))],
+        method='gsat')
+    text = (run_main(tmp_path / 'full', tmp_path, 'out_full') / 'summary.md').read_text()
+    assert ' *' not in text and '`*`' not in text
+
+
+def test_built_in_explanation_settings_that_differ_within_a_method_are_refused_and_printed(tmp_path):
+    settings = {'method': 'protgnn', 'algorithm': 'MCTS', 'settings': {'rollout': 10}}
+    for seed, rollout in ((1234, 10), (7, 20)):
+        write_run(tmp_path / 'in', 10, f'protgnn_seed{seed}', ONE, method='protgnn')
+        edit_json(tmp_path / 'in' / 'top10' / f'protgnn_seed{seed}' / 'explanation_manifest.json',
+                  lambda m, r=rollout: m.update(builtin_explanation=dict(settings, settings={'rollout': r})))
+    with pytest.raises(SystemExit, match=r'mix built-in explanation settings within K=10 protgnn'):
+        summarize.collect(tmp_path / 'in')
+    write_run(tmp_path / 'same', 10, 'protgnn_seed7', ONE, method='protgnn')
+    edit_json(tmp_path / 'same' / 'top10' / 'protgnn_seed7' / 'explanation_manifest.json',
+              lambda m: m.update(builtin_explanation=settings))
+    text = (run_main(tmp_path / 'same', tmp_path) / 'summary.md').read_text()
+    assert '- Built-in explanation source: method: protgnn; algorithm: MCTS; settings: rollout: 10' in text
+
+
+def test_a_manifest_method_other_than_the_binding_method_is_refused(tmp_path):
+    write_run(tmp_path, 10, 'gsat_seed7', ONE, method='gsat')
+    edit_json(tmp_path / 'top10' / 'gsat_seed7' / 'binding.json', lambda b: b['model_run'].update(method='graphcare'))
+    with pytest.raises(SystemExit, match=r"gsat_seed7: manifest method 'gsat' differs from its binding \('graphcare'\)"):
+        summarize.collect(tmp_path)
+
+
+def test_runs_that_differ_only_in_the_vendored_graphxai_tree_are_refused(tmp_path):
+    write_run(tmp_path, 10, 'gsat_seed1234', ONE, method='gsat')
+    write_run(tmp_path, 10, 'gsat_seed7', ONE, method='gsat')
+    edit_json(tmp_path / 'top10' / 'gsat_seed7' / 'explanation_manifest.json',
+              lambda m: m['code'].update(vendored_graphxai_tree_sha256='other'))
+    with pytest.raises(SystemExit, match=r'refusing to mix explanation code.*gsat_seed1234.*gsat_seed7'):
+        summarize.collect(tmp_path)
+
+
+@pytest.mark.parametrize('extra, match', [
+    ({'builtin_status': 'maybe'}, r"gsat_seed7: a record carries builtin_status 'maybe'"),
+    ({'graphxai': {'GradExplainer': {'status': 'pending'}}}, r"gsat_seed7: GradExplainer carries status 'pending'"),
+    ({'fidelity_v2': {}}, r'gsat_seed7: GradExplainer has no fidelity_v2 entry'),
+    ({'fidelity_v2': {'GradExplainer': {'fidelity_plus': {}}}}, r'gsat_seed7: GradExplainer has a malformed'),
+    ({'random_reference': {'status': 'lost'}}, r"gsat_seed7: a record carries random_reference status 'lost'"),
+])
+def test_records_the_summary_cannot_read_are_refused_with_the_run(tmp_path, extra, match):
+    write_run(tmp_path, 10, 'gsat_seed7', [({'GradExplainer': source(.2, .1, .3, .2, .5)},
+                                           dict({'builtin_status': 'unavailable'}, **extra))], method='gsat')
+    with pytest.raises(SystemExit, match=match):
+        summarize.collect(tmp_path)
+
+
+def test_an_unknown_fold_is_refused_with_the_run(tmp_path):
+    write_run(tmp_path, 10, 'gsat_seed7', ONE, method='gsat')
+    edit_json(tmp_path / 'top10' / 'gsat_seed7' / 'explanation_manifest.json', lambda m: m.update(fold='train'))
+    with pytest.raises(SystemExit, match=r"gsat_seed7: unknown fold 'train'"):
+        summarize.collect(tmp_path)
+
+
+def test_a_graphxai_source_without_eligible_evidence_is_counted(tmp_path):
+    write_run(tmp_path, 10, 'gsat_seed7', [
+        ({'GradExplainer': source(.2, .1, .3, .2, .5)}, {'builtin_status': 'unavailable'}),
+        ({'GradExplainer': {'status': 'no_eligible_evidence', 'support': 0}},
+         {'builtin_status': 'unavailable', 'graphxai': {'GradExplainer': {'status': 'success'}}})], method='gsat')
+    runs, _ = summarize.collect(tmp_path)
+    row = rows_of(summarize.aggregate(runs))[(10, 'gsat', 'GradExplainer')]
+    assert (row['visits'], row['visits_explained'], row['visits_no_eligible']) == (2, 1, 1)
+    assert row['fidelity_plus_mean'] == pytest.approx(0.2)
 
 
 def test_summarize_does_not_import_torch_or_the_fidelity_module():

@@ -235,6 +235,14 @@ def test_the_not_recorded_baseline_zeroes_value_and_token_and_keeps_the_kind(mp2
     with torch.no_grad():
         term = network._ple_term(torch.cat((baseline, wrapper._type_vectors), dim=-1), clinical)
     assert torch.count_nonzero(term) == 0                               # no recorded value
+    # this fixture's layout names no node kind; with the real layout's bare kind name in
+    # column 0 that column is kept and the rest of the numeric block is zeroed
+    assert "complaint" in ig_clinical.NODE_KINDS and "complaint" not in LAYOUT
+    with_kind = ig_clinical.not_recorded_baseline(
+        x, batch.node_type, ["complaint"] + LAYOUT[1:], **wrapper.ig_feature_spec())
+    assert torch.count_nonzero(x[:, 0]) > 0
+    assert torch.equal(with_kind[:, 0], x[:, 0])
+    assert torch.count_nonzero(with_kind[:, 1:]) == 0
 
 
 # ------------------------------------------------------------------ provenance per source

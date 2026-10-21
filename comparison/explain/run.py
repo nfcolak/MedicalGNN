@@ -18,10 +18,13 @@ non-zero exit status on the first failing run and writes `<out>/driver_manifest.
 already holds `explanation_manifest.json` (recorded as `skipped_existing`), keeps the previous driver manifest as
 `driver_manifest.<its started_at>.json` and refuses an interrupted run folder or any file outside the plan. A finished
 folder is skipped only if it belongs to the current plan: its manifest and `binding.json` must name the same fold,
-cohort sample size, method and run (`top<K>/<method>_seed<seed>`), and its recorded `code.source_hashes` must equal the
+cohort sample size, method and run (`top<K>/<method>_seed<seed>`), its recorded `code.source_hashes` must equal the
 hashes of the code roots of this checkout (every `.py` under the training code roots, keyed `<root>/<relative path>`,
-names starting `._` skipped); one difference refuses the resume with the folder's name. `--allow-mixed-code` skips only
-the code comparison (the summary then needs its own `--allow-mixed-code`).
+names starting `._` skipped) and its `code.vendored_graphxai_tree_sha256` the hash of the vendored GraphXAI tree; one
+difference refuses the resume with the folder's name. `--allow-mixed-code` skips only the two code comparisons (the
+summary then needs its own `--allow-mixed-code`).
+--sample-patients 0 explains every patient of the fold; the header records it as null, as the runner records it, and
+the resume and summary checks read 0 and null as the same size. A negative size is refused.
 --jobs N runs up to N runner processes at once, each with OMP_NUM_THREADS and MKL_NUM_THREADS = max(1, cpus // N).
 Every `driver_manifest.json` entry carries `seconds`, `started_at`, `status` (ok, failed, skipped_existing) and
 `max_rss_mb` (peak memory of the child, null when unknown).
@@ -108,6 +111,17 @@ def check_binding(run_dir, k, method, seed):
     return binding['seed']
 
 
+def sample_size(value):
+    """One reading of a cohort sample size: 0 and None both mean every patient (the runner records None for 0)."""
+    return None if value in (0, None) else int(value)
+
+
+def current_vendored_tree():
+    """sha256 of the vendored GraphXAI tree of this checkout, as the runner records it (loaded lazily)."""
+    from core.explain.runner import vendored_graphxai_tree_sha256
+    return vendored_graphxai_tree_sha256()
+
+
 def current_source_hashes():
     """sha256 of every `.py` under the training code roots of this checkout, keyed `<root>/<relative path>`.
 
@@ -175,7 +189,7 @@ def write_manifest(out, args, entries, results, complete, started_at=None):
     manifest = {
         'schema': 'medgnn.explanation_driver_manifest', 'protocol': PROTOCOL, 'fold': args.fold,
         'fold_role': FOLD_ROLE[args.fold], 'ks': args.ks, 'methods': args.methods, 'seeds': args.seeds,
-        'sample_patients': args.sample_patients, 'planned_runs': len(entries), 'complete': complete,
+        'sample_patients': sample_size(args.sample_patients), 'planned_runs': len(entries), 'complete': complete,
         'started_at': started_at, 'runs': runs,
     }
     Path(out).mkdir(parents=True, exist_ok=True)
@@ -183,10 +197,11 @@ def write_manifest(out, args, entries, results, complete, started_at=None):
     return manifest
 
 
-def check_finished(entry, folder, manifest, *, fold, sample_patients, hashes):
+def check_finished(entry, folder, manifest, *, fold, sample_patients, hashes, vendored=None):
     """A finished folder must belong to the current plan: fold, sample size, method, run name and code.
 
-    `hashes` is the code mapping of this checkout, or None to skip the code comparison."""
+    `hashes` is the code mapping of this checkout and `vendored` its vendored GraphXAI tree hash; None skips that
+    comparison."""
     name = shown(folder)
     binding_path = folder / 'binding.json'
     if not binding_path.is_file():
@@ -196,9 +211,9 @@ def check_finished(entry, folder, manifest, *, fold, sample_patients, hashes):
     sampling = (binding.get('cohort') or {}).get('sampling') or {}
     run_name = '/'.join(Path(str(model_run.get('run_dir', ''))).parts[-2:])
     found = {'fold': manifest.get('fold'), 'fold_role': manifest.get('fold_role'),
-             'sample size': sampling.get('sample_patients'), 'method': manifest.get('method'),
+             'sample size': sample_size(sampling.get('sample_patients')), 'method': manifest.get('method'),
              'run': run_name, 'seed': model_run.get('seed'), 'top_k_labels': model_run.get('top_k_labels')}
-    planned = {'fold': fold, 'fold_role': FOLD_ROLE[fold], 'sample size': sample_patients,
+    planned = {'fold': fold, 'fold_role': FOLD_ROLE[fold], 'sample size': sample_size(sample_patients),
                'method': BINDING_METHOD[entry['method']], 'run': entry['run'], 'seed': entry['seed'],
                'top_k_labels': entry['k']}
     for key, want in planned.items():
@@ -215,14 +230,20 @@ def check_finished(entry, folder, manifest, *, fold, sample_patients, hashes):
             raise SystemExit(f'--resume: {name} was written by other code than this checkout '
                              f'({len(changed)} files differ, e.g. {", ".join(changed[:3])}); move it away and '
                              'run again, or pass --allow-mixed-code to accept it')
+    if vendored is not None:
+        recorded = (manifest.get('code') or {}).get('vendored_graphxai_tree_sha256')
+        if recorded != vendored:
+            raise SystemExit(f'--resume: {name} was written with another vendored GraphXAI tree '
+                             f'({str(recorded)[:12]}, this checkout {vendored[:12]}); move it away and run again, '
+                             'or pass --allow-mixed-code to accept it')
 
 
-def check_resume_out(out, entries, *, fold, sample_patients, hashes):
+def check_resume_out(out, entries, *, fold, sample_patients, hashes, vendored=None):
     """Under --resume the output folder may be filled, but only by planned run folders and driver manifests.
 
     Returns the planned runs that are finished (hold `explanation_manifest.json`) and belong to the plan; an
-    interrupted run folder or a finished one of another plan is refused with its name (the user moves it; nothing
-    is deleted)."""
+    interrupted run folder or a finished one of another plan is refused with its name (it is moved away by hand;
+    nothing is deleted)."""
     out = Path(out)
     if out.exists() and not out.is_dir():
         raise SystemExit(f'--out must be a directory: {shown(out)}')
@@ -247,7 +268,8 @@ def check_resume_out(out, entries, *, fold, sample_patients, hashes):
             raise SystemExit(f'--resume: {shown(folder)} holds no {RUN_MANIFEST} (interrupted run); '
                              'move it away and run again')
         finished[e['output']] = json.loads((folder / RUN_MANIFEST).read_text())
-        check_finished(e, folder, finished[e['output']], fold=fold, sample_patients=sample_patients, hashes=hashes)
+        check_finished(e, folder, finished[e['output']], fold=fold, sample_patients=sample_patients, hashes=hashes,
+                       vendored=vendored)
     return finished
 
 
@@ -343,6 +365,8 @@ def main(argv=None, *, executor=run_command):
     args.seeds = parse_list(args.seeds, int, 'seeds')
     if args.jobs < 1:
         raise SystemExit('--jobs: must be at least 1')
+    if args.sample_patients < 0:
+        raise SystemExit('--sample-patients: must be 0 (every patient) or a positive number')
     check_methods(args.methods)
     if not args.resume:
         check_out(args.out)
@@ -353,8 +377,9 @@ def main(argv=None, *, executor=run_command):
     finished = {}
     if args.resume:
         hashes = None if args.allow_mixed_code else current_source_hashes()
+        vendored = None if args.allow_mixed_code else current_vendored_tree()
         finished = check_resume_out(args.out, entries, fold=args.fold, sample_patients=args.sample_patients,
-                                    hashes=hashes)
+                                    hashes=hashes, vendored=vendored)
 
     if args.plan or not args.execute:
         print(f'fold {args.fold} ({FOLD_ROLE[args.fold]} fold), protocol {PROTOCOL}, {len(entries)} runs')

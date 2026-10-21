@@ -1,19 +1,24 @@
 """Node deletion at the graph-record level (core/explain/node_deletion.py), the operator behind the
-fidelity metrics of intervention contract version 5.
+fidelity metrics of intervention contract version 6.
 
 Synthetic graph record shaped like the graph builder's output (data/s4_graph/graph.py): a global
 patient, the index visit (last ordinal), two complaints, a vital, two index labs of one analyte and
 one of another, a prior lab of the second analyte, prior diagnoses and knowledge nodes (a fired
 threshold state, a diagnosis concept, a complaint concept). It is encoded with a hand-fitted
 preprocessing and scored by the four final methods (gsat, graphcare, protgnn, cei_gnn_mp2) with
-perturbed weights. No data file, run or checkpoint is read.
+perturbed weights. The second half builds synthetic patients with the graph builder itself
+(`build_graph_with_visit_membership`) from an in-memory event store and compares every deletion with
+the builder run on the store without the deleted events. No data file, run or checkpoint is read.
 """
 from __future__ import annotations
 
 import copy
+import csv
+import itertools
 import json
 from argparse import Namespace
-from collections import Counter
+from collections import Counter, defaultdict
+from datetime import datetime
 
 import numpy as np
 import pytest
@@ -24,8 +29,11 @@ from cei.studies.cei_v3_absence import fit_universe
 from cei.studies.cei_v3_ple import fit_knots
 from comparison.s7_why.masking import apply_mask
 from core.contracts import VISIT_MEMBERSHIP_CONTRACT_VERSION, validate_visit_membership_record
-from core.explain.node_deletion import DeletionScorer, delete_from_record, encoding_differences
+from core.explain.node_deletion import (ComboRules, DeletionScorer, combo_source, delete_from_record,
+                                        encoding_differences, load_combo_rules)
 from core.registry import METHOD_REGISTRY, build_method
+from core.schema import THRESHOLD_COLUMNS, read_thresholds, sha256
+from data.s4_graph.graph import build_graph_with_visit_membership
 from core.tensorize import (ALL_RELATIONS, CONTEXT_NUMERIC, PAYLOAD_WIDTH, PREPROCESSING_VERSION, Scaler,
                             Vocabulary, context_number, encode_graph, node_feature_layout, node_token,
                             triple_count, triple_key)
@@ -129,6 +137,9 @@ def by_hand(graph, membership, dropped, ordinal_map, visits=None):
 
 
 SAME = {0: 0, 1: 1, 2: 2}
+# the hand-written record has no combo rule; without a table the fallback combo rule is used
+NO_COMBO = {'source': 'distinct_anchor_tokens', 'groups_deleted': 0, 'reevaluated': 0, 'refired': 0,
+            'not_reevaluated': []}
 EVIDENCE = ('c1', 'c2', 'hr', 'm1', 'm2', 'm3', 'mp', 'd1', 'd2')
 # selected -> (every node that leaves, cascaded counts, ordinal map of the surviving visits,
 #              new visits (old ordinals) of a surviving concept node whose anchors changed)
@@ -162,7 +173,8 @@ def test_deletion_follows_the_cascade_orphan_and_visit_rules(case):
     assert new_membership == expected_membership
     assert info == {'selected': len(selected),
                     'cascaded': {'analyte': analyte, 'knowledge': knowledge, 'orphan': orphan},
-                    'visits_dropped': 3 - len(set(ordinal_map.values())),
+                    'combos': NO_COMBO, 'visits_dropped': 3 - len(set(ordinal_map.values())),
+                    'visits_originally_empty': 0,
                     'nodes_after': len(expected_graph['nodes']), 'edges_after': len(expected_graph['edges'])}
     validate_visit_membership_record(new_graph, new_membership)
     assert new_graph['coverage'] == graph['coverage'] and new_graph['sample_id'] == graph['sample_id']
@@ -177,7 +189,8 @@ def test_the_inputs_are_never_modified_and_the_empty_set_is_the_record_itself():
     same_graph, same_membership, info = delete_from_record(graph, membership, [])
     assert same_graph is graph and same_membership is membership
     assert info == {'selected': 0, 'cascaded': {'analyte': 0, 'knowledge': 0, 'orphan': 0},
-                    'visits_dropped': 0, 'nodes_after': 16, 'edges_after': len(graph['edges'])}
+                    'combos': NO_COMBO, 'visits_dropped': 0, 'visits_originally_empty': 0,
+                    'nodes_after': 16, 'edges_after': len(graph['edges'])}
 
 
 @pytest.mark.parametrize('name', ['p', 'v', 'a1', 'k1'])
@@ -337,13 +350,13 @@ def _v3_state(prep, path, graph):
     return path
 
 
-def build_model(name, prep, tmp_path, seed=5):
+def build_model(name, prep, tmp_path, seed=5, graph=None):
     dims = dict(num_tokens=len(prep['vocabulary']), node_dim=len(node_feature_layout(prep)),
                 edge_dim=len(ALL_RELATIONS) + PAYLOAD_WIDTH, num_classes=CLASSES, hidden=8,
                 token_dim=4, num_triples=triple_count(prep))
     torch.manual_seed(seed)
     if name == 'cei_gnn_mp2':
-        state = _v3_state(prep, tmp_path / 'K4.json', record()[0])
+        state = _v3_state(prep, tmp_path / 'K4.json', graph if graph is not None else record()[0])
         args = Namespace(method_options={'arm': 'C', 'v3_state': str(state), 'k': 4, **MP2_FINAL},
                          seed=1234)
         model = METHOD_REGISTRY['cei_gnn_mp2'](layers=1, dropout=0.0, args=args, **dims)
@@ -474,3 +487,481 @@ def test_the_scorer_refuses_an_encoder_that_reorders_nodes(setups):
 
     with pytest.raises(ValueError, match='node indices differ from the record'):
         DeletionScorer(model_forward(models['gsat']), graph, membership, reordering, y=0)
+
+
+# ------------------------------------------------------------------ against the graph builder
+# Synthetic patients built by `build_graph_with_visit_membership` from an in-memory event store, with a
+# threshold table of a level row, a state row and four combo rules (SIRS by two combos, qSOFA, DKA).
+# For a deleted node set S the operator is compared with the builder run on the store without S's
+# events ("never recorded"), with the decided visit rule applied to the rebuild (a prior visit the
+# deletion emptied is dropped, one empty in the record stays).
+PROVENANCE = {'source_uri': 'https://example.org/synthetic', 'source_version': 'v1',
+              'reviewed_by': 'synthetic-check'}
+SIRS, QSOFA, DKA = 'knowledge:state:sirs', 'knowledge:state:qsofa', 'knowledge:state:dka'
+
+
+def _rule(rule_id, kind, token, unit, comparator, threshold, target):
+    return {'rule_id': rule_id, 'kind': kind, 'source_token': token, 'unit': unit,
+            'comparator': comparator, 'threshold': threshold, 'sex': 'any', 'target_token': target,
+            'relation': 'level' if kind == 'level' else 'indicates', **PROVENANCE,
+            'evidence': 'synthetic'}
+
+
+RULES = [
+    _rule('lvl_k_high', 'level', 'lab:K', 'mEq/L', '>', '5.1', 'level:high'),
+    _rule('state_hyperk', 'state', 'lab:K', 'mEq/L', '>', '5.5', 'knowledge:state:hyperkalemia'),
+    _rule('combo_sirs_hr_rr', 'combo', 'vital:heartrate', 'bpm', '>', '90', SIRS),
+    _rule('combo_sirs_hr_rr', 'combo', 'vital:resprate', 'bpm', '>', '20', SIRS),
+    _rule('combo_sirs_temp_hr', 'combo', 'vital:temperature', 'C', '>', '38', SIRS),
+    _rule('combo_sirs_temp_hr', 'combo', 'vital:heartrate', 'bpm', '>', '90', SIRS),
+    _rule('combo_qsofa', 'combo', 'vital:sbp', 'mmHg', '<=', '100', QSOFA),
+    _rule('combo_qsofa', 'combo', 'vital:resprate', 'bpm', '>=', '22', QSOFA),
+    _rule('combo_dka', 'combo', 'lab:GLU', 'mg/dL', '>', '250', DKA),
+    _rule('combo_dka', 'combo', 'lab:BIC', 'mEq/L', '<=', '18', DKA),
+]
+KNOWLEDGE_TRIPLES = [
+    {'source_token': source, 'target_token': target, 'relation': relation, **PROVENANCE}
+    for source, target, relation in (('cc:chest pain', 'knowledge:system:chest', 'assesses'),
+                                     ('dx:I10', 'knowledge:block:hypertension', 'is_a'),
+                                     ('dx:E11', 'knowledge:block:diabetes', 'is_a'),
+                                     ('lab:CR', 'knowledge:system:renal', 'measures'),
+                                     ('vital:heartrate', 'knowledge:system:cardiac', 'measures'))]
+COMPLAINT_VOCABULARY = {'chest pain', 'dyspnea', 'fever'}
+INDEX_STAY = ('2020-07-01T00:00:00', '2020-07-01T09:00:00')
+
+
+def _lab(lab_id, token, value, unit, time, stay=None):
+    return {'id': lab_id, 'token': token, 'value': value, 'unit': unit, 'time': time, 'available': time,
+            'source': 'labevents', 'timing_basis': 'storetime', 'censored': None, 'ref_lower': None,
+            'ref_upper': None, 'flag': None, **({'stay': stay} if stay else {})}
+
+
+def _dx(token, occurrences):
+    return {'token': token, 'occurrences': occurrences, 'source_version': 10, 'source_code': token[3:],
+            'approximate_mapping': False}
+
+
+PATIENTS = {
+    # a prior visit without any node in the record (B), two potassium labs at the index visit, a
+    # creatinine with a prior lab, SIRS through two combos, qSOFA, and DKA fired on the later of two
+    # glucose labs
+    'P1': dict(visits={'A': ('2020-01-01T00:00:00', '2020-01-01T05:00:00'),
+                       'B': ('2020-03-01T00:00:00', '2020-03-01T05:00:00'),
+                       'C': ('2020-05-01T00:00:00', '2020-05-01T05:00:00'), 'I': INDEX_STAY},
+               prior=['A', 'B', 'C'], complaints=['chest pain', 'dyspnea'],
+               vitals=[('heartrate', 121.0, 'bpm'), ('resprate', 24.0, 'bpm'), ('temperature', 38.6, 'C'),
+                       ('sbp', 95.0, 'mmHg')],
+               labs=[_lab('k1', 'lab:K', 6.4, 'mEq/L', '2020-07-01T00:30:00'),
+                     _lab('k2', 'lab:K', 4.1, 'mEq/L', '2020-07-01T01:00:00'),
+                     _lab('cr', 'lab:CR', 1.9, 'mg/dL', '2020-07-01T00:30:00'),
+                     _lab('glu1', 'lab:GLU', 300.0, 'mg/dL', '2020-07-01T00:30:00'),
+                     _lab('glu2', 'lab:GLU', 280.0, 'mg/dL', '2020-07-01T01:00:00'),
+                     _lab('bic', 'lab:BIC', 15.0, 'mEq/L', '2020-07-01T00:30:00')],
+               history=[_lab('crp', 'lab:CR', 1.1, 'mg/dL', '2020-05-01T01:00:00', 'C')],
+               diagnoses=[_dx('dx:I10', ['A'])]),
+    # SIRS through one combo only (no respiratory rate), a potassium trajectory of two prior labs with
+    # its baseline edge, comorbid prior diagnoses, and DKA not fired because the LATEST glucose is low
+    'P2': dict(visits={'A': ('2020-01-01T00:00:00', '2020-01-01T05:00:00'),
+                       'B': ('2020-03-01T00:00:00', '2020-03-01T05:00:00'), 'I': INDEX_STAY},
+               prior=['A', 'B'], complaints=['fever'],
+               vitals=[('heartrate', 95.0, 'bpm'), ('temperature', 38.9, 'C')],
+               labs=[_lab('k1', 'lab:K', 5.9, 'mEq/L', '2020-07-01T00:30:00'),
+                     _lab('k2', 'lab:K', 5.2, 'mEq/L', '2020-07-01T01:30:00'),
+                     _lab('gluA', 'lab:GLU', 320.0, 'mg/dL', '2020-07-01T00:30:00'),
+                     _lab('gluB', 'lab:GLU', 200.0, 'mg/dL', '2020-07-01T01:00:00'),
+                     _lab('bic', 'lab:BIC', 14.0, 'mEq/L', '2020-07-01T00:30:00')],
+               history=[_lab('kp1', 'lab:K', 4.0, 'mEq/L', '2020-01-01T01:00:00', 'A'),
+                        _lab('kp2', 'lab:K', 4.8, 'mEq/L', '2020-03-01T01:00:00', 'B')],
+               diagnoses=[_dx('dx:I10', ['A', 'B']), _dx('dx:E11', ['B'])]),
+    # a single visit with qSOFA
+    'P3': dict(visits={'I': INDEX_STAY}, prior=[], complaints=['chest pain'],
+               vitals=[('heartrate', 80.0, 'bpm'), ('sbp', 99.0, 'mmHg'), ('resprate', 23.0, 'bpm')],
+               labs=[_lab('cr', 'lab:CR', 1.0, 'mg/dL', '2020-07-01T00:30:00')], history=[], diagnoses=[]),
+}
+
+
+class FakeStore:
+    """The event-store calls the graph builder makes, served from a patient spec without the events
+    in `skip` (('cc', text), ('vital', field), ('lab', id), ('dx', token))."""
+
+    def __init__(self, spec, skip=(), v5=True):
+        self.spec, self.skip, self.has_v5_columns = spec, set(skip), v5
+
+    def visit(self, stay):
+        start, finish = self.spec['visits'][stay]
+        return {'subject': 's1', 'start': start, 'finish': finish}
+
+    def prior_visits(self, subject, start):
+        return list(self.spec['prior'])
+
+    def arrival(self, stay):
+        return {'age': 70, 'gender': 'F', 'race': 'A', 'arrival_transport': 'WALK IN', 'acuity': 2}
+
+    def complaints(self, stay):
+        return [c for c in self.spec['complaints'] if ('cc', c) not in self.skip]
+
+    def triage_vitals(self, stay):
+        return [(f, v, u, u) for f, v, u in self.spec['vitals'] if ('vital', f) not in self.skip]
+
+    def measurements(self, stay, cutoff):
+        return [dict(r, stay='I') for r in self.spec['labs'] if ('lab', r['id']) not in self.skip]
+
+    def analyte_history(self, subject, prior, token, cutoff):
+        return [r for r in self.spec['history'] if r['token'] == token and ('lab', r['id']) not in self.skip]
+
+
+class FakeDiagnoses:
+    def __init__(self, rows):
+        self.rows = rows
+
+    def prior_history(self, stay, prior_visits):
+        return list(self.rows)
+
+
+@pytest.fixture(scope='module')
+def table(tmp_path_factory):
+    """The threshold table as a CSV file: the builder reads it with `read_thresholds`, the operator
+    with `load_combo_rules`."""
+    path = tmp_path_factory.mktemp('thresholds') / 'thresholds.csv'
+    with path.open('w', newline='') as stream:
+        writer = csv.DictWriter(stream, fieldnames=THRESHOLD_COLUMNS)
+        writer.writeheader()
+        writer.writerows(RULES)
+    return {'path': path, 'rows': read_thresholds(path),
+            'rules': load_combo_rules(path, sha256(path), level_source='csv')}
+
+
+def build_patient(name, thresholds, skip=(), v5=True):
+    spec = PATIENTS[name]
+    sample = {'sample_id': name, 'subject_id': 's1', 'stay_id': 'I', 'cutoff': datetime(2020, 7, 1, 2),
+              'split': 'test'}
+    diagnoses = FakeDiagnoses([d for d in spec['diagnoses'] if ('dx', d['token']) not in set(skip)])
+    return build_graph_with_visit_membership(FakeStore(spec, skip, v5), sample, KNOWLEDGE_TRIPLES,
+                                             COMPLAINT_VOCABULARY, diagnoses, thresholds=thresholds)
+
+
+def source_events(name, graph, selected):
+    """The store events the nodes at `selected` were built from."""
+    labs = [*PATIENTS[name]['labs'], *PATIENTS[name]['history']]
+    events = set()
+    for i in selected:
+        node = graph['nodes'][i]
+        if node['kind'] == 'complaint':
+            events.add(('cc', node['token'][3:]))
+        elif node['kind'] == 'vital':
+            events.add(('vital', node['token'].split(':', 1)[1]))
+        elif node['kind'] == 'diagnosis':
+            events.add(('dx', node['token']))
+        else:
+            (lab,) = [r for r in labs if r['token'] == node['token'] and r['value'] == node['value']]
+            events.add(('lab', lab['id']))
+    return events
+
+
+def decided_visits(original, rebuilt):
+    """The rebuild with the decided visit rule: a prior visit the deletion emptied is dropped (the
+    builder numbers every prior stay), one empty in the record already stays."""
+    graph, membership = rebuilt
+
+    def used(m):
+        return {o for o, pos in m['membership_pairs'] if not m['global_node_mask'][pos]}
+
+    last = len(membership['visit_ordinals']) - 1
+    emptied = used(original) - used(membership) - {last}
+    order = [o for o in membership['visit_ordinals'] if o not in emptied]
+    remap = {o: i for i, o in enumerate(order)}
+    return graph, {**membership, 'visit_ordinals': list(range(len(order))),
+                   'membership_pairs': [[remap[o], pos] for o, pos in membership['membership_pairs']]}
+
+
+def encoded_canon(prep, graph, membership):
+    """The encoded tensors up to node and edge storage order: every node row (features, token, type,
+    global flag, visits) and every edge row (endpoint rows, attributes, relation, triple)."""
+    data = encode_graph(graph, prep, membership)
+    visits = defaultdict(list)
+    for ordinal, pos in data.visit_membership_index.t().tolist():
+        visits[pos].append(ordinal)
+    rows = [(tuple(data.x[i].tolist()), int(data.token[i]), int(data.node_type[i]),
+             bool(data.global_node_mask[i]), tuple(sorted(visits[i]))) for i in range(data.num_nodes)]
+    edges = Counter((rows[s], rows[t], tuple(data.edge_attr[j].tolist()), int(data.edge_relation[j]),
+                     int(data.edge_triple[j]))
+                    for j, (s, t) in enumerate(data.edge_index.t().tolist()))
+    return Counter(rows), edges, int(data.num_visits)
+
+
+def without(graph, relation):
+    return {**graph, 'edges': [e for e in graph['edges'] if e['relation'] != relation]}
+
+
+def departures(graph, selected):
+    """The two decided departures from a rebuild that a deletion of `selected` meets: the prior labs
+    the deletion keeps although every index lab of their analyte is deleted (the builder pulls no
+    history for them), and the analytes whose baseline_of edge a rebuild would re-anchor."""
+    labs = defaultdict(lambda: {'index': [], 'prior': []})
+    for i, node in enumerate(graph['nodes']):
+        if node['kind'] == 'measurement':
+            labs[node['token']][node['scope']].append(i)
+    kept_priors, reanchored = set(), set()
+    for token, lab in labs.items():
+        if not lab['prior']:
+            continue
+        if all(i in selected for i in lab['index']):
+            kept_priors |= {i for i in lab['prior'] if i not in selected}
+            continue
+        earliest = min(lab['index'], key=lambda i: graph['nodes'][i]['time_hours'])
+        last_prior = max(lab['prior'], key=lambda i: graph['nodes'][i]['time_hours'])
+        if (earliest in selected or last_prior in selected) and not all(i in selected for i in lab['prior']):
+            reanchored.add(token)
+    return kept_priors, reanchored
+
+
+def baseline_tokens(graph):
+    tokens = {n['id']: n['token'] for n in graph['nodes']}
+    return Counter(tokens[e['target']] for e in graph['edges'] if e['relation'] == 'baseline_of')
+
+
+@pytest.fixture(scope='module')
+def built(table):
+    graphs = {name: build_patient(name, table['rows']) for name in PATIENTS}
+    for graph, membership in graphs.values():
+        validate_visit_membership_record(graph, membership)
+    return graphs, preprocessing([graph for graph, _ in graphs.values()])
+
+
+def test_every_deletion_is_the_rebuild_up_to_the_two_decided_departures(table, built):
+    """Every single eligible node, every pair and the whole eligible set of three builder patients:
+    the deletion encodes to the tensors of the builder run without those events (up to storage order),
+    once the two decided departures are accounted for: the prior labs the deletion keeps are deleted
+    too, and baseline_of edges a rebuild re-anchors are left out of both; the departures themselves
+    are asserted as differences."""
+    graphs, prep = built
+    seen = Counter()
+    for name, (graph, membership) in graphs.items():
+        eligible = [i for i, n in enumerate(graph['nodes'])
+                    if n['kind'] in ('complaint', 'vital', 'measurement', 'diagnosis')]
+        for selected in [(i,) for i in eligible] + list(itertools.combinations(eligible, 2)) + [tuple(eligible)]:
+            rebuilt_graph, rebuilt_membership = decided_visits(
+                membership, build_patient(name, table['rows'], source_events(name, graph, selected)))
+            kept_priors, reanchored = departures(graph, set(selected))
+            deleted_graph, deleted_membership, info = delete_from_record(
+                graph, membership, sorted(set(selected) | kept_priors), combo_rules=table['rules'])
+            validate_visit_membership_record(deleted_graph, deleted_membership)
+            if kept_priors:
+                seen['prior labs kept'] += 1
+                plain = delete_from_record(graph, membership, selected, combo_rules=table['rules'])
+                assert encoded_canon(prep, *plain[:2]) != encoded_canon(prep, rebuilt_graph, rebuilt_membership)
+            if reanchored:
+                seen['baseline not re-anchored'] += 1
+                assert all(baseline_tokens(rebuilt_graph)[t] == 1 and baseline_tokens(deleted_graph)[t] == 0
+                           for t in reanchored), (name, selected)
+                deleted_graph, rebuilt_graph = without(deleted_graph, 'baseline_of'), without(rebuilt_graph,
+                                                                                             'baseline_of')
+            assert encoded_canon(prep, deleted_graph, deleted_membership) == encoded_canon(
+                prep, rebuilt_graph, rebuilt_membership), (name, [graph['nodes'][i]['token'] for i in selected])
+            combos = info['combos']
+            seen['combo group deleted'] += combos['groups_deleted'] > 0
+            seen['combo fired again'] += combos['refired'] > 0
+            seen['combo re-evaluated unchanged'] += combos['reevaluated'] > combos['refired']
+            seen['emptied visit dropped'] += info['visits_dropped'] > 0
+            seen['originally empty visit kept'] += info['visits_originally_empty'] > 0
+            assert combos['not_reevaluated'] == []
+    assert len(seen) == 7 and min(seen.values()) > 0, seen
+
+
+def _tokens(graph):
+    return [n['token'] for n in graph['nodes']]
+
+
+def _rule_edges(graph, target):
+    tokens = {n['id']: n['token'] for n in graph['nodes']}
+    return sorted((tokens[e['source']], e.get('rule_id')) for e in graph['edges']
+                  if e['relation'] == 'medical:indicates' and tokens[e['target']] == target)
+
+
+def _position(graph, token, value=None):
+    (pos,) = [i for i, n in enumerate(graph['nodes'])
+              if n['token'] == token and n['kind'] != 'analyte' and (value is None or n.get('value') == value)]
+    return pos
+
+
+def _same_as_rebuild(table, prep, name, graph, membership, selected, result):
+    rebuilt = decided_visits(membership, build_patient(name, table['rows'], source_events(name, graph, selected)))
+    return encoded_canon(prep, *result[:2]) == encoded_canon(prep, *rebuilt)
+
+
+def test_sirs_through_one_combo_goes_with_one_of_its_components(table, built):
+    graphs, prep = built
+    graph, membership = graphs['P2']
+    assert _rule_edges(graph, SIRS) == [('vital:heartrate', 'combo_sirs_temp_hr'),
+                                        ('vital:temperature', 'combo_sirs_temp_hr')]
+    selected = [_position(graph, 'vital:heartrate')]
+    result = delete_from_record(graph, membership, selected, combo_rules=table['rules'])
+    assert SIRS not in _tokens(result[0]) and _rule_edges(result[0], SIRS) == []
+    # both SIRS rules read the heart rate; the one without a respiratory rate fires neither before nor after
+    assert result[2]['combos'] == {'source': 'threshold_table', 'groups_deleted': 1, 'reevaluated': 2,
+                                   'refired': 0, 'not_reevaluated': []}
+    assert _same_as_rebuild(table, prep, 'P2', graph, membership, selected, result)
+
+
+def test_sirs_through_two_combos_keeps_the_combo_without_the_deleted_component(table, built):
+    graphs, prep = built
+    graph, membership = graphs['P1']
+    assert _rule_edges(graph, SIRS) == [('vital:heartrate', 'combo_sirs_hr_rr'),
+                                        ('vital:heartrate', 'combo_sirs_temp_hr'),
+                                        ('vital:resprate', 'combo_sirs_hr_rr'),
+                                        ('vital:temperature', 'combo_sirs_temp_hr')]
+    selected = [_position(graph, 'vital:resprate')]
+    result = delete_from_record(graph, membership, selected, combo_rules=table['rules'])
+    assert _rule_edges(result[0], SIRS) == [('vital:heartrate', 'combo_sirs_temp_hr'),
+                                            ('vital:temperature', 'combo_sirs_temp_hr')]
+    assert QSOFA not in _tokens(result[0])                    # its other combo needed the same rate
+    assert result[2]['combos']['groups_deleted'] == 2
+    assert _same_as_rebuild(table, prep, 'P1', graph, membership, selected, result)
+
+
+def test_a_deleted_latest_value_is_replaced_by_the_next_latest(table, built):
+    graphs, prep = built
+    graph, membership = graphs['P1']
+    assert _rule_edges(graph, DKA) == [('lab:BIC', 'combo_dka'), ('lab:GLU', 'combo_dka')]
+    latest, earlier = _position(graph, 'lab:GLU', 280.0), _position(graph, 'lab:GLU', 300.0)
+    result = delete_from_record(graph, membership, [latest], combo_rules=table['rules'])
+    tokens = {n['id']: (n['token'], n.get('value')) for n in result[0]['nodes']}
+    assert sorted(tokens[e['source']] for e in result[0]['edges'] if e.get('rule_id') == 'combo_dka') == [
+        ('lab:BIC', 15.0), ('lab:GLU', 300.0)]
+    assert result[2]['combos'] == {'source': 'threshold_table', 'groups_deleted': 0, 'reevaluated': 1,
+                                   'refired': 1, 'not_reevaluated': []}
+    assert _same_as_rebuild(table, prep, 'P1', graph, membership, [latest], result)
+    # an earlier value is not what the builder evaluated: nothing changes for the combo
+    result = delete_from_record(graph, membership, [earlier], combo_rules=table['rules'])
+    assert _rule_edges(result[0], DKA) == _rule_edges(graph, DKA)
+    assert result[2]['combos']['reevaluated'] == 1 and result[2]['combos']['refired'] == 0
+
+
+def test_a_combo_that_only_an_earlier_value_fires_appears_as_in_the_rebuild(table, built):
+    graphs, prep = built
+    graph, membership = graphs['P2']
+    assert DKA not in _tokens(graph)
+    selected = [_position(graph, 'lab:GLU', 200.0)]
+    result = delete_from_record(graph, membership, selected, combo_rules=table['rules'])
+    assert _rule_edges(result[0], DKA) == [('lab:BIC', 'combo_dka'), ('lab:GLU', 'combo_dka')]
+    assert result[2]['combos']['refired'] == 1
+    assert _same_as_rebuild(table, prep, 'P2', graph, membership, selected, result)
+
+
+def test_without_a_table_a_combo_group_goes_but_is_never_reevaluated(table, built):
+    graphs, prep = built
+    graph, membership = graphs['P2']
+    selected = [_position(graph, 'vital:heartrate')]
+    result = delete_from_record(graph, membership, selected)
+    assert SIRS not in _tokens(result[0])
+    assert result[2]['combos'] == {'source': 'distinct_anchor_tokens', 'groups_deleted': 1, 'reevaluated': 0,
+                                   'refired': 0, 'not_reevaluated': [{'rule_id': 'combo_sirs_temp_hr',
+                                                                      'reason': 'no threshold table given'}]}
+    assert _same_as_rebuild(table, prep, 'P2', graph, membership, selected, result)
+    graph, membership = graphs['P1']
+    selected = [_position(graph, 'lab:GLU', 280.0)]
+    result = delete_from_record(graph, membership, selected)
+    assert DKA not in _tokens(result[0])                      # the rebuild fires it on the earlier glucose
+    assert not _same_as_rebuild(table, prep, 'P1', graph, membership, selected, result)
+    # a state rule firing on two labs of one token is not a combo: its edges are alternatives
+    state = copy.deepcopy(graphs['P1'])
+    k1, k2 = _position(state[0], 'lab:K', 6.4), _position(state[0], 'lab:K', 4.1)
+    hyperk = _position(state[0], 'knowledge:state:hyperkalemia')
+    state[0]['edges'].append({'source': state[0]['nodes'][k2]['id'], 'target': state[0]['nodes'][hyperk]['id'],
+                              'relation': 'medical:indicates', 'informative': True, 'rule_id': 'state_hyperk'})
+    result = delete_from_record(*state, [k1])
+    assert 'knowledge:state:hyperkalemia' in _tokens(result[0]) and result[2]['combos']['groups_deleted'] == 0
+
+
+def test_a_combo_input_missing_from_the_record_is_reported(table):
+    """A graph from an event store without the v5 lab columns has no censoring sign or reference bounds
+    on its lab nodes: the combo is deleted, not evaluated again, and the record names the inputs."""
+    graph, membership = build_patient('P1', table['rows'], v5=False)
+    result = delete_from_record(graph, membership, [_position(graph, 'lab:GLU', 280.0)],
+                                combo_rules=table['rules'])
+    assert DKA not in _tokens(result[0])
+    assert result[2]['combos']['groups_deleted'] == 1 and result[2]['combos']['reevaluated'] == 0
+    assert result[2]['combos']['not_reevaluated'] == [
+        {'rule_id': 'combo_dka', 'reason': 'censored, ref_upper, ref_lower of the latest lab:GLU not in the record'}]
+
+
+def test_only_the_visits_the_deletion_emptied_are_dropped(table, built):
+    graphs, prep = built
+    graph, membership = graphs['P1']
+    assert sorted({o for o, _ in membership['membership_pairs']}) == [0, 2, 3]      # visit 1 has no node
+    complaint = _position(graph, 'cc:dyspnea')
+    result = delete_from_record(graph, membership, [complaint], combo_rules=table['rules'])
+    assert result[1]['visit_ordinals'] == [0, 1, 2, 3]
+    assert (result[2]['visits_dropped'], result[2]['visits_originally_empty']) == (0, 1)
+    diagnosis = _position(graph, 'dx:I10')            # the only node of visit 0
+    result = delete_from_record(graph, membership, [diagnosis], combo_rules=table['rules'])
+    assert result[1]['visit_ordinals'] == [0, 1, 2]
+    assert sorted({o for o, _ in result[1]['membership_pairs']}) == [1, 2]   # the empty visit, renumbered
+    assert (result[2]['visits_dropped'], result[2]['visits_originally_empty']) == (1, 1)
+    assert _same_as_rebuild(table, prep, 'P1', graph, membership, [diagnosis], result)
+
+
+def test_prior_labs_of_an_analyte_without_index_labs_stay_unlike_a_rebuild(table, built):
+    graphs, prep = built
+    graph, membership = graphs['P1']
+    index_lab, prior_lab = _position(graph, 'lab:CR', 1.9), _position(graph, 'lab:CR', 1.1)
+    result = delete_from_record(graph, membership, [index_lab], combo_rules=table['rules'])
+    assert {'lab:CR', 'knowledge:system:renal'} <= set(_tokens(result[0]))      # prior lab and analyte
+    assert not _same_as_rebuild(table, prep, 'P1', graph, membership, [index_lab], result)
+    rebuilt = build_patient('P1', table['rows'], source_events('P1', graph, [index_lab]))[0]
+    assert 'lab:CR' not in _tokens(rebuilt) and 'knowledge:system:renal' not in _tokens(rebuilt)
+    both = delete_from_record(graph, membership, [index_lab, prior_lab], combo_rules=table['rules'])
+    assert _same_as_rebuild(table, prep, 'P1', graph, membership, [index_lab], both)
+
+
+def test_a_baseline_edge_is_not_reanchored_unlike_a_rebuild(table, built):
+    graphs, prep = built
+    graph, membership = graphs['P2']
+    earliest = _position(graph, 'lab:K', 5.9)
+    result = delete_from_record(graph, membership, [earliest], combo_rules=table['rules'])
+    rebuilt = decided_visits(membership, build_patient('P2', table['rows'], source_events('P2', graph, [earliest])))
+    assert baseline_tokens(graph)['lab:K'] == 1 and baseline_tokens(result[0])['lab:K'] == 0
+    tokens = {n['id']: (n['token'], n.get('value')) for n in rebuilt[0]['nodes']}
+    assert [(tokens[e['source']], tokens[e['target']], e['delta']) for e in rebuilt[0]['edges']
+            if e['relation'] == 'baseline_of'] == [(('lab:K', 4.8), ('lab:K', 5.2), pytest.approx(0.4))]
+    assert encoded_canon(prep, *result[:2]) != encoded_canon(prep, *rebuilt)
+    assert encoded_canon(prep, without(result[0], 'baseline_of'), result[1]) == encoded_canon(
+        prep, without(rebuilt[0], 'baseline_of'), rebuilt[1])
+
+
+def test_the_combo_rules_come_from_the_threshold_table(table, tmp_path):
+    rules = table['rules']
+    assert list(rules.by_rule) == ['combo_dka', 'combo_qsofa', 'combo_sirs_hr_rr', 'combo_sirs_temp_hr']
+    assert all(row['kind'] == 'combo' for row in rules.rows) and len(rules.rows) == 8
+    assert rules.by_rule['combo_dka'][0]['threshold'] == 250.0
+    assert rules.describe() == {'source': 'threshold_table', 'path': str(table['path']),
+                                'sha256': sha256(table['path']), 'sha256_checked': True, 'level_source': 'csv',
+                                'combo_rules': 4, 'combo_rows': 8}
+    unchecked = load_combo_rules(table['path'], None, level_source='row-range')
+    assert unchecked.describe()['sha256'] == sha256(table['path']) and not unchecked.sha256_checked
+    with pytest.raises(ValueError, match='the recorded one is'):
+        load_combo_rules(table['path'], '0' * 64, level_source='csv')
+    with pytest.raises(ValueError, match='unknown level source'):
+        load_combo_rules(table['path'], None, level_source='textbook')
+    with pytest.raises(ValueError, match='only rows of kind combo'):
+        ComboRules(table['rows'], level_source='csv')
+    assert combo_source(None)['source'] == 'distinct_anchor_tokens'
+    assert combo_source(rules) == rules.describe()
+
+
+@pytest.mark.parametrize('name', METHODS)
+def test_the_scorer_deletes_with_the_combo_rules_it_was_given(table, built, name, tmp_path):
+    graphs, prep = built
+    graph, membership = graphs['P1']
+    model = build_model(name, prep, tmp_path, graph=graph)
+    latest = _position(graph, 'lab:GLU', 280.0)
+    with_table = DeletionScorer(model_forward(model), graph, membership, encoder(prep), y=0,
+                                combo_rules=table['rules'])
+    fallback = DeletionScorer(model_forward(model), graph, membership, encoder(prep), y=0)
+    assert with_table.combo_source['source'] == 'threshold_table'
+    assert fallback.combo_source['source'] == 'distinct_anchor_tokens'
+    expected = delete_from_record(graph, membership, [latest], combo_rules=table['rules'])
+    assert torch.equal(with_table.probs([latest]), reference_probs(model, prep, *expected[:2]))
+    assert with_table.last_info == expected[2]
+    assert fallback.probs([latest]).shape == with_table.probs([latest]).shape
+    assert fallback.last_info['combos']['not_reevaluated'][0]['rule_id'] == 'combo_dka'

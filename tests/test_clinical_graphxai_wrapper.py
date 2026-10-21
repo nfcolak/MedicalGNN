@@ -487,7 +487,8 @@ def test_graphcare_builtin_is_a_fresh_last_layer_attention_after_a_masked_forwar
     wrapper(x, graph.edge_index, edge_mask=torch.zeros(graph.edge_index.size(1)))
     masked_state = model.last_visit_weight.clone()
     importance = wrapper.builtin_node_importance(x, graph.edge_index)
-    assert torch.equal(torch.tensor(importance), reference)
+    # every node of this graph has its own single-visit set, so the per-set mean is the value
+    assert torch.equal(torch.tensor(importance, dtype=torch.float64), reference.double())
     assert not torch.equal(masked_state, model.last_visit_weight), \
         "the masked forward did not change the attention; the check would be vacuous"
     assert wrapper.builtin_node_importance(x, graph.edge_index, target_class=1) == importance
@@ -511,27 +512,60 @@ def test_graphcare_single_visit_graph_is_constant_one():
     assert detail["largest_tie_group_eligible"] == int(removable_node_mask(graph.node_type).sum())
 
 
-def test_graphcare_nodes_with_equal_visit_sets_tie():
-    torch.manual_seed(17)
-    # node 0 global; visit sets: 1,2 -> {1}; 3,5,6 -> {0,1}; 4,7 -> {0}
-    pairs = [(1, 1), (1, 2), (0, 3), (1, 3), (0, 4), (0, 5), (1, 5), (0, 6), (1, 6), (0, 7)]
+def test_graphcare_nodes_with_equal_visit_sets_tie_exactly():
+    import types
+
+    import numpy as np
+
+    from core.explain.fidelity_v2 import fidelity_plus_v2
+
+    # node 0 global; eligible nodes (types 2, 3, 5, 7) 2, 3, 5, 7 -> {0, 1}; 10, 11 -> {0};
+    # 13, 15 -> {1}; the structural nodes are spread over the same three visit sets.
+    visit_sets = {2: (0, 1), 3: (0, 1), 5: (0, 1), 7: (0, 1), 10: (0,), 11: (0,), 13: (1,),
+                  15: (1,), 1: (0, 1), 4: (0,), 6: (1,), 8: (0, 1), 9: (0,), 12: (1,), 14: (0, 1)}
+    pairs = sorted((visit, node) for node, visits in visit_sets.items() for visit in visits)
     membership = [[v for v, _ in pairs], [n for _, n in pairs]]
-    graph = graphcare_graph(membership, [True] + [False] * 7, num_visits=2)
+    # seed 9: the float32 values of the shared two-visit set differ (checked below)
+    torch.manual_seed(9)
+    graph = graphcare_graph(membership, [True] + [False] * 15, num_visits=2)
     wrapper, x = wrap_graphcare(graph)
+    raw = _fresh_attention(wrapper.adapter, graph)
+    shared = [2, 3, 5, 7]
+    raw_spread = float(raw[shared].max() - raw[shared].min())
+    assert raw_spread > 0, "the float32 values tie already; the check would be vacuous"
+
     value = wrapper.builtin_node_importance(x, graph.edge_index)
-    close = lambda a, b: abs(value[a] - value[b]) <= 1e-6
-    assert close(1, 2) and close(3, 5) and close(3, 6) and close(4, 7)
-    assert not close(1, 3) and not close(3, 4) and not close(1, 4)
+    groups = {}
+    for node, visits in visit_sets.items():
+        groups.setdefault(visits, []).append(node)
+    for members in groups.values():
+        assert len({value[node] for node in members}) == 1
+        mean = float(raw[sorted(members)].double().mean())
+        assert value[members[0]] == mean
+    assert len({value[members[0]] for members in groups.values()}) == 3
+    assert value[0] == 0.0   # the global node
+
     detail = wrapper.builtin_detail()
+    assert detail["node_attention"] == value
     assert detail["num_visits"] == 2 and len(detail["beta"]) == 2
     assert abs(sum(detail["beta"]) - 1.0) < 1e-6
     assert detail["kind"] == "graphcare_visit_attention" and detail["layer"] == "last"
     assert detail["class_specific"] is False
     assert "visit set" in detail["value_depends_on"]
+    assert raw_spread <= detail["max_within_visit_set_spread"] < 1e-6
     assert detail["constant_over_eligible"] is False
-    # eligible: 2 ({1}), 3 and 5 ({0,1}), 7 ({0}): three visit sets, three values
-    assert len({round(value[n], 6) for n in (2, 3, 5, 7)}) == 3
-    assert detail["distinct_values_eligible"] == len({value[n] for n in (2, 3, 5, 7)})
+    eligible = [2, 3, 5, 7, 10, 11, 13, 15]
+    assert removable_node_mask(graph.node_type).nonzero().view(-1).tolist() == eligible
+    assert detail["distinct_values_eligible"] == 3
+    assert detail["largest_tie_group_eligible"] == 4
+
+    # a cut inside the shared set is a tie over its four members
+    above = sum(value[node] > value[2] for node in eligible)
+    scorer = types.SimpleNamespace(node_type=graph.node_type,
+                                   probs=lambda deleted: torch.tensor([[0.6, 0.4]]))
+    result = fidelity_plus_v2(scorer, np.asarray(value), 0, k=above + 2)
+    assert result["tied_at_cut"] is True
+    assert result["tie_group_size"] == 4
 
 
 # --- explainers through the wrappers ----------------------------------------------------------

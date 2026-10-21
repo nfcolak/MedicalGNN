@@ -243,8 +243,21 @@ def test_the_builtin_is_the_exact_ledger_accounting_with_neighbourhood_rows(mp2)
     assert detail['edge_mask_scope'] == EDGE_MASK_SCOPES['cei_gnn_mp2']
     other = (prediction + 1) % CLASSES
     redirected = wrapper.builtin_node_importance(x, batch.edge_index, target_class=other)
-    assert wrapper.builtin_detail()['explained_class'] == other
+    assert wrapper.builtin_detail(other)['explained_class'] == other
     assert importance != redirected
+
+
+def test_builtin_detail_without_a_class_is_the_predicted_class_after_another_class(mp2):
+    _, wrapper, batch, x = mp2
+    with torch.no_grad():
+        prediction = int(wrapper(x, batch.edge_index).argmax(-1))
+    other = (prediction + 1) % CLASSES
+    assert wrapper.builtin_detail(other)['explained_class'] == other
+    detail = wrapper.builtin_detail()
+    assert detail['explained_class'] == prediction
+    importance = wrapper.builtin_node_importance(x, batch.edge_index)
+    assert torch.allclose(torch.tensor(detail['signed_node_contributions']).abs(),
+                          torch.tensor(importance))
 
 
 def test_the_builtin_records_the_protected_mass_and_the_negative_eligible_nodes(mp2):

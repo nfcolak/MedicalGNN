@@ -14,11 +14,13 @@ rebuilds the exact model and the exact split of the chosen fold, and refuses to 
 
 Then, for every chosen visit of the fold, it runs GradExplainer, the vendored (zero-baseline) IG and
 GNNExplainer (`core/explain/graphxai_standardized.explain_algorithms`), the clinical-baseline IG
-(`core/explain/ig_clinical`, steps raised per visit until completeness) and the model's own built-in
-explanation where it has one. Every explanation is scored with the fidelity metrics of `fidelity_v2.py`
-(intervention contract version 5): evidence nodes are deleted from the visit's graph RECORD, the record is
-re-encoded with the run's own preprocessing and the trained model scores it with its own forward
-(`core/explain/node_deletion.DeletionScorer`, checked per visit against the split tensor). The report fold is
+(`core/explain/ig_clinical`, steps raised per visit until completeness holds or the largest candidate is
+reached) and the model's own built-in explanation where it has one. Every explanation is scored with the
+fidelity metrics of `fidelity_v2.py` (intervention contract version 6): evidence nodes are deleted from the
+visit's graph RECORD, the record is re-encoded with the run's own preprocessing and the trained model scores
+it with its own forward (`core/explain/node_deletion.DeletionScorer`, checked per visit against the split
+tensor). Combo threshold states follow the combo rules of the threshold table the graph artifact was built
+with (`artifact_combo_rules`, hash-checked against the artifact manifest). The report fold is
 `test` (default); `validation` and `dev` are decision folds, labelled as such in the outputs (`fold_role`).
 
 Cohort contract: `explanation_contract_v2.py` (COHORT_SCHEMA_VERSION = 2): the test, validation or dev fold
@@ -62,9 +64,10 @@ from core.explain.explanation_contract_v2 import build_cohort_v2, validate_cohor
 from core.explain.graphxai_wrapper import (
     GRAPHCARE_VALUE_DEPENDENCE, GSAT_EDGE_ATTENTION_RULE, PROTGNN_EXPLANATION_STYLE,
     PROTGNN_OFFICIAL_SETTINGS, PROTGNN_SEARCH_ALGORITHM, PROTGNN_SUBGRAPH_SCORING,
-    ClinicalGNNGraphXAIWrapper, ClinicalGraphXAIWrapper, GraphCareGraphXAIWrapper,
+    PROTGNN_SUBGRAPH_SIZE_NOTE, ClinicalGNNGraphXAIWrapper, ClinicalGraphXAIWrapper,
+    GraphCareGraphXAIWrapper,
 )
-from core.explain.node_deletion import DeletionScorer
+from core.explain.node_deletion import ComboRules, DeletionScorer, combo_source, load_combo_rules
 from core.model import ClinicalGNN
 from core.paths import CODE_ROOTS, REPO_ROOT
 from core.registry import build_method
@@ -181,16 +184,47 @@ def record_encoder(binding: dict[str, Any], prep):
         rewire_seed=binding["seed"], edge_direction=binding["edge_direction"])
 
 
+def artifact_combo_rules(binding: dict[str, Any]) -> ComboRules | None:
+    """The combo rules of the threshold table the graph artifact was built with: the file the artifact
+    manifest names in its `thresholds` block (`thresholds.csv` next to the graphs), refused when its
+    sha256 differs from the one the manifest recorded (the file's own hash is kept when none is
+    recorded), evaluated with the manifest's `level_source` (the builder's default `csv` when the
+    manifest names none; a binding that recorded another level source is refused). None when the
+    artifact has no threshold layer: its graphs then carry no threshold state, and the deletion
+    records its fallback combo rule."""
+    artifact = Path(binding["artifact"])
+    manifest = json.loads((artifact / "manifest.json").read_text())
+    block = manifest.get("thresholds")
+    if block is None:
+        return None
+    level_source = manifest.get("level_source", "csv")
+    recorded = binding.get("level_source")
+    if recorded is not None and recorded != level_source:
+        raise ValueError(f"binding.json records level_source {recorded!r}, the artifact manifest "
+                         f"{level_source!r}; refusing to re-evaluate threshold states")
+    return load_combo_rules(artifact / block.get("file", "thresholds.csv"), block.get("sha256"),
+                            level_source=level_source)
+
+
+def recorded_combo_source(combo_rules: ComboRules | None) -> dict[str, Any]:
+    """Which combo rule the deletions of a run used (`node_deletion.combo_source`), with the table
+    reduced to its file name."""
+    return _without_local_paths(combo_source(combo_rules))
+
+
 class VisitRecords:
     """The graph records (graphs.jsonl line, visit-membership sidecar row) of the explained visits and the
-    run's record encoder: what each visit's `DeletionScorer` deletes evidence from."""
+    run's record encoder: what each visit's `DeletionScorer` deletes evidence from, with the combo rules
+    of the artifact's threshold table (None: the deletion's fallback combo rule)."""
 
-    def __init__(self, records: dict[str, tuple[dict, dict]], encode):
+    def __init__(self, records: dict[str, tuple[dict, dict]], encode,
+                 combo_rules: ComboRules | None = None):
         self.records = dict(records)
         self.encode = encode
+        self.combo_rules = combo_rules
 
     @classmethod
-    def read(cls, artifact, sample_ids, encode) -> "VisitRecords":
+    def read(cls, artifact, sample_ids, encode, combo_rules: ComboRules | None = None) -> "VisitRecords":
         artifact = Path(artifact)
         wanted = {str(sample_id) for sample_id in sample_ids}
         found = {}
@@ -200,7 +234,7 @@ class VisitRecords:
         missing = wanted - set(found)
         if missing:
             raise ValueError(f"{len(missing)} explained visits have no graph record in the artifact")
-        return cls(found, encode)
+        return cls(found, encode, combo_rules)
 
     def scorer(self, forward, data) -> DeletionScorer:
         """The visit's deletion scorer; refuses when the record's encoding is not the split tensor."""
@@ -209,19 +243,23 @@ class VisitRecords:
             raise ValueError("no graph record was read for this visit")
         graph, membership = self.records[sample_id]
         scorer = DeletionScorer(forward, graph, membership, self.encode,
-                                y=int(torch.as_tensor(data.y).view(-1)[0]))
+                                y=int(torch.as_tensor(data.y).view(-1)[0]),
+                                combo_rules=self.combo_rules)
         scorer.check_against(data)
         return scorer
 
 
 class RebuiltSplits(dict):
     """{fold: [encoded visits]} exactly as `train.build_dataset` returned them, plus the fitted
-    preprocessing (`preprocessing`) and the run's record encoder (`encode`)."""
+    preprocessing (`preprocessing`), the run's record encoder (`encode`) and the combo rules of the
+    artifact's threshold table (`combo_rules`, `artifact_combo_rules`)."""
 
     def __init__(self, splits, *, preprocessing, binding: dict[str, Any]):
         super().__init__(splits)
         self.preprocessing = preprocessing
         self.encode = record_encoder(binding, preprocessing)
+        self.combo_rules = artifact_combo_rules(binding)
+        self.combo_source = recorded_combo_source(self.combo_rules)
         self._artifact = Path(binding["artifact"])
         self._rewired = tuple(binding.get("rewired_relations") or ())
 
@@ -229,7 +267,7 @@ class RebuiltSplits(dict):
         if self._rewired:
             raise ValueError("node deletion is not defined for a run trained on rewired edges "
                              f"({list(self._rewired)}): re-encoding a reduced record would rewire it anew")
-        return VisitRecords.read(self._artifact, sample_ids, self.encode)
+        return VisitRecords.read(self._artifact, sample_ids, self.encode, self.combo_rules)
 
 
 def _recorded(binding: dict[str, Any], key: str):
@@ -287,16 +325,21 @@ def rebuild_split(binding: dict[str, Any], fold: str = "test") -> RebuiltSplits:
             "split would be encoded differently from training; refusing to explain it")
     if fold not in splits:
         raise ValueError(f"rebuilt splits have no {fold} fold")
-    recorded = binding.get("split_sample_ids_sha256", {}).get(fold)
-    actual = sample_ids_sha256(d.sample_id for d in splits[fold])
-    if recorded != actual:
-        raise ValueError(
-            f"rebuilt {fold} split's sample-ID hash does not match "
-            f"binding.json's split_sample_ids_sha256[{fold!r}] -- the "
-            "artifact, targets file, or build arguments have drifted since "
-            "training; refusing to explain against a different split than "
-            "the model was actually evaluated on."
-        )
+    # The explained fold's hash must be recorded; every other rebuilt fold (the IG pilot comes from a
+    # decision fold, the real-patient IG bank from train) is checked wherever training recorded it.
+    recorded_hashes = binding.get("split_sample_ids_sha256") or {}
+    for name in [fold] + sorted(set(splits) - {fold}):
+        if name != fold and name not in recorded_hashes:
+            continue
+        actual = sample_ids_sha256(d.sample_id for d in splits[name])
+        if recorded_hashes.get(name) != actual:
+            raise ValueError(
+                f"rebuilt {name} split's sample-ID hash does not match "
+                f"binding.json's split_sample_ids_sha256[{name!r}] -- the "
+                "artifact, targets file, or build arguments have drifted since "
+                "training; refusing to explain against a different split than "
+                "the model was actually trained and evaluated on."
+            )
     return RebuiltSplits(splits, preprocessing=prep, binding=binding)
 
 
@@ -630,7 +673,8 @@ def _normalise_statuses(graphxai: dict[str, Any]) -> None:
 def _clinical_ig_payloads(wrapper, x, batch, batch_index, target_class: int, ig: dict[str, Any]):
     """IG from the pre-registered clinical baseline (and, if requested, the real-patient
     reference variant), inside the wrapper's IG path, with the steps raised per visit until
-    completeness holds; each payload records its completeness and the PLE term it ran on."""
+    completeness holds; each payload records its completeness and the PLE term it ran on. The step
+    count IG ran with is `steps_used` in both payloads; the run's start count is `start_steps`."""
     from core.explain.explanation_contract import build_node_explanation
 
     edge_index = batch.edge_index
@@ -663,14 +707,14 @@ def _clinical_ig_payloads(wrapper, x, batch, batch_index, target_class: int, ig:
         "baseline": "not_recorded",
         "feature_provenance": ig.get("feature_provenance") or {},
         **completeness,
-        "steps": ig["steps"], "start_steps": ig["steps"], "step_candidates": list(ig["candidates"]),
+        "start_steps": ig["steps"], "step_candidates": list(ig["candidates"]),
         "escalation": IG_ESCALATION, "step_selection": ig["step_selection"],
         "ple_term": ple_term, "node_reduction": ig_clinical.NODE_REDUCTION}, standard)}
     if refs is not None:
         averaged, summary = refs
         out["refs"] = payload(ig_clinical.node_importance(averaged).numpy(), {
             "implementation": "core.explain.ig_clinical", "baseline": "real_patient_refs",
-            "steps": completeness["steps_used"], "ple_term": ple_term,
+            "steps_used": completeness["steps_used"], "ple_term": ple_term,
             "node_reduction": ig_clinical.NODE_REDUCTION, **summary}, standard)
     return out
 
@@ -842,16 +886,51 @@ def _single_graph_check(single_logits, stored_row) -> dict[str, Any] | None:
         return None
 
 
-def intervention_record() -> dict[str, Any]:
-    """The intervention every fidelity number of a record was computed with."""
+COMBO_RULE_TEXT = ("the medical:indicates edges of one (state node, rule_id) of a combo rule form a group; "
+                   "deleting any anchor deletes the group; when the latest index value of a combo token "
+                   "is deleted the rule is evaluated again on the next-latest value with the graph "
+                   "builder's rule check and the artifact's threshold table; an input missing from the "
+                   "record is reported and the group is deleted")
+EMPTY_VISIT_TEXT = "prior visits the deletion emptied are dropped; prior visits empty in the record are kept"
+DEPARTURES_TEXT = ("the record with the nodes deleted, not the record the graph builder would produce "
+                   "without the events: prior labs of an analyte whose index labs are all deleted stay "
+                   "(with the analyte and its knowledge nodes), and a baseline_of edge is not re-anchored")
+
+
+def intervention_record(combo: dict[str, Any] | None = None) -> dict[str, Any]:
+    """The intervention every fidelity number of a record was computed with; `combo` is the combo
+    source the deletions used (`recorded_combo_source`)."""
     return {"version": fv2.INTERVENTION_CONTRACT_VERSION,
             "definition": fv2.INTERVENTION_CONTRACT,
             "eligible_node_kinds": list(fv2.EVIDENCE_NODE_KINDS),
             "protected_node_kinds": list(fv2.STRUCTURAL_NODE_KINDS),
+            "combos": COMBO_RULE_TEXT,
+            "combo_source": combo,
             "cascade": ("analytes without a kept measurement, knowledge nodes without a kept anchor, "
                         "then nodes left without an edge"),
-            "empty_visits": "dropped",
-            "chains": "not relinked"}
+            "empty_visits": EMPTY_VISIT_TEXT,
+            "chains": ("not relinked: a broken trajectory chain stays broken and a baseline_of edge is "
+                       "not moved to the next index lab or the previous prior lab"),
+            "departures_from_a_rebuild": DEPARTURES_TEXT}
+
+
+def deletion_summary(scorer: DeletionScorer) -> dict[str, Any]:
+    """What the visit's deletions did to combo states and visits, over every node set it scored:
+    how many sets deleted a combo group, had a rule evaluated again or fired again, and every
+    (rule, reason) a rule could not be evaluated again for."""
+    infos = scorer.deletion_infos()
+    untouched = infos[0]
+    combos = [info.get("combos") or {} for info in infos]
+    not_reevaluated = sorted({(case["rule_id"], case["reason"])
+                              for combo in combos for case in combo.get("not_reevaluated", [])})
+    return {"sets_scored": len(infos) - 1,
+            "sets_with_combo_groups_deleted": sum(1 for c in combos if c.get("groups_deleted")),
+            "sets_with_rules_reevaluated": sum(1 for c in combos if c.get("reevaluated")),
+            "sets_with_rules_refired": sum(1 for c in combos if c.get("refired")),
+            "not_reevaluated": [{"rule_id": rule_id, "reason": reason}
+                                for rule_id, reason in not_reevaluated],
+            "sets_with_visits_dropped": sum(1 for info in infos if info.get("visits_dropped")),
+            "visits_originally_empty": untouched.get("visits_originally_empty")}
 
 
 def explain_subject(wrapper, data, *, method: str, conv: str | None,
@@ -887,6 +966,7 @@ def explain_subject(wrapper, data, *, method: str, conv: str | None,
         "encoding_equals_split_tensor": True,
         "max_abs_prob_diff": float((torch.softmax(single_logits.detach(), dim=-1)
                                     - scorer.probs(())).abs().max()),
+        "combo_source": _without_local_paths(scorer.combo_source),
     }
     true_class = int(data.y.view(-1)[0].item())
     seed = _stable_seed(random_seed, str(data.sample_id))
@@ -945,7 +1025,7 @@ def explain_subject(wrapper, data, *, method: str, conv: str | None,
         "builtin_detail": collected["builtin_detail"],
         "graphxai": collected["graphxai"],
         "fidelity_v2": fidelity_v2,
-        "fidelity_v2_intervention": intervention_record(),
+        "fidelity_v2_intervention": intervention_record(deletion_check["combo_source"]),
         "fidelity_v2_skipped_sources": [name for name in FIDELITY_SKIPPED_SOURCES
                                         if name in collected["graphxai"]],
         "random_reference": random_info,
@@ -983,6 +1063,7 @@ def explain_subject(wrapper, data, *, method: str, conv: str | None,
         record["audit"] = _audit_subject(wrapper, batch, x, _source_vectors(collected), prediction,
                                          method=explained_method, steps=steps, epochs=epochs, ig=ig,
                                          audit=dict(audit, seed=seed))
+    record["deletion_check"]["deletions"] = deletion_summary(scorer)
     record["seconds"] = round(time.perf_counter() - started, 3)
     return record
 
@@ -1148,9 +1229,10 @@ def method_disclosure(method: str, *, epochs: int) -> dict[str, Any]:
     intervention = (f"node deletion in the graph record (intervention contract version "
                     f"{fv2.INTERVENTION_CONTRACT_VERSION}): the record without the selected evidence "
                     "nodes and their derived concept nodes, re-encoded with the run's own preprocessing "
-                    "and scored by the model's own forward; emptied prior visits are dropped and "
-                    "trajectory chains are not relinked; nodes are ranked by |importance|, ties at a cut "
-                    "averaged over seeded orders")
+                    "and scored by the model's own forward; combo states: " + COMBO_RULE_TEXT + "; "
+                    + EMPTY_VISIT_TEXT + "; trajectory chains are not relinked; this is "
+                    + DEPARTURES_TEXT + "; nodes are ranked by |importance|, ties at a cut averaged "
+                    "over seeded orders")
     explainers = {
         "gradient": ("GradExplainer and the clinical IG explain x = [numeric row | token vector]; node "
                      "type, edges and edge metadata stay fixed; node importance = sum of |attribution| "
@@ -1174,8 +1256,7 @@ def method_disclosure(method: str, *, epochs: int) -> dict[str, Any]:
                     f"overridden; {PROTGNN_OFFICIAL_SETTINGS})",
                     PROTGNN_SUBGRAPH_SCORING,
                     "a per-prediction subgraph (ProtGNN+ style), not the paper's whole-prototype view",
-                    "the subgraph usually holds 1-3 eligible evidence nodes, so its k differs from the "
-                    "dense sources",
+                    PROTGNN_SUBGRAPH_SIZE_NOTE,
                     PROJECTION_NOTE,
                     "runs selected before the first projection explain with learned prototype vectors "
                     "that are not training cases; they are flagged in prototype_projection"]
@@ -1249,7 +1330,7 @@ def dated_output_dir(base, method: str, conv: str | None = None) -> Path:
     return Path(base) / name
 
 
-DEFAULT_EXPLAINED_PATIENTS = 500   # decided by the user; the same draw for every method
+DEFAULT_EXPLAINED_PATIENTS = 500   # the same draw of 500 patients for every method
 
 
 def run_explanations(run_dir, output_dir, *, fold: str = "test",
@@ -1270,7 +1351,8 @@ def run_explanations(run_dir, output_dir, *, fold: str = "test",
     visits of `fold` ("test" = report fold; "validation" and "dev" = decision folds) -> write output.
     Raises before writing anything if a check fails. `steps` is the budget of the vendored
     (zero-baseline) IG; the clinical IG chooses its start step count from the completeness error on
-    decision-fold pilot patients and raises it per visit until completeness holds."""
+    decision-fold pilot patients and raises it per visit until completeness holds or the largest
+    candidate is reached."""
     run_started = time.perf_counter()
     output_dir = Path(output_dir)
     if output_dir.exists() and any(output_dir.iterdir()):
@@ -1369,6 +1451,7 @@ def run_explanations(run_dir, output_dir, *, fold: str = "test",
         "intervention_contract_version": fv2.INTERVENTION_CONTRACT_VERSION,
         "eligible_node_kinds": list(fv2.EVIDENCE_NODE_KINDS),
         "protected_node_kinds": list(fv2.STRUCTURAL_NODE_KINDS),
+        "combo_source": splits.combo_source,
         "clinical_ig": ig_summary,
         "random_reference": {"repeats": random_repeats, "seed": random_seed},
     }
@@ -1382,6 +1465,7 @@ def run_explanations(run_dir, output_dir, *, fold: str = "test",
         "schema_version": RUNNER_SCHEMA_VERSION,
         "record_schema_version": RECORD_SCHEMA_VERSION,
         "intervention_contract_version": fv2.INTERVENTION_CONTRACT_VERSION,
+        "combo_source": splits.combo_source,
         "method": method,
         "conv": conv,
         "run_dir": run_name,

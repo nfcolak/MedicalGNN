@@ -108,9 +108,12 @@ def test_the_builtin_is_the_exact_additive_accounting(bridge):
         assert key in detail
     other = (prediction + 1) % CLASSES
     redirected = wrapper.builtin_node_importance(x, batch.edge_index, target_class=other)
-    assert wrapper.builtin_detail()["explained_class"] == other
+    assert wrapper.builtin_detail(target_class=other)["explained_class"] == other
     assert importance != redirected
     assert wrapper.builtin_detail(target_class=prediction)["explained_class"] == prediction
+    # no class means the predicted class, whichever class was explained last
+    wrapper.builtin_detail(target_class=other)
+    assert wrapper.builtin_detail()["explained_class"] == prediction
 
 
 def test_gnnexplainer_reaches_cei_and_leaves_no_mask_state_behind(bridge):
@@ -139,8 +142,8 @@ def test_ig_baseline_keeps_the_kind_and_zeroes_value_and_token_vectors(bridge):
     _, wrapper, batch, x = bridge
     spec = wrapper.ig_feature_spec()
     baseline = ig_clinical.not_recorded_baseline(x, batch.node_type, LAYOUT, **spec)
-    # the kind columns are kept (tests/test_graphxai_phase_b.py, real layout names); this
-    # fixture's layout has none, so the whole numeric block is "not recorded"
+    # the kind columns are kept (real layout names, below); this fixture's layout has none,
+    # so the whole numeric block is "not recorded"
     assert torch.count_nonzero(baseline[:, :NODE_DIM]) == 0
     assert torch.count_nonzero(baseline[:, NODE_DIM:]) == 0              # the pad embedding
     with_kinds = ig_clinical.not_recorded_baseline(
@@ -210,6 +213,73 @@ def test_explain_algorithms_leaves_the_global_rng_untouched(bridge):
         gx.explain_algorithms(wrapper, x, batch.edge_index, batch=torch.zeros(8, dtype=torch.long),
                               steps=2, epochs=2, seed=seed)
         assert torch.equal(torch.random.get_rng_state(), before)
+
+
+def _accelerator_states():
+    states = {}
+    if torch.cuda.is_available():
+        states["cuda"] = lambda: torch.cuda.get_rng_state_all()
+    mps = getattr(torch, "mps", None)
+    if getattr(torch.backends, "mps", None) is not None and torch.backends.mps.is_available():
+        states["mps"] = lambda: [mps.get_rng_state()]
+    return states
+
+
+def test_a_seeded_explain_algorithms_leaves_the_accelerator_rng_untouched(bridge):
+    states = _accelerator_states()
+    if not states:
+        pytest.skip("no CUDA or MPS generator on this machine")
+    _, wrapper, batch, x = bridge
+    torch.manual_seed(11)          # every generator away from the seed used below
+    before = {name: [state.clone() for state in read()] for name, read in states.items()}
+    result = gx.explain_algorithms(wrapper, x, batch.edge_index,
+                                   batch=torch.zeros(8, dtype=torch.long), steps=2, epochs=2, seed=3)
+    assert result["GNNExplainer"]["status"] == "success", result["GNNExplainer"]
+    for name, read in states.items():
+        assert all(torch.equal(a, b) for a, b in zip(read(), before[name])), name
+
+
+def test_a_keyword_edge_mask_keeps_its_gradient_after_gnnexplainer(bridge):
+    adapter, wrapper, batch, x = bridge
+    edges = batch.edge_index
+    target = int(wrapper(x, edges).argmax(-1))
+
+    def mask_gradient():
+        mask = torch.full((edges.size(1),), 0.7, requires_grad=True)
+        (gradient,) = torch.autograd.grad(wrapper(x, edges, edge_mask=mask)[0, target], mask,
+                                          allow_unused=True)
+        return gradient
+
+    fresh = mask_gradient()
+    assert fresh is not None and fresh.abs().sum() > 0
+    result = gx.explain_algorithms(wrapper, x, edges, batch=torch.zeros(8, dtype=torch.long),
+                                   steps=2, epochs=2)
+    assert result["GNNExplainer"]["status"] == "success"
+    registered = [module for module in wrapper.inner.modules()
+                  if isinstance(module, MessagePassing) and "_edge_mask" in module._parameters]
+    assert registered, "GNNExplainer left no registration; the check would be vacuous"
+    after = mask_gradient()
+    assert after is not None
+    assert torch.equal(after, fresh)
+    wrapper.set_context(batch)
+    assert torch.equal(mask_gradient(), fresh)
+
+
+@pytest.mark.parametrize("corruption", ["type_vectors", "edge_metadata"])
+def test_a_corrupted_cei_context_makes_verify_fail(bridge, corruption):
+    """verify compares with the adapter's own forward on the raw batch, so an error in any held
+    part of the context fails it."""
+    import dataclasses
+
+    _, wrapper, batch, x = bridge
+    assert wrapper.verify(x, batch.edge_index)[0]
+    if corruption == "type_vectors":
+        wrapper._type_vectors = wrapper._type_vectors + 0.5
+    else:
+        clinical = wrapper.inner.clinical
+        wrapper.inner.clinical = dataclasses.replace(clinical, edge_attr=clinical.edge_attr + 1.0)
+    ok, diff = wrapper.verify(x, batch.edge_index)
+    assert ok is False and diff > 1e-5
 
 
 def test_a_seeded_gnnexplainer_is_reproducible(bridge):

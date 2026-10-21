@@ -9,8 +9,9 @@ Inference-free: nothing is loaded except those JSON files, nothing is trained, n
 
 Outputs (`--out` must be new or empty): `summary.csv`, `summary.json`, `summary.md`.
 
-What is read. Only explanation record schema 3 with intervention contract version 5 (node deletion with concept
-cascade, tie-aware scoring, width-matched random reference); anything else is refused with the run's name.
+What is read. Only explanation record schema 3 with intervention contract version 6 (node deletion with combo
+provenance and concept cascade, emptied prior visits dropped, tie-aware scoring, width-matched random reference);
+anything else is refused with the run's name.
 
 Rows. One row per (K, method, importance source); the sources are the GraphXAI algorithms of the records plus the
 model's built-in explanation (`builtin`). The vendored zero-baseline integrated gradients
@@ -33,7 +34,11 @@ source), `visits_explained` (visits with metrics, the ones the means are over), 
 `visits_failed_explainer` (the explainer returned no explanation), `visits_failed_fidelity` (the fidelity evaluation
 failed), `visits_unavailable` (the model's built-in explanation is unavailable) and `visits_no_eligible` (the
 explanation holds no eligible evidence node); the six add up to `visits`. `failed_visits` counts visits the runner
-could not explain at all. Also per row: the share of integrated-gradients visits that met the completeness tolerance,
+could not explain at all. `visits_vs_random` counts the explained visits whose metrics carry the difference to the
+random reference (the `*_vs_random` and `*_beats_random` columns are means over these visits only; a visit whose
+random reference failed or was not computed has none); a headline cell whose runs rest on fewer visits than
+`visits_explained` is marked with `*` in the markdown, and the missing reference statuses are listed per row
+(`random_reference_missing`). Also per row: the share of integrated-gradients visits that met the completeness tolerance,
 the share of visits whose importance is constant over the eligible nodes, the share where the evaluation cut fell
 inside a group of equal importance, and the mean size of the largest tie group. A second table holds the
 visits every source of a method has (the paired table); a third lists the sources that are not available on any visit,
@@ -44,9 +49,10 @@ carry, the settings, the replay rule that passed, and for ProtGNN how many of it
 
 Checks (all refuse with a message that names the run): fold and fold role, `final_eval`, intervention contract
 version, record schema; K and seed from the folder name against the run's binding; the protocol from the bindings
-against the driver header; a driver run that is not complete (a run without return code 0) unless `--allow-incomplete`
+against the driver header; `protocol_overrides` an empty list in every binding; a driver run that is not complete (a run without return code 0) unless `--allow-incomplete`
 (the runs left out are listed in a "runs not summarised" table); the run folders against the driver plan (a planned run
-whose folder is missing, a folder that is not in the plan); and, unless `--allow-mixed-code`, runs of different
+whose folder is missing, a folder that is not in the plan, a cohort sample size other than the plan's, with 0 and
+null both meaning every patient); and, unless `--allow-mixed-code`, runs of different
 explanation code, protocols, cohort sample, or settings, and, within one (K, method), different disclosures. Without a
 driver header the run set cannot be checked and the markdown says so.
 
@@ -65,7 +71,7 @@ from pathlib import Path
 
 HEADLINE_CURVE = 'mean_change'    # 'auc' or 'mean_change': which curve measure leads the markdown columns
 RECORD_SCHEMA_VERSION = 3
-CONTRACT_VERSION = 5
+CONTRACT_VERSION = 6
 FOLD_LABEL = {'test': 'test (report fold)', 'validation': 'validation (decision fold)',
               'dev': 'dev (decision fold)'}
 FOLD_ROLE = {'test': 'report', 'validation': 'decision', 'dev': 'decision'}
@@ -81,6 +87,9 @@ METRICS = ('fidelity_plus', 'fidelity_minus') + CURVE_MEASURES \
     + tuple(f'{key}_vs_random' for key in RANDOM_KEYS) + tuple(f'{key}_beats_random' for key in RANDOM_KEYS)
 CATEGORIES = ('explained', 'unsupported', 'failed_explainer', 'failed_fidelity', 'unavailable', 'no_eligible')
 COUNT_COLUMNS = tuple(f'visits_{c}' for c in CATEGORIES)
+# a visit's metrics carry the difference to random exactly when this key is present
+VS_RANDOM_KEY = 'fidelity_plus_vs_random'
+RANDOM_REFERENCE_STATUSES = ('computed', 'failed', 'not_requested', 'no_eligible_evidence')
 POOLED = ('ig_completeness_met_share', 'constant_importance_share', 'tied_at_cut_share', 'largest_tie_group_mean')
 # settings that must agree across every run of one table; the chosen IG step count is run-specific and not here
 IG_COMPARABLE = ('baseline', 'tolerance', 'step_candidates', 'candidates', 'escalation')
@@ -152,6 +161,12 @@ def sample_facts(sampling):
     return {SAMPLE_NAMES[k]: sampling[k] for k in SAMPLING_COMPARABLE if k in sampling}
 
 
+def sample_size(value):
+    """One reading of a cohort sample size: 0 and None both mean every patient of the fold (the runner records
+    None for the driver's `--sample-patients 0`)."""
+    return None if value in (0, None) else int(value)
+
+
 def short_reason(text):
     """A fixed model message (never an identifier); long texts are cut."""
     text = ' '.join(str(text).split())
@@ -165,7 +180,10 @@ def classify_record(record, where):
     builtin_status = record.get('builtin_status')
     if builtin_status not in ('available', 'unavailable', 'no_eligible_evidence'):
         raise SystemExit(f'{where}: a record carries builtin_status {builtin_status!r}')
-    names = [n for n in dict.fromkeys([*graphxai, *fidelity, 'builtin']) if n not in EXCLUDED_SOURCES]
+    reference = (record.get('random_reference') or {}).get('status')
+    if reference is not None and reference not in RANDOM_REFERENCE_STATUSES:
+        raise SystemExit(f'{where}: a record carries random_reference status {reference!r}')
+    names =[n for n in dict.fromkeys([*graphxai, *fidelity, 'builtin']) if n not in EXCLUDED_SOURCES]
     out = {}
     for name in names:
         extras = {}
@@ -214,6 +232,8 @@ def classify_record(record, where):
             tied = (entry.get('fidelity_plus') or {}).get('tied_at_cut')
             if tied is not None:
                 extras['tied_at_cut'] = bool(tied)
+            if VS_RANDOM_KEY not in metrics:
+                extras['random_reference_missing'] = reference or 'not recorded'
             out[name] = ('explained', metrics, None, extras)
     return out
 
@@ -297,7 +317,7 @@ def load_run(run_dir, k, folder_method, seed):
             raise SystemExit(f'{name}: folder says {key} {folder}, its binding says {model_run[key]!r}')
     if model_run.get('protocol') is None:
         raise SystemExit(f'{name}: binding.json model_run carries no protocol')
-    if model_run.get('protocol_overrides') not in ([], None) or 'protocol_overrides' not in model_run:
+    if model_run.get('protocol_overrides') != []:
         raise SystemExit(f'{name}: binding.json protocol_overrides must be an empty list, not '
                          f'{model_run.get("protocol_overrides")!r}')
     if manifest.get('method') != model_run.get('method'):
@@ -395,11 +415,12 @@ def check_driver_plan(header, runs, left_out):
     if extra:
         raise SystemExit('run folders outside the driver plan: ' + ', '.join(
             f'top{k}/{m}_seed{s}' for k, m, s in extra))
-    if header.get('sample_patients') is not None:
-        wrong = [r['name'] for r in runs if r['sampling'].get('sample_patients') != header['sample_patients']]
+    if 'sample_patients' in header:
+        planned = sample_size(header['sample_patients'])
+        wrong = [r['name'] for r in runs if sample_size(r['sampling'].get('sample_patients')) != planned]
         if wrong:
-            raise SystemExit(f'cohort sample differs from the driver plan ({header["sample_patients"]}): '
-                             + ', '.join(wrong))
+            raise SystemExit(f'cohort sample differs from the driver plan '
+                             f'({"every patient" if planned is None else planned}): ' + ', '.join(wrong))
 
 
 def collect(root, allow_incomplete=False, allow_mixed_code=False):
@@ -522,6 +543,11 @@ def aggregate(runs, planned=None, paired=False):
                'paired_visits': sum(len(v) for v in used.values()) if paired else None}
         for category in CATEGORIES:
             row[f'visits_{category}'] = None if paired else counts[category]
+        row['visits_vs_random'] = sum(1 for visits in used.values() for m in visits.values() if VS_RANDOM_KEY in m)
+        row['random_reference_missing'] = sorted({
+            extra['random_reference_missing'] for run in members
+            for i, extra in run['extras'].get(source, {}).items()
+            if i in used[run['name']] and 'random_reference_missing' in extra})
         reasons = {}
         for run in members:
             for category, texts in run['reasons'].get(source, {}).items():
@@ -556,11 +582,19 @@ def fmt(value, digits=4):
     return '' if value is None else f'{value:.{digits}f}'
 
 
+def visits_with_metrics(row):
+    """The visits a row's means are over: explained visits (all-visits table) or paired visits."""
+    return row['paired_visits'] if row['table'] == 'paired_visits' else row['visits_explained']
+
+
 def pm(row, metric):
     mean, sd = row[f'{metric}_mean'], row[f'{metric}_sd']
     if mean is None:
         return ''
-    return fmt(mean) if sd is None else f'{fmt(mean)} ± {fmt(sd)}'
+    text = fmt(mean) if sd is None else f'{fmt(mean)} ± {fmt(sd)}'
+    if metric.endswith(('_vs_random', '_beats_random')) and row['visits_vs_random'] < visits_with_metrics(row):
+        text += ' *'    # a mean over fewer visits than the row's other columns
+    return text
 
 
 def render(value):
@@ -621,7 +655,7 @@ def caveat_lines(group):
 
 def csv_columns():
     return ['table', 'fold', 'k', 'method', 'source', 'runs', 'runs_planned', 'visits', *COUNT_COLUMNS,
-            'failed_visits', 'paired_visits', *POOLED] + [f'{m}_{part}' for m in METRICS for part in ('mean', 'sd')]
+            'visits_vs_random', 'failed_visits', 'paired_visits', *POOLED] + [f'{m}_{part}' for m in METRICS for part in ('mean', 'sd')]
 
 
 def md_table(rows, shown, label=lambda r: r['source_label']):
@@ -695,13 +729,20 @@ def write_outputs(out, rows, paired_rows, runs, meta):
             lines += md_table(k_rows, shown) + ['']
         lines += ['### Visit accounting', '',
                   '| method | source | visits | explained | unsupported | explainer failed | fidelity failed | '
-                  'built-in unavailable | no eligible evidence | IG complete | constant importance | '
-                  'tied at cut | largest tie group |', '|---|---|---|---|---|---|---|---|---|---|---|---|---|']
+                  'built-in unavailable | no eligible evidence | with random reference | IG complete | '
+                  'constant importance | tied at cut | largest tie group |',
+                  '|---|---|---|---|---|---|---|---|---|---|---|---|---|---|']
         for row in (r for r in rows if r['k'] == k):
             lines.append(f'| {row["method"]} | {row["source_label"]} | {row["visits"]} | '
-                         + ' | '.join(str(row[c]) for c in COUNT_COLUMNS) + ' | '
+                         + ' | '.join(str(row[c]) for c in COUNT_COLUMNS) + f' | {row["visits_vs_random"]} | '
                          + ' | '.join(fmt(row[c], 3) for c in POOLED[:3]) + f' | {fmt(row[POOLED[3]], 2)} |')
         lines.append('')
+        short = [r for r in rows if r['k'] == k and r['visits_vs_random'] < r['visits_explained']]
+        if short:
+            lines += ['`*`: the difference to random of these rows rests on fewer visits than the other columns '
+                      '(random reference ' + ', '.join(sorted({s for r in short for s in r['random_reference_missing']}))
+                      + '): ' + '; '.join(f'{r["method"]} {r["source_label"]} {r["visits_vs_random"]} of '
+                                          f'{r["visits_explained"]}' for r in short) + '.', '']
         p_rows = [r for r in paired_available if r['k'] == k]
         if p_rows:
             lines += ['### Paired comparison (visits every source of the method has)', '',

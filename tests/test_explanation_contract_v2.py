@@ -110,3 +110,64 @@ def test_a_cohort_with_repeated_ids_or_a_wrong_count_is_refused():
     miscounted = {**cohort(), "explained_count": 3}
     with pytest.raises(ValueError, match="not unique or the count is wrong"):
         contract.validate_cohort_v2(miscounted, binding())
+
+
+# ------------------------------------------------------------------ v1 node-explanation schema
+class _Linear(__import__("torch").nn.Module):
+    """One-graph toy model: logits = sum of the node rows times a fixed matrix."""
+
+    def __init__(self):
+        import torch
+
+        super().__init__()
+        self.weight = torch.nn.Parameter(torch.tensor([[1.0, -1.0], [0.5, 2.0], [-0.3, 0.2]]))
+
+    def forward(self, x, edge_index, batch=None, **kwargs):
+        del edge_index, batch, kwargs
+        return (x.sum(dim=0) @ self.weight)[None]
+
+
+def _v1_record(**build):
+    import torch
+
+    from core.explain import explanation_contract as v1
+
+    torch.manual_seed(3)
+    x = torch.randn(6, 3)
+    edge_index = torch.tensor([[0, 1, 2, 3, 4], [1, 2, 3, 4, 5]])
+    model = _Linear().eval()
+    explanation = v1.build_node_explanation(model, x, edge_index,
+                                            batch=torch.zeros(6, dtype=torch.long), **build)
+    prediction = explanation["target"]["class_id"]
+    record = {"schema": v1.EXPLANATION_SCHEMA, "schema_version": 1, "method": "gsat",
+              "subject_id": "s1", "topology": "star", "seed": 0, "true_class_id": prediction,
+              "prediction_class_id": prediction, "attribution_method": "input_gradient",
+              "node_explanation": explanation}
+    return v1, record
+
+
+def test_a_v1_record_built_with_the_v1_fidelity_passes_the_v1_validator():
+    v1, record = _v1_record(v1_fidelity=True)
+    assert set(record["node_explanation"]) == set(v1.EXPLANATION_METRIC_KEYS)
+    assert v1.validate_explanation_record(record, method="gsat", topology="star", seed=0) == "s1"
+
+
+def test_a_record_without_the_v1_fidelity_is_refused_with_the_reason():
+    v1, record = _v1_record()
+    assert "fidelity_plus" not in record["node_explanation"]
+    with pytest.raises(ValueError, match="v1_fidelity=True"):
+        v1.validate_explanation_record(record, method="gsat", topology="star", seed=0)
+
+
+def test_the_historical_cei_export_schema_accepts_a_v1_fidelity_explanation():
+    from cei.studies.cei_graphxai import _validate_algorithm_record
+
+    # without provenance the validator stops after the schema checks, at the provenance check
+    _, record = _v1_record(v1_fidelity=True)
+    with pytest.raises(ValueError, match="provenance is missing"):
+        _validate_algorithm_record("GradExplainer", {"status": "success",
+                                                     "node_explanation": record["node_explanation"]})
+    _, plain = _v1_record()
+    with pytest.raises(ValueError, match="genuine node explanation schema"):
+        _validate_algorithm_record("GradExplainer", {"status": "success",
+                                                     "node_explanation": plain["node_explanation"]})

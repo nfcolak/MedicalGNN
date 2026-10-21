@@ -49,8 +49,9 @@ from types import MethodType
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch_geometric.explain.algorithm.utils import clear_masks, set_masks
+from torch_geometric.explain.algorithm.utils import clear_masks
 
+from core.explain.graphxai_wrapper import set_keyword_mask
 from core.registry import build_method
 
 CEI_METHODS = ("cei_gnn_v3", "cei_gnn_mp2")
@@ -286,7 +287,7 @@ class CEIGraphXAIWrapper(nn.Module):
         features = torch.cat((x, self._type_vectors.to(device=x.device, dtype=x.dtype)), dim=-1)
         installed = removal_mask is not None
         if installed:
-            set_masks(self.inner, removal_mask, edge_index.long(), apply_sigmoid=False)
+            set_keyword_mask(self.inner, removal_mask, edge_index.long())
         try:
             return self.inner(features, edge_index, batch)
         finally:
@@ -327,8 +328,7 @@ class CEIGraphXAIWrapper(nn.Module):
             raise NotImplementedError(
                 f"cei_gnn_mp2 with ev_combine={network.ev_combine!r}, readout={network.readout!r} "
                 "has no additive evidence ledger, so it has no exact per-node built-in explanation")
-        target = (int(target_class) if target_class is not None
-                  else int(self.adapter(self._raw_context, epoch=0).logits.argmax(-1)))
+        target = int(target_class) if target_class is not None else self._predicted_class()
         importance, provenance = native_importance(self.adapter, self._raw_context, target)
         if importance is None:
             raise NotImplementedError(
@@ -337,13 +337,22 @@ class CEIGraphXAIWrapper(nn.Module):
                             explained_class=target, ple_term=PLE_TERM_EXACT)
         return [float(value) for value in importance.detach()]
 
+    def _predicted_class(self) -> int:
+        return int(self.adapter(self._raw_context, epoch=0).logits.argmax(-1))
+
+    @torch.no_grad()
     def builtin_detail(self, target_class=None):
-        """Provenance of the built-in explanation (accounting check, bias, absence, shares).
-        With `target_class`, the detail of that class's explanation (computed if the last one
-        explained another class)."""
-        if target_class is not None and (self._native is None
-                                         or self._native["explained_class"] != int(target_class)):
-            self.builtin_node_importance(None, None, target_class=target_class)
+        """Provenance of the built-in explanation (accounting check, bias, absence, shares) of
+        `target_class`, or of the predicted class when it is None; computed when the last
+        explanation was of another class. None when the configuration has no built-in."""
+        if self.inner is None:
+            raise RuntimeError("call set_context(batch) before builtin_detail()")
+        explained = int(target_class) if target_class is not None else self._predicted_class()
+        if self._native is None or self._native["explained_class"] != explained:
+            try:
+                self.builtin_node_importance(None, None, target_class=explained)
+            except NotImplementedError:
+                return None
         return self._native
 
     def ig_feature_spec(self) -> dict:
