@@ -3,8 +3,9 @@
 Built ON TOP of Necati's own explanation code (cei/studies/cei_v3_graphxai.py); nothing of his is
 reimplemented:
 
-- the model-facing wrapper is his `CEIV3GraphXAIWrapper` (a private copy of the network,
-  the original PLE term cached and held fixed, edge identity checked on every call);
+- the model-facing wrapper is his `CEIV3GraphXAIWrapper` (a private copy of the network, edge
+  identity checked on every call), with one change: his cached, constant PLE term is dropped
+  (`_recompute_ple`), so the network's own `_ple_term` runs on the features passed to `forward`;
 - the built-in explanation is his `native_importance`, the exact additive accounting of the
   logit (node + half of each incident edge/pair contribution), with bias and absence
   evidence exported separately rather than pushed onto nodes. For `cei_gnn_mp2` it reads
@@ -21,6 +22,16 @@ message-passing stack as `edge_weight`, cei/layers.py). Like `ClinicalGNNGraphXA
 `forward` therefore declares no `edge_mask` parameter: the explainer has exactly one delivery
 path, and a removal mask from the fidelity code goes through the same hook for that one call.
 
+The PLE (piecewise-linear encoding) term of the node encoder is a function of the explained
+row's value and has_value columns (the knot row comes from the fixed tokens). It is recomputed
+from the explained features, so gradients, IG and the removal interventions reach the value
+column through it. His study cached the term at the original features: nothing in the network
+forces that (`ple_basis` is built from clamp / gather / scatter and is differentiable in the
+value), it was a choice that kept the PLE input out of the explained quantity. The hard
+`has_value > 0` gate of `ple_basis` is replaced by a linear one (`_smooth_ple_term`), identical at
+has_value 0 and 1: otherwise the IG path from the not-recorded baseline jumps at its first step
+and IG completeness fails.
+
 Departures from the contract the other models get, recorded rather than hidden:
 
 - The explained input is CEI's continuous row (numeric features | token vectors |
@@ -36,25 +47,31 @@ Departures from the contract the other models get, recorded rather than hidden:
 from __future__ import annotations
 
 from argparse import Namespace
+from types import MethodType
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch_geometric.explain.algorithm.utils import clear_masks, set_masks
 
 from core.registry import build_method
 
 CEI_METHODS = ("cei_gnn_v3", "cei_gnn_mp2")
 
+PLE_TERM = ("recomputed from the explained features (differentiable; has_value gate "
+            "interpolated linearly, identical at 0 and 1)")
+
 INTERVENTION_SCOPE = (
-    "continuous node row zeroed (numeric + token + type vectors) and incident edges masked; "
+    "continuous node row zeroed (numeric + token + type vectors; the PLE term is recomputed "
+    "from the zeroed row) and incident edges masked; "
     "within-visit pair contributions and the absence block still see the node. Partial "
     "removal: not strictly comparable with the other models' fidelity."
 )
 INTERVENTION_SCOPES = {
     "cei_gnn_v3": INTERVENTION_SCOPE,
     "cei_gnn_mp2": (
-        "continuous node row zeroed (numeric + token + type vectors; the PLE term held at its "
-        "original value) and incident edges masked. A masked edge (0) is deleted from the edge "
+        "continuous node row zeroed (numeric + token + type vectors; the PLE term is recomputed "
+        "from the zeroed row) and incident edges masked. A masked edge (0) is deleted from the edge "
         "rows and from every message-passing layer (weighted means, relation groups, hub max, "
         "mp_dedup copy split and mirror rule); a fractional mask scales the edge once. The node's "
         "own node and neighbourhood rows remain (its zeroed row still passes through the encoder), "
@@ -137,6 +154,42 @@ def _comparable_run_config(rebuilt: dict, recorded: dict) -> dict:
     return comparable
 
 
+def _smooth_ple_term(network, features, metadata):
+    """The network's PLE term with its hard has_value gate made continuous.
+
+    `ple_basis` switches a node's row on at `has_value > 0`, so along an IG path that starts at
+    has_value = 0 the logit jumps and IG misses the jump. Here the basis is computed as if the
+    value were recorded (has_value treated as 1 for every row with an active knot table, from
+    the explained value column) and each row is then multiplied by the explained has_value
+    column. At has_value in {0, 1} this is exactly the network's own term; in between it is
+    linear in has_value. A non-finite value on a row whose has_value is 0 is read as 0 (the hard
+    gate never looked at it); with has_value > 0 it still raises, as in `ple_basis`."""
+    from cei.studies.cei_v3_ple import ple_basis
+
+    values = features[:, network.scaled_value_column]
+    gate = features[:, network.has_value_column]
+    values = torch.where(torch.isfinite(values) | (gate > 0), values, torch.zeros_like(values))
+    knot_row = network.knot_row_of_token[metadata.token]
+    if getattr(network, "ple_mode", "hat") == "robust_cum":
+        basis = ple_basis(values, torch.ones_like(gate), knot_row, network.robust_knots,
+                          network.robust_knot_active) * gate[:, None]
+        return F.linear(basis[:, 1:], network.ple_projection.weight.cumsum(dim=1))
+    basis = ple_basis(values, torch.ones_like(gate), knot_row, network.knots,
+                      network.knot_active) * gate[:, None]
+    return network.ple_projection(basis)
+
+
+def _recompute_ple(inner) -> None:
+    """Undo the frozen PLE of his wrapper: drop the cached constant and install the continuous
+    PLE term, which runs on the features of every forward."""
+    network = inner.network
+    if "_graphxai_fixed_ple" in network._buffers:
+        del network._buffers["_graphxai_fixed_ple"]
+    network._ple_term = MethodType(_smooth_ple_term, network)
+    if hasattr(network, "_graphxai_fixed_ple"):
+        raise RuntimeError("the fixed PLE term could not be removed from the explained network")
+
+
 class CEIGraphXAIWrapper(nn.Module):
     def __init__(self, adapter, *, method: str):
         super().__init__()
@@ -168,6 +221,7 @@ class CEIGraphXAIWrapper(nn.Module):
             raise ValueError(
                 f"this wrapper explains one graph at a time; got graph_count={clinical.graph_count}")
         self.inner = CEIV3GraphXAIWrapper(adapter, batch).eval()
+        _recompute_ple(self.inner)
         self._raw_context = batch
         self._native = None
         with torch.no_grad():
@@ -213,7 +267,7 @@ class CEIGraphXAIWrapper(nn.Module):
             raise NotImplementedError(
                 f"{self._method} has no per-node built-in explanation in this adapter")
         provenance = dict(provenance, intervention_scope=self.intervention_scope,
-                          explained_class=target)
+                          explained_class=target, ple_term=PLE_TERM, ple_inputs=PLE_TERM)
         self._native = provenance
         return importance.detach()
 
@@ -223,7 +277,16 @@ class CEIGraphXAIWrapper(nn.Module):
         return self._native
 
     def ig_feature_spec(self) -> dict:
-        """Widths of CEI's composite explained row, for the IG 'not recorded' baseline."""
+        """Widths of CEI's composite explained row, for the IG 'not recorded' baseline.
+
+        Only the widths: the runner passes this dict on as keyword arguments of
+        `ig_clinical.not_recorded_baseline`. The PLE provenance is `ig_feature_provenance()`."""
         adapter = self.adapter
         return {"numeric_width": int(adapter.node_dim), "zeroed_tail": int(adapter.token_dim),
                 "kept_tail": int(adapter.hidden)}
+
+    def ig_feature_provenance(self) -> dict:
+        """How the explained row reaches the logits through the PLE term. The baseline zeroes
+        the value and has_value columns, so a node without a recorded value has a zero basis row
+        and its PLE term is 0 (the projection has no bias)."""
+        return {"ple_term": PLE_TERM, **self.ig_feature_spec()}

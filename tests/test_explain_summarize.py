@@ -172,6 +172,8 @@ def test_both_curve_measures_and_the_explained_fraction_by_hand(tmp_path):
 
 def test_markdown_has_both_columns_in_headline_order_and_direction_notes(tmp_path, monkeypatch):
     build(tmp_path / 'in')
+    assert summarize.HEADLINE_CURVE == 'mean_change'     # user decision 2026-10-21
+    monkeypatch.setattr(summarize, 'HEADLINE_CURVE', 'auc')
     summarize.main(['--explanations', str(tmp_path / 'in'), '--out', str(tmp_path / 'auc')])
     text = (tmp_path / 'auc' / 'summary.md').read_text()
     header = next(line for line in text.splitlines() if line.startswith('| method'))

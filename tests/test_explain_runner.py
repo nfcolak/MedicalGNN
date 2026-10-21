@@ -403,3 +403,18 @@ def test_single_graph_check_is_null_without_a_stored_row_and_never_refuses(tmp_p
     assert record["single_graph_check"]["max_abs_diff"] > explain.REPLAY_TOLERANCE
     assert isinstance(record["single_graph_check"]["argmax_agrees"], bool)
     assert record["seconds"] > 0
+
+
+def test_prototype_projection_status_reads_the_selected_epoch(tmp_path):
+    import json as _json
+    binding = {"method": "protgnn",
+               "method_config": {"effective_settings": {"proj_epochs": 20, "proj_interval": 25}}}
+    for selected, projected in ((8, False), (20, False), (21, True), (27, True)):
+        (tmp_path / "result.json").write_text(_json.dumps({"selected_epoch": selected}))
+        status = explain.prototype_projection_status(tmp_path, binding)
+        assert status["prototypes_projected"] is projected
+        assert status["first_projection_epoch"] == 21
+    assert explain.prototype_projection_status(tmp_path, {"method": "gsat"}) is None
+    (tmp_path / "result.json").unlink()
+    assert explain.prototype_projection_status(tmp_path, binding) == {
+        "status": "selected_epoch_not_recorded"}

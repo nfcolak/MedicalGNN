@@ -86,8 +86,18 @@ class CompatibleGNNExplainer(GNNExplainer):
         clear_masks(self.model)
         super()._clear_masks()
 
+# GNNExplainer's budget: kept at the 50 epochs every earlier study used; the paper uses
+# 100-300 and PyG defaults to 100 (disclosed in each record's provenance).
+GNNEXPLAINER_EPOCHS_NOTE = '50 epochs (paper 100-300, PyG default 100)'
+
+
 def explain_algorithms(wrapper, x, edge_index, *, batch, steps=32, epochs=50,
-                       reversible_edge_pairs=None, node_reduction='sum', target_class=None):
+                       reversible_edge_pairs=None, node_reduction='sum', target_class=None,
+                       seed=None):
+    """`seed` (optional) fixes GNNExplainer's random mask initialisation: it runs inside
+    `torch.random.fork_rng()` after `torch.manual_seed(seed)`, so the same visit gives the
+    same explanation and the caller's global RNG stream is left untouched. `None` keeps the
+    historical unseeded behaviour."""
     if steps < 1 or epochs < 1:
         raise ValueError('positive explanation budgets required')
     # 'sum' is the historical reduction every existing caller (e.g. the CEI GraphXAI
@@ -120,6 +130,9 @@ def explain_algorithms(wrapper, x, edge_index, *, batch, steps=32, epochs=50,
                                if name != 'GNNExplainer' else 'predicted_class_log_probability',
                       'steps':steps if name == 'IntegratedGradExplainer' else None,
                       'epochs':epochs if name == 'GNNExplainer' else None}
+        if name == 'GNNExplainer':
+            provenance['seed'] = None if seed is None else int(seed)
+            provenance['epochs_note'] = GNNEXPLAINER_EPOCHS_NOTE
         # Isolated per algorithm: one algorithm's failure (e.g. GNNExplainer's
         # disconnected-gradient refusal above) must not discard the other two
         # algorithms' already-computed, perfectly valid results along with it.
@@ -166,7 +179,10 @@ def explain_algorithms(wrapper, x, edge_index, *, batch, steps=32, epochs=50,
                     provenance['empty_edge_entropy'] = 'zero'
                     ex._clear_masks()
                     os.environ['GNNEXP_EPOCHS'] = str(epochs)
-                    exp = ex.get_explanation_graph(features,edge_index,forward_kwargs={'batch':batch})
+                    with torch.random.fork_rng(devices=[]):
+                        if seed is not None:
+                            torch.manual_seed(int(seed))
+                        exp = ex.get_explanation_graph(features,edge_index,forward_kwargs={'batch':batch})
                 finally:
                     ex._clear_masks()
                     if old is None:

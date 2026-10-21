@@ -36,7 +36,7 @@ import re
 import sys
 from pathlib import Path
 
-HEADLINE_CURVE = 'auc'    # 'auc' or 'mean_change': which curve measure leads the markdown columns
+HEADLINE_CURVE = 'mean_change'    # 'auc' or 'mean_change': which curve measure leads the markdown columns
 FOLD_LABEL = {'test': 'test (report fold)', 'validation': 'validation (decision fold)',
               'dev': 'dev (decision fold)'}
 FOLD_ROLE = {'test': 'report', 'validation': 'decision', 'dev': 'decision'}

@@ -125,9 +125,18 @@ def _connected(nodes, edge_index):
     return seen == nodes
 
 
-def test_protgnn_builtin_is_its_own_prototype_subgraph():
+def larger_graph(node_count=9):
+    return synthetic_graph(
+        sample_id="larger", label=0, node_count=node_count, num_visits=1,
+        membership=[0] * node_count, global_mask=[False] * node_count,
+    )
+
+
+def test_protgnn_builtin_is_its_paper_mcts_prototype_subgraph():
+    from core.explain.protgnn_paper_mcts import OFFICIAL_MCTS
+
     torch.manual_seed(43)
-    graph = one_graph()
+    graph = larger_graph()
     wrapper, x = wrap_generic("protgnn", graph)
     importance = wrapper.builtin_node_importance(x, graph.edge_index)
     detail = wrapper.builtin_detail()
@@ -137,8 +146,8 @@ def test_protgnn_builtin_is_its_own_prototype_subgraph():
     assert set(importance.tolist()) <= {0.0, 1.0}
     members = [int(i) for i in importance.nonzero().view(-1)]
     assert members == detail["subgraph_nodes"]
-    assert adapter.min_atoms <= len(members) <= adapter.max_atoms
-    assert _connected(members, graph.edge_index)
+    assert members and _connected(members, graph.edge_index)
+    assert detail["search"]["settings"] == OFFICIAL_MCTS
 
     with torch.no_grad():
         assert detail["predicted_class"] == int(wrapper(x, graph.edge_index).argmax(-1))
@@ -152,22 +161,50 @@ def test_protgnn_builtin_is_its_own_prototype_subgraph():
 
 def test_protgnn_builtin_is_deterministic_and_does_not_disturb_the_model():
     torch.manual_seed(47)
-    graph = one_graph()
+    graph = larger_graph()
     wrapper, x = wrap_generic("protgnn", graph)
     before = wrapper(x, graph.edge_index).detach().clone()
-    first, second = wrapper.builtin_detail(), wrapper.builtin_detail()
+    first = wrapper.builtin_detail()
+    wrapper.set_context(graph)   # a new context clears the cache: a fresh search
+    second = wrapper.builtin_detail()
     assert first == second
     assert torch.equal(wrapper(x, graph.edge_index), before)
     assert not wrapper.adapter.training
 
 
-def test_protgnn_builtin_refuses_instead_of_inventing_when_no_subgraph_exists():
-    graph = one_graph()
-    model = build_adapter("protgnn", min_atoms=6, max_atoms=6)   # graph has only 5 nodes
-    wrapper, x = wrap_generic("protgnn", graph, model=model)
-    assert wrapper.builtin_detail()["subgraph_nodes"] == []
-    with pytest.raises(RuntimeError, match="no connected subgraph"):
+def test_protgnn_builtin_searches_once_per_visit_and_class(monkeypatch):
+    import core.explain.graphxai_wrapper as module
+
+    calls = []
+    real = module.paper_explain_detail
+
+    def counting(model, batch, target_class=None):
+        calls.append(target_class)
+        return real(model, batch, target_class)
+
+    monkeypatch.setattr(module, "paper_explain_detail", counting)
+    torch.manual_seed(49)
+    graph = larger_graph()
+    wrapper, x = wrap_generic("protgnn", graph)
+    wrapper.builtin_node_importance(x, graph.edge_index)
+    wrapper.builtin_detail()
+    wrapper.builtin_node_importance(x, graph.edge_index)
+    assert calls == [None]
+    wrapper.builtin_node_importance(x, graph.edge_index, target_class=1)
+    wrapper.builtin_node_importance(x, graph.edge_index, target_class=1)
+    assert calls == [None, 1]
+    wrapper.set_context(graph)
+    wrapper.builtin_detail()
+    assert calls == [None, 1, None]
+
+
+def test_protgnn_builtin_refuses_instead_of_inventing_when_the_graph_is_too_small():
+    graph = one_graph()   # 5 nodes: not more than the official min_atoms (5)
+    wrapper, x = wrap_generic("protgnn", graph)
+    with pytest.raises(RuntimeError, match="needs more than 5 nodes"):
         wrapper.builtin_node_importance(x, graph.edge_index)
+    with pytest.raises(RuntimeError, match="needs more than 5 nodes"):
+        wrapper.builtin_detail()
 
 
 def test_wrappers_without_a_builtin_still_refuse_clearly():
@@ -225,7 +262,7 @@ def test_graphcare_edge_mask_hook_changes_prediction_and_is_differentiable():
     assert not torch.allclose(zeroed, baseline, atol=1e-4)
 
 
-def test_graphcare_builtin_node_importance():
+def test_graphcare_builtin_node_importance_is_unavailable_with_a_reason():
     torch.manual_seed(47)
     graph = one_graph()
     model = build_adapter("graphcare")
@@ -235,9 +272,13 @@ def test_graphcare_builtin_node_importance():
         num_triples=NUM_TRIPLES, num_relations=NUM_RELATIONS,
     )
     x = wrapper.set_context(graph)
-    importance = wrapper.builtin_node_importance(x, graph.edge_index)
-    assert importance.numel() > 0
-    assert torch.isfinite(importance).all()
+    with pytest.raises(RuntimeError, match="constant within a visit"):
+        wrapper.builtin_node_importance(x, graph.edge_index)
+    with pytest.raises(RuntimeError, match="ranks nothing"):
+        wrapper.builtin_node_importance(x, graph.edge_index, target_class=1)
+    # The attention arrays stay available to diagnostics.
+    wrapper(x, graph.edge_index)
+    assert model.last_node_attention is not None and model.last_node_attention.numel() > 0
 
 
 @pytest.mark.parametrize("name", GENERIC_METHODS)

@@ -57,8 +57,8 @@ def test_a_removal_mask_matches_his_own_public_hook_exactly_once(bridge, value):
     reference = copy.deepcopy(adapter)
     reference.network.set_edge_mask(mask)
     expected = reference.forward_continuous(x, edges, batch).detach()
-    # his wrapper holds the PLE term fixed at its original value; the adapter recomputes
-    # it from the (unchanged) features, so the two agree
+    # the wrapper recomputes the PLE term from the features it is given, as the adapter does;
+    # the features are unchanged here, so the two agree
     assert torch.allclose(got, expected, atol=1e-6), (got, expected)
     assert not torch.allclose(got, wrapper(x, edges).detach(), atol=1e-6)    # the mask does something
 

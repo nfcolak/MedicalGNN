@@ -40,13 +40,21 @@ import torch.nn as nn
 
 from torch_geometric.explain.algorithm.utils import clear_masks, set_masks
 
+from core.explain.protgnn_paper_mcts import paper_explain_detail
 from core.method_base import ClinicalBatch, read_clinical_batch
 from core.tensorize import PAYLOAD_WIDTH
 
-# Methods whose adapter exposes .explain(batch) -> per-node tensor as its own
-# built-in node-importance readout: GSAT's deterministic attention, and ProtGNN's
-# own prototype subgraph (binary membership; the model's explanation is a
-# subgraph, not a ranking). Others raise rather than fabricating a score.
+GRAPHCARE_BUILTIN_UNAVAILABLE = (
+    "GraphCare's built-in node attention is not an explanation: alpha is a softmax "
+    "over the visits that contain a node, so it is constant within a visit and 1.0 "
+    "for a single-visit patient; it ranks nothing")
+
+# Methods with a per-node built-in node-importance readout: GSAT's deterministic
+# attention (the adapter's `.explain(batch)`), and ProtGNN's prototype subgraph
+# (binary membership; the model's explanation is a subgraph, not a ranking),
+# found with the paper / official-code MCTS in core/explain/protgnn_paper_mcts.py
+# rather than the adapter's own projection search. Others raise rather than
+# fabricating a score; GraphCare's built-in attention is deliberately not one.
 _SUPPORTS_BUILTIN_EXPLAIN = frozenset({"gsat", "protgnn"})
 
 
@@ -71,8 +79,19 @@ class ClinicalGraphXAIWrapper(nn.Module):
         self._is_method_adapter = is_method_adapter
         self._context: ClinicalBatch | None = None
         self._raw_context = None
+        # ProtGNN paper-MCTS detail per (raw context object, target class): one
+        # search per visit and class, shared by the node vector and the detail.
+        self._paper_cache: dict = {}
+
+    def _paper_detail(self, target_class):
+        key = (id(self._raw_context), None if target_class is None else int(target_class))
+        if key not in self._paper_cache:
+            self._paper_cache[key] = paper_explain_detail(
+                self.adapter, self._raw_context, target_class)
+        return self._paper_cache[key]
 
     def set_context(self, batch) -> torch.Tensor:
+        self._paper_cache = {}
         clinical_batch = read_clinical_batch(
             batch, method=self._method, node_dim=self._node_dim, edge_dim=self._edge_dim,
             num_tokens=self._num_tokens, num_triples=self._num_triples,
@@ -126,10 +145,12 @@ class ClinicalGraphXAIWrapper(nn.Module):
 
     @torch.no_grad()
     def builtin_node_importance(self, x, edge_index, batch=None, target_class=None):
-        """Calls the adapter's own `.explain(batch)`, for the methods that
-        have one (GSAT, ProtGNN). Always a fresh, unmasked pass -- never
-        reuses state from a prior forward(edge_mask=...) probe. `target_class` is
-        passed only to adapters whose explanation is class-specific (ProtGNN)."""
+        """GSAT: the adapter's own `.explain(batch)`. ProtGNN: the binary mask of
+        the paper / official-code MCTS subgraph (`paper_explain`), which raises
+        RuntimeError when the graph has at most `min_atoms` nodes. Always a fresh,
+        unmasked pass -- never reuses state from a prior forward(edge_mask=...)
+        probe. `target_class` is passed only to explanations that are
+        class-specific (ProtGNN)."""
         del x, edge_index, batch
         if self._method not in _SUPPORTS_BUILTIN_EXPLAIN:
             raise NotImplementedError(
@@ -138,6 +159,11 @@ class ClinicalGraphXAIWrapper(nn.Module):
         was_training = self.adapter.training
         self.adapter.eval()
         try:
+            if self._method == "protgnn":
+                detail = self._paper_detail(target_class)
+                importance = torch.zeros(detail["node_count"])
+                importance[detail["subgraph_nodes"]] = 1.0
+                return importance
             if target_class is not None and "target_class" in inspect.signature(
                     self.adapter.explain).parameters:
                 return self.adapter.explain(self._raw_context, target_class).detach()
@@ -148,8 +174,11 @@ class ClinicalGraphXAIWrapper(nn.Module):
 
     @torch.no_grad()
     def builtin_detail(self):
-        """The adapter's own structured explanation (e.g. ProtGNN's prototype,
-        its activation and the matching subgraph), or None if it has none."""
+        """The structured explanation: for ProtGNN the prototype, its activation
+        and the paper-MCTS subgraph with the search provenance (`paper_explain_detail`);
+        otherwise the adapter's own `explain_detail`, or None if it has none."""
+        if self._method == "protgnn":
+            return self._paper_detail(None)
         detail = getattr(self.adapter, "explain_detail", None)
         return None if detail is None else detail(self._raw_context)
 
@@ -285,18 +314,12 @@ class GraphCareGraphXAIWrapper(nn.Module):
 
     @torch.no_grad()
     def builtin_node_importance(self, x, edge_index, batch=None, target_class=None):
-        """GraphCare's own node-conditioned attention (class-independent, so
-        `target_class` is accepted for interface parity and ignored), scattered to one value
-        per node (last_node_attention), from a fresh, unmasked forward pass
-        this call performs. NOT last_alpha: that array is indexed over only
-        the direct (non-global, non-knowledge) attention pairs, not one entry
-        per node, so it is unusable as a node_importance array against the
-        full node indexing (x/token/node_type) fidelity and GraphXAI expect."""
-        self.forward(x, edge_index, batch=batch)
-        node_attention = self.adapter.last_node_attention
-        if node_attention is None or not node_attention.numel():
-            raise RuntimeError("GraphCare produced no node attention on this graph")
-        return node_attention.detach()
+        """GraphCare has no usable built-in node explanation, so this always raises
+        RuntimeError and the run records it as unavailable with the reason.
+        `target_class` is accepted for interface parity. The attention arrays
+        (`last_node_attention`, `last_alpha`) stay available to diagnostics."""
+        del x, edge_index, batch, target_class
+        raise RuntimeError(GRAPHCARE_BUILTIN_UNAVAILABLE)
 
     @torch.no_grad()
     def verify(self, x, edge_index, batch=None, atol: float = 1e-5):

@@ -474,7 +474,9 @@ def _clinical_ig_payloads(wrapper, x, batch, batch_index, target_class: int, ig:
 
     standard = ig["explain_predicted"]
     out = {"main": payload(importance, {
-        "implementation": "core.explain.ig_clinical", "baseline": "not_recorded",
+        "implementation": "core.explain.ig_clinical (clinical IG, not GraphXAI's IntegratedGradExplainer)",
+        "baseline": "not_recorded",
+        "feature_provenance": ig.get("feature_provenance") or {},
         "steps": ig["steps"], "step_selection": ig["step_selection"],
         "tolerance": ig["tolerance"],
         "completeness_met": completeness["completeness_error_rel"] <= ig["tolerance"],
@@ -490,7 +492,7 @@ def _clinical_ig_payloads(wrapper, x, batch, batch_index, target_class: int, ig:
 
 
 def _collect_importances(wrapper, batch, x, *, steps: int, epochs: int, ig, prediction: int,
-                         target_class: int | None = None) -> dict[str, Any]:
+                         target_class: int | None = None, seed: int | None = None) -> dict[str, Any]:
     """Every explanation source for one graph: the three GraphXAI explainers (IG
     replaced by the clinical-baseline version when `ig` is given) and the model's own
     built-in explanation where one exists."""
@@ -501,7 +503,7 @@ def _collect_importances(wrapper, batch, x, *, steps: int, epochs: int, ig, pred
     graphxai = explain_algorithms(
         wrapper, x, batch.edge_index, batch=batch_index, steps=steps, epochs=epochs,
         reversible_edge_pairs=reversible_edge_pairs(batch.edge_relation),
-        node_reduction="mean", target_class=target_class,
+        node_reduction="mean", target_class=target_class, seed=seed,
     )
     _normalise_statuses(graphxai)
     target = prediction if target_class is None else int(target_class)
@@ -583,7 +585,8 @@ def _audit_subject(wrapper, batch, x, base_vectors, prediction, *, steps, epochs
             with torch.no_grad():
                 random_prediction = int(random_wrapper(random_x, batch.edge_index).argmax(-1))
             collected = _collect_importances(random_wrapper, batch, random_x, steps=steps,
-                                             epochs=epochs, ig=ig, prediction=random_prediction)
+                                             epochs=epochs, ig=ig, prediction=random_prediction,
+                                             seed=seed)
             out["weight_randomisation"] = {
                 "prediction_changed": random_prediction != prediction,
                 "sources": audit_mod.compare_sources(base_vectors, _source_vectors(collected),
@@ -605,7 +608,8 @@ def _audit_subject(wrapper, batch, x, base_vectors, prediction, *, steps, epochs
                 draws.append({"prediction_changed": True, "measured_nodes_perturbed": measured})
                 continue
             collected = _collect_importances(wrapper, perturbed, perturbed_x, steps=steps,
-                                             epochs=epochs, ig=ig, prediction=prediction)
+                                             epochs=epochs, ig=ig, prediction=prediction,
+                                             seed=seed)
             draws.append({"prediction_changed": False, "measured_nodes_perturbed": measured,
                           "sources": audit_mod.compare_sources(
                               base_vectors, _source_vectors(collected), batch.node_type)})
@@ -660,7 +664,7 @@ def explain_subject(wrapper, data, *, method: str, conv: str | None,
     seed = _stable_seed(random_seed, str(data.sample_id))
 
     collected = _collect_importances(wrapper, batch, x, steps=steps, epochs=epochs, ig=ig,
-                                     prediction=prediction)
+                                     prediction=prediction, seed=seed)
     vectors = _source_vectors(collected)
     # Full-evidence-removal fidelity for every source that produced a vector. A
     # source's own failure must not block the others (same isolation principle as
@@ -725,7 +729,7 @@ def explain_subject(wrapper, data, *, method: str, conv: str | None,
         try:
             true_collected = _collect_importances(
                 wrapper, batch, x, steps=steps, epochs=epochs, ig=ig, prediction=prediction,
-                target_class=true_class)
+                target_class=true_class, seed=seed)
             true_vectors = _source_vectors(true_collected)
             true_fidelity, true_random = _evaluate_sources(
                 wrapper, x, batch, true_vectors, true_class,
@@ -759,19 +763,32 @@ def _stored_rows(stored_npz: Path) -> dict[str, np.ndarray]:
     return {str(i): row for i, row in zip(stored["sample_ids"], stored["proba"])}
 
 
+def _ig_pilot_rows(splits, pilot: int):
+    """The IG step count is a decision, so its pilot graphs come from a decision fold
+    (validation, else dev), never from the report fold (ADR-023)."""
+    for pilot_fold in ("validation", "dev"):
+        if splits.get(pilot_fold):
+            return pilot_fold, select_explained_subjects(splits[pilot_fold], max_subjects=max(1, pilot))
+    raise ValueError("no validation or dev rows to choose the IG step count on")
+
+
 def _prepare_clinical_ig(bundle, wrapper, subjects, splits, *, tolerance: float,
                          candidates, pilot: int, reference_draws: int,
                          keep_zero_baseline: bool, seed: int) -> dict[str, Any]:
     """Pre-registered IG setup for one run: the baseline layout, and the step count
-    chosen from the completeness error on a few pilot graphs (never a default)."""
+    chosen from the completeness error on a few pilot graphs of the validation fold
+    (never a default, never the report fold). `subjects` (the explained visits) is
+    not read here."""
+    del subjects
     layout = (bundle.preprocessing or {}).get("node_feature_layout")
     if not layout:
         raise ValueError("preprocessing.json has no node_feature_layout; cannot build the IG baseline")
     spec = wrapper.ig_feature_spec() if hasattr(wrapper, "ig_feature_spec") else {}
+    pilot_fold, pilot_rows = _ig_pilot_rows(splits, pilot)
     errors: dict[int, list[float]] = {}
     for steps in candidates:
         errors[steps] = []
-        for data in subjects[:max(1, pilot)]:
+        for data in pilot_rows:
             batch = _single_graph_batch(data)
             x = wrapper.set_context(batch)
             with torch.no_grad():
@@ -788,10 +805,35 @@ def _prepare_clinical_ig(bundle, wrapper, subjects, splits, *, tolerance: float,
     # no such rows to draw from, so it gets the primary baseline only.
     bank = (ig_clinical.ReferenceBank.from_graphs(splits["train"][:2000])
             if reference_draws > 0 and not spec else None)
+    chosen = dict(chosen, pilot_fold=pilot_fold, pilot_graphs=len(pilot_rows))
     return {"layout": layout, "steps": chosen["steps"], "tolerance": tolerance,
             "feature_spec": spec,
+            "feature_provenance": (wrapper.ig_feature_provenance()
+                                   if hasattr(wrapper, "ig_feature_provenance") else {}),
             "step_selection": chosen, "bank": bank, "reference_draws": reference_draws,
             "keep_zero_baseline": keep_zero_baseline, "seed": seed}
+
+
+def prototype_projection_status(run_dir, binding) -> dict[str, Any] | None:
+    """ProtGNN only: were the selected checkpoint's prototypes ever projected onto
+    training subgraphs? Projection runs at the start of epoch index `proj_epochs`
+    (1-based epoch proj_epochs + 1) and every `proj_interval` epochs after; a
+    checkpoint selected before that epoch carries learned prototype vectors that are
+    not real training cases. Read from result.json's `selected_epoch` (1-based); None
+    for other methods or when the run records no selected epoch."""
+    if binding.get("method") != "protgnn":
+        return None
+    settings = (binding.get("method_config") or {}).get("effective_settings") or {}
+    if "proj_epochs" not in settings:
+        return None
+    try:
+        selected = json.loads((Path(run_dir) / "result.json").read_text())["selected_epoch"]
+    except (OSError, KeyError, ValueError):
+        return {"status": "selected_epoch_not_recorded"}
+    first = int(settings["proj_epochs"]) + 1
+    return {"selected_epoch": int(selected), "first_projection_epoch": first,
+            "projection_interval": int(settings.get("proj_interval", 0)),
+            "prototypes_projected": int(selected) >= first}
 
 
 def dated_output_dir(base, method: str, conv: str | None = None) -> Path:
@@ -927,6 +969,7 @@ def run_explanations(run_dir, output_dir, *, fold: str = "test",
         "steps": steps,
         "epochs": epochs,
         "clinical_ig": ig_summary,
+        "prototype_projection": prototype_projection_status(run_dir, binding),
         "record_files": record_files,
         "environment": environment_info(),
         "seconds_before_first_explanation": seconds_before_first_explanation,

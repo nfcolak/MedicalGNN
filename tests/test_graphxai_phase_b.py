@@ -474,3 +474,53 @@ def test_protgnn_builtin_can_explain_a_chosen_class(tmp_path):
         detail = wrapper.adapter.explain_detail(wrapper._raw_context, target)
         assert detail["explained_class"] == target
         assert int(model.prototype_class_ids[detail["prototype_index"]]) == target
+
+
+# ------------------------------------------------------------------ explain-decisions (2026-10-21)
+def _gnnexplainer_importance(wrapped, seed):
+    graph, wrapper, x, _ = wrapped
+    batch = torch.zeros(x.size(0), dtype=torch.long)
+    result = gx.explain_algorithms(wrapper, x, graph.edge_index, batch=batch, steps=2, epochs=5,
+                                   node_reduction="mean", seed=seed)
+    record = result["GNNExplainer"]
+    assert record["status"] == "success", record
+    return record["node_explanation"]["node_importance"], record["provenance"]
+
+
+def test_gnnexplainer_with_a_seed_is_reproducible_and_records_seed_and_budget():
+    torch.manual_seed(0)
+    wrapped = _wrapped("gsat")                               # one model for every call
+    first, provenance = _gnnexplainer_importance(wrapped, seed=11)
+    torch.manual_seed(999)                                   # the global stream must not matter
+    second, _ = _gnnexplainer_importance(wrapped, seed=11)
+    assert first == second
+    assert provenance["seed"] == 11 and provenance["epochs"] == 5
+    assert "100-300" in provenance["epochs_note"]
+    other, _ = _gnnexplainer_importance(wrapped, seed=12)
+    assert other != first                                   # the seed really drives the mask init
+    unseeded, unseeded_provenance = _gnnexplainer_importance(wrapped, seed=None)
+    assert unseeded_provenance["seed"] is None              # historical behaviour still available
+
+
+def test_ig_pilot_graphs_come_from_a_decision_fold_never_the_report_fold():
+    visits = _visits(["v1", "v1", "v2", "v3"])
+    test_rows = _visits(["t1", "t2"])
+    fold, rows = runner._ig_pilot_rows({"train": [], "validation": visits, "test": test_rows}, 3)
+    assert fold == "validation" and len(rows) == 3
+    assert {r.sample_id for r in rows} <= {v.sample_id for v in visits}
+    fold, rows = runner._ig_pilot_rows({"train": [], "dev": visits}, 2)
+    assert fold == "dev" and len(rows) == 2
+    with pytest.raises(ValueError, match="validation or dev"):
+        runner._ig_pilot_rows({"train": [], "test": test_rows}, 3)
+
+
+def test_run_records_ig_pilot_fold_and_clinical_ig_label(tmp_path, trained):
+    run_dir, *_ = trained
+    out = tmp_path / "ex_pilot"
+    runner.run_explanations(run_dir, out, max_subjects=1, steps=2, epochs=3,
+                            ig_step_candidates=(2, 4), random_repeats=2)
+    record = json.loads(next(out.glob("subject_*.json")).read_text())
+    ig = record["graphxai"]["IntegratedGradExplainer"]["provenance"]
+    assert ig["step_selection"]["pilot_fold"] in ("validation", "dev")
+    assert "not GraphXAI's IntegratedGradExplainer" in ig["implementation"]
+    assert record["graphxai"]["GNNExplainer"]["provenance"]["seed"] is not None
