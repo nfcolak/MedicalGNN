@@ -9,11 +9,11 @@ projection-selected, GraphCare, GSAT, GCHM-PNA final and cosine. Every pair is t
 compared with its own runs (P1 vs ProtGNN projection-selected, C1 vs GCHM-PNA cosine).
 
     python -m comparison.nasim.cross_method --runs <comparison/standardized> --out <new dir> \
-        [--fold test|validation] [--stored-bolum2 <bolum2-sonuc.md>]
+        [--fold test|validation] [--stored-section2 <section2-tables.md>]
 
 `--fold` names the fold that leads the tables (default test, the reporting fold); both folds are always computed
 and written, the other one labelled "validation (decision fold)" or "test". Decisions (checkpoint, HPO, which
-baseline) use VALIDATION; every reported result is on TEST. `--stored-bolum2` compares the validation fold with the
+baseline) use VALIDATION; every reported result is on TEST. `--stored-section2` compares the validation fold with the
 earlier validation tables (baseline means, arm means and every arm-vs-baseline difference with its interval) and
 writes `validation_reproduction.json`. `--out` must not exist; run folders are read-only.
 
@@ -245,14 +245,14 @@ def main(argv=None):
     ap.add_argument('--runs', default=str(ROOT / 'comparison' / 'standardized'), help='folder holding the run folders')
     ap.add_argument('--out', required=True, help='new output directory (must not exist)')
     ap.add_argument('--fold', choices=FOLDS, default='test', help='fold that leads the tables (both are computed)')
-    ap.add_argument('--stored-bolum2', help='earlier validation tables (markdown) to reproduce')
+    ap.add_argument('--stored-section2', help='earlier validation tables (markdown) to reproduce')
     args = ap.parse_args(argv)
     try:
         out = Path(args.out)
         if out.exists():
             raise A.Refusal(f'--out already exists: {out}')
         doc = analyze(args.runs)
-        rep = reproduce(doc, args.stored_bolum2) if args.stored_bolum2 else None
+        rep = reproduce(doc, args.stored_section2) if args.stored_section2 else None
     except A.Refusal as e:
         print(f'REFUSED: {e}', file=sys.stderr)
         return 2
