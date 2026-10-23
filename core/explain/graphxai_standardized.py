@@ -277,6 +277,10 @@ def _explain_algorithms(wrapper, x, edge_index, *, batch, steps, epochs, reversi
                 old = os.environ.get('GNNEXP_EPOCHS')
                 try:
                     with torch.random.fork_rng(devices=[]):
+                        if seed is not None:
+                            # Seed the pre-check's mask draw per visit too, so its diagnostic
+                            # (edge_gradient_l1) does not depend on earlier draws in the process.
+                            torch.random.default_generator.manual_seed(int(seed))
                         ex._set_masks(features,edge_index,explain_feature=True,device=x.device)
                         # This connectivity pre-check calls `wrapper` directly, not
                         # through `_predict` (unlike the optimisation loop inside

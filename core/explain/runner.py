@@ -44,6 +44,7 @@ import hashlib
 import json
 import os
 import subprocess
+import sys
 import time
 from argparse import Namespace
 from contextlib import nullcontext
@@ -53,6 +54,7 @@ from typing import Any
 
 import numpy as np
 import torch
+import torch_geometric
 from torch_geometric.loader import DataLoader
 
 from core import train
@@ -1343,6 +1345,101 @@ def dated_output_dir(base, method: str, conv: str | None = None) -> Path:
 
 DEFAULT_EXPLAINED_PATIENTS = 500   # the same draw of 500 patients for every method
 
+CHECKPOINT_HEADER = "checkpoint_header.json"
+# The header pins the IG decision, never the measured completeness errors per step count (they differ in
+# the last digits between processes, e.g. with the thread order).
+IG_DECISION_KEYS = ("steps", "completeness_met", "tolerance", "pilot_fold", "pilot_graphs",
+                    "pilot_patients_requested", "pilot_rule")
+
+
+def _write_json_atomic(path: Path, payload) -> None:
+    """`payload` as JSON in `path`: a temp file in the same directory (its name does not match
+    `subject_*.json`), flushed to disk, then renamed over the target, so a reader never sees a
+    half-written file."""
+    temp = path.with_name(f".{path.name}.tmp")
+    with open(temp, "w") as handle:
+        handle.write(json.dumps(payload, indent=2) + "\n")
+        handle.flush()
+        os.fsync(handle.fileno())
+    os.replace(temp, path)
+
+
+def _checkpoint_fields(*, run_name, binding, fold, subjects, code, settings, ig_config,
+                       ig_reference_draws, keep_zero_baseline_ig, model_checkpoint_sha256) -> dict[str, Any]:
+    """What a checkpoint is valid for: the run (its weights and stored predictions too), the fold and
+    the explained visits, the code and the settings the records were computed with, the IG reference
+    settings, the torch and torch_geometric versions, and the IG start steps and step selection (a
+    decision taken once per run). Only identities, settings and decisions: no measured float."""
+    fields = {
+        "run_dir": run_name,
+        "binding_preprocessing_sha256": binding["preprocessing_sha256"],
+        "fold": fold,
+        "fold_sample_ids_sha256": binding["split_sample_ids_sha256"][fold],
+        "fold_prediction_sha256": binding[FOLD_BLOCK[fold]]["prediction_sha256"],
+        "model_checkpoint_sha256": model_checkpoint_sha256,
+        "explained_sample_ids_sha256": sample_ids_sha256(d.sample_id for d in subjects),
+        "source_hashes": code["source_hashes"],
+        "vendored_graphxai_tree_sha256": code["vendored_graphxai_tree_sha256"],
+        "graphxai_upstream_commit": code["graphxai_upstream_commit"],
+        "settings": settings,
+        "ig_reference_draws": int(ig_reference_draws),
+        "keep_zero_baseline_ig": bool(keep_zero_baseline_ig),
+        "torch": torch.__version__,
+        "torch_geometric": torch_geometric.__version__,
+        "ig_start_steps": None if ig_config is None else ig_config["steps"],
+        "ig_step_selection": None if ig_config is None else {
+            key: ig_config["step_selection"].get(key) for key in IG_DECISION_KEYS},
+    }
+    return json.loads(json.dumps(fields, default=str))
+
+
+def _open_checkpoint(checkpoint_dir: Path, fields: dict[str, Any]) -> int:
+    """Create the header of a new checkpoint directory, or compare an existing one field by field
+    (refusing, naming the field, on the first difference) and count this start. Returns the number of
+    segments including this one."""
+    header_path = checkpoint_dir / CHECKPOINT_HEADER
+    checkpoint_dir.mkdir(parents=True, exist_ok=True)
+    if not header_path.exists():
+        if any(checkpoint_dir.glob("subject_*.json")):
+            raise ValueError(f"checkpoint directory holds records but no {CHECKPOINT_HEADER}; "
+                             "refusing to use records of an unknown run")
+        segments = 1
+    else:
+        header = json.loads(header_path.read_text())
+        for name, value in fields.items():
+            if header.get(name) != value:
+                raise ValueError(f"checkpoint was written by another run: field {name!r} differs "
+                                 f"from {CHECKPOINT_HEADER}; refusing to mix records")
+        extra = sorted(set(header) - set(fields) - {"segments"})
+        if extra:
+            raise ValueError(f"checkpoint was written by another run: field {extra[0]!r} is in "
+                             f"{CHECKPOINT_HEADER} only; refusing to mix records")
+        segments = int(header.get("segments", 1)) + 1
+    _write_json_atomic(header_path, dict(fields, segments=segments))
+    return segments
+
+
+def _load_checkpoint_records(checkpoint_dir: Path, wanted_ids: set[str]) -> dict[str, dict]:
+    """sample id -> record of every `subject_<id>.json` of the checkpoint that is of an explained visit,
+    parses as a JSON object and names the same sample id inside; any other file is ignored and reported."""
+    loaded, ignored = {}, []
+    for path in sorted(checkpoint_dir.glob("subject_*.json")):
+        sample_id = path.name[len("subject_"):-len(".json")]
+        try:
+            record = json.loads(path.read_text())
+        except (OSError, ValueError):
+            ignored.append(path.name)
+            continue
+        if (sample_id in wanted_ids and isinstance(record, dict)
+                and str(record.get("sample_id")) == sample_id):
+            loaded[sample_id] = record
+        else:
+            ignored.append(path.name)
+    if ignored:
+        print(f"checkpoint: ignored {len(ignored)} unusable record file(s): {', '.join(ignored[:5])}"
+              f"{' ...' if len(ignored) > 5 else ''}", file=sys.stderr)
+    return loaded
+
 
 def run_explanations(run_dir, output_dir, *, fold: str = "test",
                      max_subjects: int | None = None,
@@ -1357,13 +1454,18 @@ def run_explanations(run_dir, output_dir, *, fold: str = "test",
                      random_seed: int = 1234,
                      audit_subjects: int = 0, stability_draws: int = 2,
                      stability_sigma: float = 0.05,
-                     true_class_explanations: bool = True) -> dict[str, Any]:
+                     true_class_explanations: bool = True,
+                     checkpoint_dir=None) -> dict[str, Any]:
     """The full pipeline: load -> rebuild and verify the split -> replay-check -> explain the chosen
     visits of `fold` ("test" = report fold; "validation" and "dev" = decision folds) -> write output.
     Raises before writing anything if a check fails. `steps` is the budget of the vendored
     (zero-baseline) IG; the clinical IG chooses its start step count from the completeness error on
     decision-fold pilot patients and raises it per visit until completeness holds or the largest
-    candidate is reached."""
+    candidate is reached. With `checkpoint_dir`, each explained visit's record is written there at once and
+    a restarted run with the same directory explains only the visits without a valid record there (the
+    directory's header pins run, fold, cohort, code, settings and software versions); the output is the
+    same either way, except that the per-record IG step-selection diagnostics come from the segment that
+    explained the record."""
     run_started = time.perf_counter()
     output_dir = Path(output_dir)
     if output_dir.exists() and any(output_dir.iterdir()):
@@ -1404,32 +1506,6 @@ def run_explanations(run_dir, output_dir, *, fold: str = "test",
                     "stability_draws": stability_draws, "sigma": stability_sigma,
                     "seed": random_seed}
 
-    stored_rows = _stored_rows(Path(run_dir) / f"{fold}.npz", binding[FOLD_BLOCK[fold]]["prediction_sha256"],
-                               [str(d.sample_id) for d in splits[fold]])
-    seconds_before_first_explanation = round(time.perf_counter() - run_started, 3)
-    explained, failures = [], []
-    for index, data in enumerate(subjects):
-        try:
-            explained.append(
-                explain_subject(
-                    wrapper, data, method=method, conv=conv, steps=steps, epochs=epochs,
-                    num_relation_columns=binding["num_relations"], records=records,
-                    fidelity_v2_curve_points=fidelity_v2_curve_points, ig=ig_config,
-                    random_repeats=random_repeats, tie_draws=tie_draws, random_seed=random_seed,
-                    audit=audit_config if index < audit_subjects else None,
-                    true_class_explanations=true_class_explanations,
-                    stored_row=stored_rows.get(str(data.sample_id)))
-            )
-        except Exception as exc:  # noqa: BLE001 - one subject's failure must not lose the rest
-            failures.append({"sample_id": str(data.sample_id), "error": str(exc)})
-
-    output_dir.mkdir(parents=True, exist_ok=True)
-    (output_dir / "cohort.json").write_text(json.dumps(cohort, indent=2) + "\n")
-    record_files = []
-    for record in explained:
-        filename = f"subject_{record['sample_id']}.json"
-        (output_dir / filename).write_text(json.dumps(record, indent=2) + "\n")
-        record_files.append(filename)
     ig_summary = None if ig_config is None else {
         "baseline": "not_recorded", "steps": ig_config["steps"], "start_steps": ig_config["steps"],
         "tolerance": ig_config["tolerance"], "step_candidates": list(ig_config["candidates"]),
@@ -1456,6 +1532,54 @@ def run_explanations(run_dir, output_dir, *, fold: str = "test",
         "audit": {"subjects": audit_subjects, "stability_draws": stability_draws,
                   "stability_sigma": stability_sigma},
     }
+    run_name = _relative_run_path(run_dir)
+
+    checkpoint = {"used": False, "records_loaded": 0, "segments": 1}
+    loaded: dict[str, dict] = {}
+    if checkpoint_dir is not None:
+        checkpoint_dir = Path(checkpoint_dir)
+        if checkpoint_dir.resolve().is_relative_to(output_dir.resolve()):
+            raise ValueError("the checkpoint directory must lie outside the output directory")
+        # the header is written once the IG start steps are chosen and before the first visit
+        segments = _open_checkpoint(checkpoint_dir, _checkpoint_fields(
+            run_name=run_name, binding=binding, fold=fold, subjects=subjects, code=code,
+            settings=settings, ig_config=ig_config, ig_reference_draws=ig_reference_draws,
+            keep_zero_baseline_ig=keep_zero_baseline_ig,
+            model_checkpoint_sha256=sha256(Path(run_dir) / "best.pt")))
+        loaded = _load_checkpoint_records(checkpoint_dir, {str(d.sample_id) for d in subjects})
+        checkpoint = {"used": True, "records_loaded": len(loaded), "segments": segments}
+
+    stored_rows = _stored_rows(Path(run_dir) / f"{fold}.npz", binding[FOLD_BLOCK[fold]]["prediction_sha256"],
+                               [str(d.sample_id) for d in splits[fold]])
+    seconds_before_first_explanation = round(time.perf_counter() - run_started, 3)
+    explained, failures = [], []
+    for index, data in enumerate(subjects):
+        if str(data.sample_id) in loaded:
+            explained.append(loaded[str(data.sample_id)])
+            continue
+        try:
+            record = explain_subject(
+                wrapper, data, method=method, conv=conv, steps=steps, epochs=epochs,
+                num_relation_columns=binding["num_relations"], records=records,
+                fidelity_v2_curve_points=fidelity_v2_curve_points, ig=ig_config,
+                random_repeats=random_repeats, tie_draws=tie_draws, random_seed=random_seed,
+                audit=audit_config if index < audit_subjects else None,
+                true_class_explanations=true_class_explanations,
+                stored_row=stored_rows.get(str(data.sample_id)))
+        except Exception as exc:  # noqa: BLE001 - one subject's failure must not lose the rest
+            failures.append({"sample_id": str(data.sample_id), "error": str(exc)})
+            continue
+        if checkpoint_dir is not None:   # a failed write stops the run: it must not pass as a visit failure
+            _write_json_atomic(checkpoint_dir / f"subject_{record['sample_id']}.json", record)
+        explained.append(record)
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / "cohort.json").write_text(json.dumps(cohort, indent=2) + "\n")
+    record_files = []
+    for record in explained:
+        filename = f"subject_{record['sample_id']}.json"
+        (output_dir / filename).write_text(json.dumps(record, indent=2) + "\n")
+        record_files.append(filename)
     config = {
         **settings,
         "steps_vendored_ig": steps, "node_reduction": "mean",
@@ -1471,7 +1595,6 @@ def run_explanations(run_dir, output_dir, *, fold: str = "test",
     if method not in disclosure:
         disclosure[method] = method_disclosure(method if method != "clinical_gnn" else str(conv),
                                                epochs=epochs)
-    run_name = _relative_run_path(run_dir)
     manifest = {
         "schema": RUNNER_SCHEMA,
         "schema_version": RUNNER_SCHEMA_VERSION,
@@ -1503,6 +1626,7 @@ def run_explanations(run_dir, output_dir, *, fold: str = "test",
         "builtin_explanation": builtin_explanation(binding, wrapper),
         "prototype_projection": prototype_projection_status(run_dir, binding, fold),
         "record_files": record_files,
+        "checkpoint": checkpoint,
         "environment": environment_info(),
         "seconds_before_first_explanation": seconds_before_first_explanation,
         "seconds_total": round(time.perf_counter() - run_started, 3),
@@ -1579,6 +1703,9 @@ def _cli() -> None:
     parser.add_argument("--tie-draws", type=int, default=fv2.TIE_DRAWS)
     parser.add_argument("--audit-subjects", type=int, default=0,
                         help="run weight-randomisation + stability controls on the first N explained visits")
+    parser.add_argument("--checkpoint-dir", type=Path, default=None,
+                        help="write each explained visit's record here at once; a restarted run with the "
+                             "same directory skips the visits already recorded")
     args = parser.parse_args()
     output = args.output
     if output is None:
@@ -1593,6 +1720,7 @@ def _cli() -> None:
         ig_pilot_patients=args.ig_pilot_patients,
         ig_reference_draws=args.ig_reference_draws, random_repeats=args.random_repeats,
         tie_draws=args.tie_draws, audit_subjects=args.audit_subjects,
+        checkpoint_dir=args.checkpoint_dir,
     )
     print(json.dumps({k: manifest[k] for k in
                       ("method", "conv", "explained_count", "failed_count")} | {"output": str(output)}))
