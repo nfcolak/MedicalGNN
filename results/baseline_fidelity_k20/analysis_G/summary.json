@@ -1,0 +1,911 @@
+{
+ "protocol": "fair_v10t",
+ "reference": "final",
+ "arms": [
+  "G_ib1.0_r0.5",
+  "G_ib1.0_r0.7",
+  "G_ib0.1_r0.5",
+  "G_ib0.1_r0.7",
+  "G_ib0.01_r0.5",
+  "G_ib0.01_r0.7"
+ ],
+ "method_filter": [
+  "gsat"
+ ],
+ "task": {
+  "top_k_labels": 20,
+  "num_classes": 20,
+  "folds": {
+   "validation": {
+    "rows": 4183,
+    "patients": 3142,
+    "K": 20
+   },
+   "test": {
+    "rows": 4174,
+    "patients": 3151,
+    "K": 20
+   }
+  }
+ },
+ "bootstrap": {
+  "B": 2000,
+  "rng_patients": {
+   "validation": 20261012,
+   "test": 20261013
+  },
+  "rng_seeds": 20261014,
+  "levels": "seeds (matched, with replacement), then patients (by subjects, rows paired by sample_ids; one patient resample per replicate shared by seeds and arms)",
+  "statistic": "mean over drawn seeds of macro-F1(arm) - macro-F1(reference)",
+  "ci": "95% percentile"
+ },
+ "protocol_note": "Decisions (checkpoint, HPO, baseline choice) use VALIDATION; every reported result is on TEST (scored once per run at the validation-selected checkpoint).",
+ "notes": [],
+ "groups": [
+  {
+   "arm": "final",
+   "is_reference": true,
+   "method": "gsat",
+   "seeds": [
+    7,
+    1234,
+    2025
+   ],
+   "runs": [
+    {
+     "path": "final/gsat_seed7",
+     "method": "gsat",
+     "seed": 7,
+     "binding_method": "gsat",
+     "binding_conv": null,
+     "selected_epoch": 37,
+     "best_epoch_is_last": false,
+     "K": 20,
+     "val_macro_f1": 0.668680542570417,
+     "val_accuracy": 0.6839588811857519,
+     "test_macro_f1": 0.668276653123196,
+     "test_accuracy": 0.6837565884044082
+    },
+    {
+     "path": "final/gsat_seed1234",
+     "method": "gsat",
+     "seed": 1234,
+     "binding_method": "gsat",
+     "binding_conv": null,
+     "selected_epoch": 32,
+     "best_epoch_is_last": false,
+     "K": 20,
+     "val_macro_f1": 0.6743884830052933,
+     "val_accuracy": 0.6851541955534306,
+     "test_macro_f1": 0.6736785005188968,
+     "test_accuracy": 0.6897460469573551
+    },
+    {
+     "path": "final/gsat_seed2025",
+     "method": "gsat",
+     "seed": 2025,
+     "binding_method": "gsat",
+     "binding_conv": null,
+     "selected_epoch": 20,
+     "best_epoch_is_last": false,
+     "K": 20,
+     "val_macro_f1": 0.6723123492837305,
+     "val_accuracy": 0.6834807554386804,
+     "test_macro_f1": 0.6656950697557974,
+     "test_accuracy": 0.6808816482989938
+    }
+   ],
+   "validation_macro_f1": {
+    "mean": 0.6717937916198137,
+    "sd": 0.0028890868003798808,
+    "n": 3
+   },
+   "validation_accuracy": {
+    "mean": 0.6841979440592877,
+    "sd": 0.0008619534485929,
+    "n": 3
+   },
+   "selected_epoch": {
+    "mean": 29.666666666666668,
+    "sd": 8.736894948054106,
+    "n": 3
+   },
+   "test_macro_f1": {
+    "mean": 0.6692167411326301,
+    "sd": 0.004073894425044871,
+    "n": 3
+   },
+   "test_accuracy": {
+    "mean": 0.6847947612202524,
+    "sd": 0.004522470894351641,
+    "n": 3
+   }
+  },
+  {
+   "arm": "G_ib1.0_r0.5",
+   "is_reference": false,
+   "method": "gsat",
+   "seeds": [
+    1234
+   ],
+   "runs": [
+    {
+     "path": "G_ib1.0_r0.5/gsat_seed1234",
+     "method": "gsat",
+     "seed": 1234,
+     "binding_method": "gsat",
+     "binding_conv": null,
+     "selected_epoch": 24,
+     "best_epoch_is_last": false,
+     "K": 20,
+     "val_macro_f1": 0.6705272401716246,
+     "val_accuracy": 0.6786994979679656,
+     "test_macro_f1": 0.6654915586860157,
+     "test_accuracy": 0.6760900814566363
+    }
+   ],
+   "validation_macro_f1": {
+    "mean": 0.6705272401716246,
+    "sd": null,
+    "n": 1
+   },
+   "validation_accuracy": {
+    "mean": 0.6786994979679656,
+    "sd": null,
+    "n": 1
+   },
+   "selected_epoch": {
+    "mean": 24.0,
+    "sd": null,
+    "n": 1
+   },
+   "test_macro_f1": {
+    "mean": 0.6654915586860157,
+    "sd": null,
+    "n": 1
+   },
+   "test_accuracy": {
+    "mean": 0.6760900814566363,
+    "sd": null,
+    "n": 1
+   },
+   "matched_seeds": [
+    1234
+   ],
+   "unmatched_seeds": [],
+   "vs_reference": {
+    "n_matched_seeds": 1,
+    "per_seed": [],
+    "test": {
+     "per_seed": [
+      {
+       "seed": 1234,
+       "macro_f1_delta": -0.008186941832881045,
+       "accuracy_delta": -0.013655965500718792
+      }
+     ],
+     "macro_f1_delta": {
+      "mean": -0.008186941832881045,
+      "sd": null,
+      "n": 1
+     },
+     "accuracy_delta": {
+      "mean": -0.013655965500718792,
+      "sd": null,
+      "n": 1
+     },
+     "bootstrap": {
+      "seeds_and_patients": {
+       "ci95": [
+        -0.0200084454549685,
+        0.0029505983659062745
+       ],
+       "p_delta_gt_0": 0.0765
+      },
+      "patients_only": {
+       "ci95": [
+        -0.0200084454549685,
+        0.0029505983659062745
+       ],
+       "p_delta_gt_0": 0.0765
+      }
+     },
+     "reading": "no measurable effect",
+     "reading_note": "not resolved at this precision"
+    },
+    "validation": {
+     "per_seed": [
+      {
+       "seed": 1234,
+       "macro_f1_delta": -0.003861242833668732,
+       "accuracy_delta": -0.006454697585465019
+      }
+     ],
+     "macro_f1_delta": {
+      "mean": -0.003861242833668732,
+      "sd": null,
+      "n": 1
+     },
+     "accuracy_delta": {
+      "mean": -0.006454697585465019,
+      "sd": null,
+      "n": 1
+     },
+     "bootstrap": {
+      "seeds_and_patients": {
+       "ci95": [
+        -0.015366887450878854,
+        0.0070365731731721086
+       ],
+       "p_delta_gt_0": 0.253
+      },
+      "patients_only": {
+       "ci95": [
+        -0.015366887450878854,
+        0.0070365731731721086
+       ],
+       "p_delta_gt_0": 0.253
+      }
+     },
+     "reading": "no measurable effect",
+     "reading_note": ""
+    }
+   }
+  },
+  {
+   "arm": "G_ib1.0_r0.7",
+   "is_reference": false,
+   "method": "gsat",
+   "seeds": [
+    1234
+   ],
+   "runs": [
+    {
+     "path": "G_ib1.0_r0.7/gsat_seed1234",
+     "method": "gsat",
+     "seed": 1234,
+     "binding_method": "gsat",
+     "binding_conv": null,
+     "selected_epoch": 24,
+     "best_epoch_is_last": false,
+     "K": 20,
+     "val_macro_f1": 0.6727285012329289,
+     "val_accuracy": 0.6760698063590724,
+     "test_macro_f1": 0.6713863942042069,
+     "test_accuracy": 0.6806420699568759
+    }
+   ],
+   "validation_macro_f1": {
+    "mean": 0.6727285012329289,
+    "sd": null,
+    "n": 1
+   },
+   "validation_accuracy": {
+    "mean": 0.6760698063590724,
+    "sd": null,
+    "n": 1
+   },
+   "selected_epoch": {
+    "mean": 24.0,
+    "sd": null,
+    "n": 1
+   },
+   "test_macro_f1": {
+    "mean": 0.6713863942042069,
+    "sd": null,
+    "n": 1
+   },
+   "test_accuracy": {
+    "mean": 0.6806420699568759,
+    "sd": null,
+    "n": 1
+   },
+   "matched_seeds": [
+    1234
+   ],
+   "unmatched_seeds": [],
+   "vs_reference": {
+    "n_matched_seeds": 1,
+    "per_seed": [],
+    "test": {
+     "per_seed": [
+      {
+       "seed": 1234,
+       "macro_f1_delta": -0.0022921063146899012,
+       "accuracy_delta": -0.009103977000479158
+      }
+     ],
+     "macro_f1_delta": {
+      "mean": -0.0022921063146899012,
+      "sd": null,
+      "n": 1
+     },
+     "accuracy_delta": {
+      "mean": -0.009103977000479158,
+      "sd": null,
+      "n": 1
+     },
+     "bootstrap": {
+      "seeds_and_patients": {
+       "ci95": [
+        -0.013309488718922697,
+        0.008437360094748537
+       ],
+       "p_delta_gt_0": 0.353
+      },
+      "patients_only": {
+       "ci95": [
+        -0.013309488718922697,
+        0.008437360094748537
+       ],
+       "p_delta_gt_0": 0.353
+      }
+     },
+     "reading": "no measurable effect",
+     "reading_note": ""
+    },
+    "validation": {
+     "per_seed": [
+      {
+       "seed": 1234,
+       "macro_f1_delta": -0.0016599817723643717,
+       "accuracy_delta": -0.009084389194358167
+      }
+     ],
+     "macro_f1_delta": {
+      "mean": -0.0016599817723643717,
+      "sd": null,
+      "n": 1
+     },
+     "accuracy_delta": {
+      "mean": -0.009084389194358167,
+      "sd": null,
+      "n": 1
+     },
+     "bootstrap": {
+      "seeds_and_patients": {
+       "ci95": [
+        -0.012487319268441682,
+        0.00912719118781751
+       ],
+       "p_delta_gt_0": 0.3735
+      },
+      "patients_only": {
+       "ci95": [
+        -0.012487319268441682,
+        0.00912719118781751
+       ],
+       "p_delta_gt_0": 0.3735
+      }
+     },
+     "reading": "no measurable effect",
+     "reading_note": ""
+    }
+   }
+  },
+  {
+   "arm": "G_ib0.1_r0.5",
+   "is_reference": false,
+   "method": "gsat",
+   "seeds": [
+    1234
+   ],
+   "runs": [
+    {
+     "path": "G_ib0.1_r0.5/gsat_seed1234",
+     "method": "gsat",
+     "seed": 1234,
+     "binding_method": "gsat",
+     "binding_conv": null,
+     "selected_epoch": 32,
+     "best_epoch_is_last": false,
+     "K": 20,
+     "val_macro_f1": 0.664691046230218,
+     "val_accuracy": 0.676547932106144,
+     "test_macro_f1": 0.6633926038667124,
+     "test_accuracy": 0.6777671298514615
+    }
+   ],
+   "validation_macro_f1": {
+    "mean": 0.664691046230218,
+    "sd": null,
+    "n": 1
+   },
+   "validation_accuracy": {
+    "mean": 0.676547932106144,
+    "sd": null,
+    "n": 1
+   },
+   "selected_epoch": {
+    "mean": 32.0,
+    "sd": null,
+    "n": 1
+   },
+   "test_macro_f1": {
+    "mean": 0.6633926038667124,
+    "sd": null,
+    "n": 1
+   },
+   "test_accuracy": {
+    "mean": 0.6777671298514615,
+    "sd": null,
+    "n": 1
+   },
+   "matched_seeds": [
+    1234
+   ],
+   "unmatched_seeds": [],
+   "vs_reference": {
+    "n_matched_seeds": 1,
+    "per_seed": [],
+    "test": {
+     "per_seed": [
+      {
+       "seed": 1234,
+       "macro_f1_delta": -0.010285896652184379,
+       "accuracy_delta": -0.011978917105893605
+      }
+     ],
+     "macro_f1_delta": {
+      "mean": -0.010285896652184379,
+      "sd": null,
+      "n": 1
+     },
+     "accuracy_delta": {
+      "mean": -0.011978917105893605,
+      "sd": null,
+      "n": 1
+     },
+     "bootstrap": {
+      "seeds_and_patients": {
+       "ci95": [
+        -0.021253022891290645,
+        0.00023977850419247443
+       ],
+       "p_delta_gt_0": 0.028
+      },
+      "patients_only": {
+       "ci95": [
+        -0.021253022891290645,
+        0.00023977850419247443
+       ],
+       "p_delta_gt_0": 0.028
+      }
+     },
+     "reading": "no measurable effect",
+     "reading_note": "not resolved at this precision"
+    },
+    "validation": {
+     "per_seed": [
+      {
+       "seed": 1234,
+       "macro_f1_delta": -0.009697436775075285,
+       "accuracy_delta": -0.008606263447286655
+      }
+     ],
+     "macro_f1_delta": {
+      "mean": -0.009697436775075285,
+      "sd": null,
+      "n": 1
+     },
+     "accuracy_delta": {
+      "mean": -0.008606263447286655,
+      "sd": null,
+      "n": 1
+     },
+     "bootstrap": {
+      "seeds_and_patients": {
+       "ci95": [
+        -0.020612357442873118,
+        0.0004909641841857932
+       ],
+       "p_delta_gt_0": 0.0305
+      },
+      "patients_only": {
+       "ci95": [
+        -0.020612357442873118,
+        0.0004909641841857932
+       ],
+       "p_delta_gt_0": 0.0305
+      }
+     },
+     "reading": "no measurable effect",
+     "reading_note": "not resolved at this precision"
+    }
+   }
+  },
+  {
+   "arm": "G_ib0.1_r0.7",
+   "is_reference": false,
+   "method": "gsat",
+   "seeds": [
+    1234
+   ],
+   "runs": [
+    {
+     "path": "G_ib0.1_r0.7/gsat_seed1234",
+     "method": "gsat",
+     "seed": 1234,
+     "binding_method": "gsat",
+     "binding_conv": null,
+     "selected_epoch": 22,
+     "best_epoch_is_last": false,
+     "K": 20,
+     "val_macro_f1": 0.6675231063954628,
+     "val_accuracy": 0.6777432464738227,
+     "test_macro_f1": 0.6596611909524615,
+     "test_accuracy": 0.6775275515093435
+    }
+   ],
+   "validation_macro_f1": {
+    "mean": 0.6675231063954628,
+    "sd": null,
+    "n": 1
+   },
+   "validation_accuracy": {
+    "mean": 0.6777432464738227,
+    "sd": null,
+    "n": 1
+   },
+   "selected_epoch": {
+    "mean": 22.0,
+    "sd": null,
+    "n": 1
+   },
+   "test_macro_f1": {
+    "mean": 0.6596611909524615,
+    "sd": null,
+    "n": 1
+   },
+   "test_accuracy": {
+    "mean": 0.6775275515093435,
+    "sd": null,
+    "n": 1
+   },
+   "matched_seeds": [
+    1234
+   ],
+   "unmatched_seeds": [],
+   "vs_reference": {
+    "n_matched_seeds": 1,
+    "per_seed": [],
+    "test": {
+     "per_seed": [
+      {
+       "seed": 1234,
+       "macro_f1_delta": -0.014017309566435321,
+       "accuracy_delta": -0.012218495448011568
+      }
+     ],
+     "macro_f1_delta": {
+      "mean": -0.014017309566435321,
+      "sd": null,
+      "n": 1
+     },
+     "accuracy_delta": {
+      "mean": -0.012218495448011568,
+      "sd": null,
+      "n": 1
+     },
+     "bootstrap": {
+      "seeds_and_patients": {
+       "ci95": [
+        -0.025498814151998332,
+        -0.001666161368465916
+       ],
+       "p_delta_gt_0": 0.0125
+      },
+      "patients_only": {
+       "ci95": [
+        -0.025498814151998332,
+        -0.001666161368465916
+       ],
+       "p_delta_gt_0": 0.0125
+      }
+     },
+     "reading": "matters",
+     "reading_note": ""
+    },
+    "validation": {
+     "per_seed": [
+      {
+       "seed": 1234,
+       "macro_f1_delta": -0.0068653766098305535,
+       "accuracy_delta": -0.007410949079607931
+      }
+     ],
+     "macro_f1_delta": {
+      "mean": -0.0068653766098305535,
+      "sd": null,
+      "n": 1
+     },
+     "accuracy_delta": {
+      "mean": -0.007410949079607931,
+      "sd": null,
+      "n": 1
+     },
+     "bootstrap": {
+      "seeds_and_patients": {
+       "ci95": [
+        -0.017939381806485973,
+        0.004315454212076587
+       ],
+       "p_delta_gt_0": 0.117
+      },
+      "patients_only": {
+       "ci95": [
+        -0.017939381806485973,
+        0.004315454212076587
+       ],
+       "p_delta_gt_0": 0.117
+      }
+     },
+     "reading": "no measurable effect",
+     "reading_note": "not resolved at this precision"
+    }
+   }
+  },
+  {
+   "arm": "G_ib0.01_r0.5",
+   "is_reference": false,
+   "method": "gsat",
+   "seeds": [
+    1234
+   ],
+   "runs": [
+    {
+     "path": "G_ib0.01_r0.5/gsat_seed1234",
+     "method": "gsat",
+     "seed": 1234,
+     "binding_method": "gsat",
+     "binding_conv": null,
+     "selected_epoch": 6,
+     "best_epoch_is_last": false,
+     "K": 20,
+     "val_macro_f1": 0.4629879708810488,
+     "val_accuracy": 0.47716949557733684,
+     "test_macro_f1": 0.46743031201431845,
+     "test_accuracy": 0.4832295160517489
+    }
+   ],
+   "validation_macro_f1": {
+    "mean": 0.4629879708810488,
+    "sd": null,
+    "n": 1
+   },
+   "validation_accuracy": {
+    "mean": 0.47716949557733684,
+    "sd": null,
+    "n": 1
+   },
+   "selected_epoch": {
+    "mean": 6.0,
+    "sd": null,
+    "n": 1
+   },
+   "test_macro_f1": {
+    "mean": 0.46743031201431845,
+    "sd": null,
+    "n": 1
+   },
+   "test_accuracy": {
+    "mean": 0.4832295160517489,
+    "sd": null,
+    "n": 1
+   },
+   "matched_seeds": [
+    1234
+   ],
+   "unmatched_seeds": [],
+   "vs_reference": {
+    "n_matched_seeds": 1,
+    "per_seed": [],
+    "test": {
+     "per_seed": [
+      {
+       "seed": 1234,
+       "macro_f1_delta": -0.20624818850457832,
+       "accuracy_delta": -0.20651653090560618
+      }
+     ],
+     "macro_f1_delta": {
+      "mean": -0.20624818850457832,
+      "sd": null,
+      "n": 1
+     },
+     "accuracy_delta": {
+      "mean": -0.20651653090560618,
+      "sd": null,
+      "n": 1
+     },
+     "bootstrap": {
+      "seeds_and_patients": {
+       "ci95": [
+        -0.2238097724531626,
+        -0.18904233469832205
+       ],
+       "p_delta_gt_0": 0.0
+      },
+      "patients_only": {
+       "ci95": [
+        -0.2238097724531626,
+        -0.18904233469832205
+       ],
+       "p_delta_gt_0": 0.0
+      }
+     },
+     "reading": "matters",
+     "reading_note": ""
+    },
+    "validation": {
+     "per_seed": [
+      {
+       "seed": 1234,
+       "macro_f1_delta": -0.2114005121242445,
+       "accuracy_delta": -0.20798469997609376
+      }
+     ],
+     "macro_f1_delta": {
+      "mean": -0.2114005121242445,
+      "sd": null,
+      "n": 1
+     },
+     "accuracy_delta": {
+      "mean": -0.20798469997609376,
+      "sd": null,
+      "n": 1
+     },
+     "bootstrap": {
+      "seeds_and_patients": {
+       "ci95": [
+        -0.2286387665490548,
+        -0.19495814141115475
+       ],
+       "p_delta_gt_0": 0.0
+      },
+      "patients_only": {
+       "ci95": [
+        -0.2286387665490548,
+        -0.19495814141115475
+       ],
+       "p_delta_gt_0": 0.0
+      }
+     },
+     "reading": "matters",
+     "reading_note": ""
+    }
+   }
+  },
+  {
+   "arm": "G_ib0.01_r0.7",
+   "is_reference": false,
+   "method": "gsat",
+   "seeds": [
+    1234
+   ],
+   "runs": [
+    {
+     "path": "G_ib0.01_r0.7/gsat_seed1234",
+     "method": "gsat",
+     "seed": 1234,
+     "binding_method": "gsat",
+     "binding_conv": null,
+     "selected_epoch": 6,
+     "best_epoch_is_last": false,
+     "K": 20,
+     "val_macro_f1": 0.5597497005253158,
+     "val_accuracy": 0.585464977289027,
+     "test_macro_f1": 0.581297846519253,
+     "test_accuracy": 0.6018207954000958
+    }
+   ],
+   "validation_macro_f1": {
+    "mean": 0.5597497005253158,
+    "sd": null,
+    "n": 1
+   },
+   "validation_accuracy": {
+    "mean": 0.585464977289027,
+    "sd": null,
+    "n": 1
+   },
+   "selected_epoch": {
+    "mean": 6.0,
+    "sd": null,
+    "n": 1
+   },
+   "test_macro_f1": {
+    "mean": 0.581297846519253,
+    "sd": null,
+    "n": 1
+   },
+   "test_accuracy": {
+    "mean": 0.6018207954000958,
+    "sd": null,
+    "n": 1
+   },
+   "matched_seeds": [
+    1234
+   ],
+   "unmatched_seeds": [],
+   "vs_reference": {
+    "n_matched_seeds": 1,
+    "per_seed": [],
+    "test": {
+     "per_seed": [
+      {
+       "seed": 1234,
+       "macro_f1_delta": -0.09238065399964379,
+       "accuracy_delta": -0.08792525155725928
+      }
+     ],
+     "macro_f1_delta": {
+      "mean": -0.09238065399964379,
+      "sd": null,
+      "n": 1
+     },
+     "accuracy_delta": {
+      "mean": -0.08792525155725928,
+      "sd": null,
+      "n": 1
+     },
+     "bootstrap": {
+      "seeds_and_patients": {
+       "ci95": [
+        -0.10754376249398843,
+        -0.07702565859674312
+       ],
+       "p_delta_gt_0": 0.0
+      },
+      "patients_only": {
+       "ci95": [
+        -0.10754376249398843,
+        -0.07702565859674312
+       ],
+       "p_delta_gt_0": 0.0
+      }
+     },
+     "reading": "matters",
+     "reading_note": ""
+    },
+    "validation": {
+     "per_seed": [
+      {
+       "seed": 1234,
+       "macro_f1_delta": -0.1146387824799775,
+       "accuracy_delta": -0.09968921826440358
+      }
+     ],
+     "macro_f1_delta": {
+      "mean": -0.1146387824799775,
+      "sd": null,
+      "n": 1
+     },
+     "accuracy_delta": {
+      "mean": -0.09968921826440358,
+      "sd": null,
+      "n": 1
+     },
+     "bootstrap": {
+      "seeds_and_patients": {
+       "ci95": [
+        -0.13104766982112315,
+        -0.09947583274609385
+       ],
+       "p_delta_gt_0": 0.0
+      },
+      "patients_only": {
+       "ci95": [
+        -0.13104766982112315,
+        -0.09947583274609385
+       ],
+       "p_delta_gt_0": 0.0
+      }
+     },
+     "reading": "matters",
+     "reading_note": ""
+    }
+   }
+  }
+ ]
+}

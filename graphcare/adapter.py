@@ -64,13 +64,20 @@ class _BATLayer(nn.Module):
         self.update = nn.Linear(hidden, hidden)
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, node_state, edge_index, edge_context, node_attention):
+    def forward(self, node_state, edge_index, edge_context, node_attention, edge_mask=None):
         aggregate = torch.zeros_like(node_state)
         if edge_index.numel():
             source, target = edge_index
             sender = node_state[source] * node_attention[source].unsqueeze(-1)
             relation = self.relation_gate(edge_context) * edge_context
             messages = F.relu(sender + relation)
+            # Plain sum, not a mean (no degree normaliser here, unlike
+            # _RelationPayloadLayer), so masking the message once is the
+            # whole story -- no denominator to keep consistent with it.
+            if edge_mask is not None:
+                if edge_mask.ndim != 1 or edge_mask.numel() != target.numel():
+                    raise ValueError("edge_mask must contain one value per edge")
+                messages = messages * edge_mask.unsqueeze(-1)
             aggregate.index_add_(0, target, messages)
         updated = self.update(aggregate + (1.0 + self.eps) * node_state)
         return F.relu(self.dropout(updated))
@@ -261,8 +268,20 @@ class GraphCareAdapter(ClinicalMethodAdapter):
             visit_count=visit_count,
         )
 
-    def _encode_inputs(self, clinical_batch: ClinicalBatch):
-        token_state = self.token_embedding(clinical_batch.token)
+    def embed_tokens(self, batch) -> torch.Tensor:
+        """The token-embedding rows [N, token_dim] that forward() looks up for
+        this batch; forward(token_vectors=...) accepts a replacement of exactly
+        this shape."""
+        return self.token_embedding(self._clinical_batch(batch).token)
+
+    def _encode_inputs(self, clinical_batch: ClinicalBatch, token_vectors=None):
+        if token_vectors is None:
+            token_state = self.token_embedding(clinical_batch.token)
+        elif (token_vectors.ndim != 2
+              or token_vectors.shape != (clinical_batch.x.size(0), self.token_dim)):
+            raise ValueError("token_vectors must have shape [nodes, token_dim]")
+        else:
+            token_state = token_vectors
         node_state = self.node_projection(torch.cat([
             clinical_batch.x,
             token_state,
@@ -350,11 +369,19 @@ class GraphCareAdapter(ClinicalMethodAdapter):
         )
         return alpha, beta, visit_weight, node_context, node_attention
 
-    def forward(self, batch, *, epoch: int) -> MethodOutput:
+    def forward(self, batch, *, epoch: int, external_edge_mask=None,
+                token_vectors=None) -> MethodOutput:
+        # Explanation hooks (the trainer never passes them; None is the
+        # training call): `external_edge_mask` scales the BAT messages,
+        # `token_vectors` [nodes, token_dim] replaces the token-embedding rows
+        # (embed_tokens).
         epoch_index(epoch)
         clinical_batch = self._clinical_batch(batch)
         visit_batch = self._visit_batch(batch, clinical_batch)
-        node_state, edge_context = self._encode_inputs(clinical_batch)
+        node_state, edge_context = self._encode_inputs(
+            clinical_batch,
+            token_vectors=token_vectors,
+        )
         non_global_mask = ~visit_batch.global_node_mask
         knowledge_index = NODE_KINDS.index("knowledge")
         direct_mask = non_global_mask & (clinical_batch.node_type != knowledge_index)
@@ -365,14 +392,35 @@ class GraphCareAdapter(ClinicalMethodAdapter):
             mask=direct_mask,
         )
 
+        if external_edge_mask is not None and (
+            external_edge_mask.ndim != 1
+            or external_edge_mask.numel() != clinical_batch.edge_index.size(1)
+        ):
+            raise ValueError(
+                "external_edge_mask must contain one value per edge of the "
+                "full (unfiltered) edge_index"
+            )
         if clinical_batch.edge_index.numel():
             source, target = clinical_batch.edge_index
             message_edge_mask = non_global_mask[source] & non_global_mask[target]
             message_edge_index = clinical_batch.edge_index[:, message_edge_mask]
             message_edge_context = edge_context[message_edge_mask]
+            # GraphCare's own message pass already excludes global-node edges
+            # (message_edge_mask, above); an external mask (e.g. GNNExplainer's)
+            # is expressed over the full, unfiltered edge_index like every other
+            # adapter's, so it must be subset identically before use here, or
+            # its values would land on the wrong edges once global-node edges
+            # are dropped. Direct/global readout paths below never see this
+            # mask, and neither do the global-node edges, which carry no
+            # message in this model.
+            filtered_edge_mask = (
+                external_edge_mask[message_edge_mask]
+                if external_edge_mask is not None else None
+            )
         else:
             message_edge_index = clinical_batch.edge_index
             message_edge_context = edge_context
+            filtered_edge_mask = None
 
         visit_state, nonempty = self._visit_states(node_state, visit_batch)
         alpha = node_state.new_empty((0,))
@@ -393,6 +441,7 @@ class GraphCareAdapter(ClinicalMethodAdapter):
                 message_edge_index,
                 message_edge_context,
                 node_attention,
+                edge_mask=filtered_edge_mask,
             )
 
         graph_state = graph_mean(

@@ -60,6 +60,14 @@ class ClinicalMethodAdapter(nn.Module, ABC):
     def run_config(self) -> dict:
         raise NotImplementedError
 
+    @classmethod
+    def validate_method_options(cls, args) -> None:
+        """Plan-mode hook: raise ValueError for method options the adapter would refuse, without building anything.
+
+        The default checks nothing; adapters that own a method-option table override it.
+        """
+        del args
+
 
 def method_setting(args, names, default, cast, *, minimum=None, maximum=None):
     """Return the first supplied, non-None override (Namespace or mapping), validated."""

@@ -73,8 +73,9 @@ _TABLE = (
     ('mp_update_kinds', str, 'all', 'all', None, None, None, 'stack', 'EVD-03'),
     ('mp_time_decay', int, 0, 0, None, 0, 1, 'stack', 'RDO-05'),
     ('mp_shortcut', int, 0, 0, None, 0, 1, 'stack', 'STR-03'),
-    ('mp_feed', str, 'all', 'all', ('all', 'dual', 'node', 'gates'), None, None, 'network',
-     'EVD-01,EVD-06,EVD-04'),
+    # mp_feed='none' (ablation): no message-passing stack is built; every head reads the node-local state h0
+    ('mp_feed', str, 'all', 'all', ('all', 'dual', 'node', 'gates', 'none'), None, None, 'network',
+     'EVD-01,EVD-06,EVD-04,ABL-05'),
     ('mp_dual_read', int, 0, 0, None, 0, 1, 'network', 'ERR-01'),
     ('mp_aux_weight', float, 0.3, 0.3, None, 0.0, 10.0, 'adapter', 'ERR-01'),
     ('mp_jk', int, 0, 0, None, 0, 1, 'network', 'REG-06'),
@@ -102,6 +103,13 @@ _TABLE = (
     ('mp_lr_schedule', str, 'none', 'none', ('none', 'cosine'), None, None, 'adapter', 'mp2rev-train-01'),
     ('mp_label_smoothing', float, 0.0, 0.0, None, 0.0, 0.3, 'adapter', 'mp2rev-train-01'),
     ('mp_dropout', float, -1.0, -1.0, None, -1.0, None, 'adapter', 'mp2rev-perf-05'),
+    # Ablation switches (Nasim section 4). Each default is today's behaviour (DEFAULT == LEGACY), so the
+    # final model is unchanged; see network.py for what each switch does to the computation.
+    ('ev_combine', str, 'sum', 'sum', ('sum', 'mlp'), None, None, 'network', 'ABL-02'),
+    ('ev_pair', int, 1, 1, None, 0, 1, 'network', 'ABL-04'),
+    ('ev_edge', int, 1, 1, None, 0, 1, 'network', 'ABL-04b'),
+    ('readout', str, 'evidence', 'evidence', ('evidence', 'pool'), None, None, 'network', 'ABL-06'),
+    ('pool_hidden', int, 0, 0, None, 0, None, 'network', 'ABL-06'),
 )
 
 SPECS: dict[str, dict] = {
@@ -234,13 +242,66 @@ def ignored_options(options: dict) -> dict:
         note('mp_att_dropout', 'needs an attention stack (mp_rev_attention=1 or simplehgn/hgt)')
     if options['mp_optimizer'] != 'adamw':
         note('mp_weight_decay', "needs mp_optimizer='adamw'")
+    if options['mp_feed'] == 'none':   # no stack is built: every stack option is moot
+        for name in _NEEDS_STACK:
+            note(name, "needs a message-passing stack (mp_feed != 'none')")
+        note('mp_aux_weight', "needs mp_feed != 'none'")
+    if options['readout'] != 'pool':
+        note('pool_hidden', "needs readout='pool'")
+    if options['readout'] == 'pool':
+        for name in ('node_readout', 'edge_head_rank', 'mp_hub_kinds'):
+            note(name, "readout='pool' has no evidence heads")
+    if options['ev_edge'] == 0:
+        note('edge_head_rank', 'needs ev_edge=1')
     if options['mp_kind'] != 'gine':   # mp2v2-train-06: layers.py _parse resets these for the other kinds
         for name in _GINE_ONLY:
             note(name, "needs mp_kind='gine' (reset by the stack for rgcn, diag, simplehgn, hgt)")
     return ignored
 
 
+# options that act on (or through) the message-passing stack: meaningless when the stack is not built
+_NEEDS_STACK = tuple(STACK_KEYS)
+
+
+def _check_ablation(options: dict) -> None:
+    """Combinations of the ablation switches (ev_combine, ev_pair, ev_edge, readout, mp_feed='none')."""
+    if options['mp_feed'] == 'none':
+        for name, bad in (('mp_jk', 1), ('mp_split_rows', 1), ('mp_time_decay', 1)):
+            if options[name] == bad:
+                raise ValueError(f"{name}={bad} contradicts mp_feed='none' (no message-passing stack is built)")
+        for name, limit in (('mp_branches', 1), ('mp_shrink', 0.0), ('mp_mask_rate', 0.0)):
+            if options[name] != limit:
+                raise ValueError(f"{name}={options[name]!r} contradicts mp_feed='none' (no message-passing stack is built)")
+        if options['mp_pretrain_checkpoint']:
+            raise ValueError("mp_pretrain_checkpoint contradicts mp_feed='none' (no message-passing stack to load into)")
+    if options['readout'] == 'pool':
+        if options['mp_feed'] != 'all':
+            raise ValueError(f"readout='pool' needs mp_feed='all' (got {options['mp_feed']!r}): the pooled head reads "
+                             'the message-passing state and no evidence row exists')
+        if options['pool_hidden'] < 1:
+            raise ValueError("readout='pool' needs pool_hidden >= 1")
+        for name, off in (('ev_combine', 'sum'), ('ev_pair', 1), ('ev_edge', 1), ('mp_dual_read', 0),
+                          ('mp_split_rows', 0), ('mp_branches', 1), ('shared_gate', 0), ('row_drop', 0.0)):
+            if options[name] != off:
+                raise ValueError(f"{name}={options[name]!r} contradicts readout='pool' (the pooled head has no "
+                                 'evidence rows)')
+    if options['ev_combine'] == 'mlp':
+        for name, off in (('mp_dual_read', 0), ('mp_split_rows', 0)):
+            if options[name] != off:
+                raise ValueError(f"{name}={options[name]!r} contradicts ev_combine='mlp' (the block totals are not "
+                                 'summed, so the additive ledger rows it needs do not exist)')
+    if options['ev_pair'] == 0 and options['mp_dual_read'] == 1:
+        raise ValueError('ev_pair=0 contradicts mp_dual_read=1 (the message-state pair head would stay)')
+    if options['ev_edge'] == 0:
+        for name, off in (('mp_dual_read', 0), ('shared_gate', 0)):
+            if options[name] != off:
+                raise ValueError(f"{name}={options[name]!r} contradicts ev_edge=0 (it needs the edge heads)")
+        if options['mp_feed'] == 'gates':
+            raise ValueError("mp_feed='gates' contradicts ev_edge=0 (the gates feed the edge gate)")
+
+
 def _check_combinations(options: dict) -> None:
+    _check_ablation(options)
     if options['mp_dual_read'] == 1 and options['mp_feed'] != 'all':
         raise ValueError(f"mp_dual_read=1 contradicts mp_feed={options['mp_feed']!r} "
                          "(dual read needs mp_feed=all)")

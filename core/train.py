@@ -150,6 +150,7 @@ METHOD_NATIVE_ARGUMENTS = {
         'warm_epochs', 'proj_epochs', 'proj_interval', 'nearest_graphs',
         'prototypes_per_class', 'cluster_weight', 'separation_weight', 'margin',
         'rollout', 'min_atoms', 'max_atoms', 'expand_atoms', 'c_puct',
+        'select_after_projection',
     ),
     'gsat': (
         'gsat_temperature', 'gsat_info_loss_coef', 'gsat_init_r', 'gsat_final_r',
@@ -575,6 +576,17 @@ def early_stopping_start_epoch(method, model):
     return 0
 
 
+def selection_start_epoch(model):
+    """First zero-based epoch that may become the selected checkpoint; None = every epoch.
+
+    Looked up with getattr on the adapter (`selection_start_epoch()` returning an int or None); an
+    adapter without the hook, or one that returns None, keeps the historical selection loop.
+    """
+    hook = getattr(model, 'selection_start_epoch', None)
+    value = hook() if callable(hook) else None
+    return None if value is None else int(value)
+
+
 def grad_clip_settings(method, model):
     """What `clip_gradients` really applies for this method: {'value': .., 'norm': ..} (None = off)."""
     value, norm = None, None
@@ -859,6 +871,10 @@ def run(args):
     # the 'selection' text is kept as on fair_v3 ON PURPOSE (design decision 2026-10-11): core/aggregate.py
     # uses it as a cohort key and every existing run carries it, so it does not follow this predicate; the
     # 'early_stopping' key carries the truth.
+    select_start = selection_start_epoch(model) if isinstance(model, ClinicalMethodAdapter) else None
+    if select_start is not None and select_start >= args.epochs:
+        raise ValueError(f'checkpoint selection starts at epoch index {select_start} but only '
+                         f'{args.epochs} epochs are trained: no eligible checkpoint')
     early_stopping_disabled = (isinstance(model, ClinicalMethodAdapter)
                                and args.patience >= args.epochs - early_stop_start)
     if selection_fold == 'dev':
@@ -982,6 +998,8 @@ def run(args):
     # New keys only (no existing key changes): recorded when they apply.
     # fv10-m2-03: gradient clipping really applied by `clip_gradients` for this method
     binding['grad_clip'] = grad_clip_settings(args.method, model)
+    if select_start is not None:   # s2-protgnn-code: recorded only when the adapter restricts selection
+        binding['selection_start_epoch_index'] = select_start
     # fv10-d2-05 / d3-04: the graph artifact actually trained on (graphs.jsonl bytes were verified against
     # the manifest hash by verify_graph_file above; the manifest file itself is hashed here)
     binding['graph_sha256'] = manifest['graphs_sha256']
@@ -1026,6 +1044,8 @@ def run(args):
         model.train()
         if isinstance(model, ClinicalMethodAdapter):
             model.on_epoch_start(epoch_index, train_loader)
+            epoch_record_hook = getattr(model, 'epoch_record', None)
+            epoch_record = epoch_record_hook() if callable(epoch_record_hook) else None
         epoch_lr = float(optimizer.param_groups[0]['lr'])   # mp2v2-train-03: lr in force during this epoch
         total, auxiliary_total, seen = 0.0, 0.0, 0
         for batch in train_loader:
@@ -1058,6 +1078,8 @@ def run(args):
             row['selection_fold'] = 'dev'
         if isinstance(model, ClinicalMethodAdapter):
             row['train_auxiliary_loss'] = round(auxiliary_total / seen, 6)
+            if epoch_record is not None:   # s2-protgnn-code: e.g. ProtGNN projection record of this epoch
+                row['projection'] = epoch_record
         if train_eval_loader is not None:   # mp2rev-train-09: eval-mode train subset and selection-fold CE
             proba_tr, y_tr = evaluate(model, train_eval_loader, device, epoch=epoch_index)
             row['train_eval_macro_f1'] = metrics(y_tr, proba_tr, num_classes)['macro_f1']
@@ -1065,7 +1087,8 @@ def run(args):
             row['dev_ce' if selection_fold == 'dev' else 'selection_ce'] = mean_cross_entropy(y_select, proba)
         history.append(row)
         print(json.dumps(row), flush=True)
-        if best is None or m['macro_f1'] > best['metrics']['macro_f1']:
+        if ((select_start is None or epoch_index >= select_start)
+                and (best is None or m['macro_f1'] > best['metrics']['macro_f1'])):
             best = {'epoch': display_epoch, 'epoch_index': epoch_index,
                     'metrics': m, 'proba': proba, 'y': y_select}
             torch.save(model.state_dict(), out / 'best.pt')
@@ -1295,6 +1318,10 @@ def parser():
     p.add_argument('--protgnn-max-atoms', dest='max_atoms', type=int)
     p.add_argument('--protgnn-expand-atoms', dest='expand_atoms', type=int)
     p.add_argument('--protgnn-c-puct', dest='c_puct', type=float)
+    p.add_argument('--protgnn-select-after-projection', dest='select_after_projection',
+                   action='store_true', default=None,
+                   help='checkpoint selection ignores every epoch before the first completed projection '
+                        '(default off: every epoch is eligible)')
     p.add_argument('--gsat-temperature', type=float)
     p.add_argument('--gsat-info-loss-coef', type=float)
     p.add_argument('--gsat-init-r', type=float)
@@ -1331,7 +1358,12 @@ def main():
     if args.execute:
         run(args)
     else:
-        print(json.dumps({
+        if is_plugin(args.method):   # plan mode must not accept an option the real run would refuse
+            try:
+                METHOD_REGISTRY[args.method].validate_method_options(args)
+            except ValueError as error:
+                p.error(f'invalid --method-option for {args.method}: {error}')
+        plan = {
             'status': 'not_executed',
             'requires': '--execute',
             'method': args.method,
@@ -1344,7 +1376,10 @@ def main():
             'effective_defaults': {
                 name: getattr(args, name) for name in method_defaults(args.method, args.conv)
             },
-        }))
+        }
+        if getattr(args, 'select_after_projection', None):
+            plan['select_after_projection'] = True
+        print(json.dumps(plan))
 
 
 if __name__ == '__main__':

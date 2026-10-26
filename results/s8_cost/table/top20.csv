@@ -1,0 +1,5 @@
+method,display_name,parameters_total,parameters_active,explanation_params,forward_ms_per_graph,tensorize_ms_per_graph,inference_peak_rss_mb,selected_epoch_min,selected_epoch_max,epochs_to_95_mean,epochs_to_99_mean,median_s_per_epoch,total_train_minutes,explanation_overhead_ms_per_graph,train_batch_size,bench_batch_size,bench_graphs
+cei_mp2,CEI-GNN mp2,223240,223240,0,0.41319544466666613,0.9691851659999999,800.5,30,40,4.7,19,80.0,55.2,0.061189581999997245,128,64,500
+gsat,GSAT,222520,222520,66049,0.2799409999999997,0.9852941680000002,756.7,20,37,7.7,20.7,66.5,46.5,0.014417167999999592,128,64,500
+graphcare,GraphCare-style (adapted),145340,145340,0,0.19428427733333375,0.9713991680000005,740.6,19,38,6.7,20.3,26.9,22.4,,32,64,500
+protgnn,ProtGNN,431728,431728,14800,0.33423888933333323,0.969050084,757.5,8,31,4.3,12.3,65.1,46.1,0.008967501999999072,128,64,500

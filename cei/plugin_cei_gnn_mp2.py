@@ -176,6 +176,19 @@ class EvidenceAdapterMP2(EvidenceAdapterV3):
     known_options = KNOWN_OPTIONS | set(SPECS)
     network_class = EvidenceNetworkMP2
 
+    @classmethod
+    def validate_method_options(cls, args) -> None:
+        """Plan-mode check: the v3 options plus every mp2 option (types, ranges, combinations, build facts)."""
+        super().validate_method_options(args)
+        supplied = _method_options(args)
+        options = validate({name: supplied[name] for name in SPECS if name in supplied})
+        defaults = cls.runner_defaults
+        hidden = getattr(args, 'hidden', None) if not isinstance(args, dict) else args.get('hidden')
+        dropout = getattr(args, 'dropout', None) if not isinstance(args, dict) else args.get('dropout')
+        check_build(options, hidden=int(defaults['hidden'] if hidden is None else hidden),
+                    dropout=float(defaults['dropout'] if dropout is None else dropout))
+        EvidenceNetworkMP2._check_options(options)
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         options = self.mp2_options

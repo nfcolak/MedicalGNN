@@ -15,6 +15,17 @@ and nothing is stored in persistent buffers.
 
 Per-graph statistics only: all graph-level reductions index by ``batch_index`` (global mean,
 anchor visit, GraphNorm, DropPath), so no graph influences another.
+
+Explanation edge mask: ``MPStack.forward(..., edge_weight=w)`` with ``w`` float[E] over the caller's
+``edge_index`` (the network passes the edge aggregator's explanation mask, so GNNExplainer and a
+fidelity removal mask reach the stack through that one hook). ``edge_weight=None`` (training, plain
+eval) runs the unmasked operations unchanged. ``w = 0`` on an edge is the same intervention as
+deleting it: it leaves every weighted mean (numerator, degree, relation-group presence), the hub
+max, the anchor visit and the shortcut products. Under ``mp_dedup`` the mask also enters the two
+structural rules, exactly as deletion would: a group of parallel copies is re-split over its
+surviving weight (the DropEdge rule of ``_edge_weights``) and an edge's reverse message is
+suppressed only by the weight of the edges on the mirrored node pair. A fractional ``w`` scales the
+edge inside the weighted mean and its max-term message; it is applied once.
 """
 from __future__ import annotations
 
@@ -869,7 +880,11 @@ class MPStack(nn.Module):
         # relation, not at the paired relation: has_visit <-> index_visit_of and
         # has_prior_diagnosis <-> recurrence_of count as mirrors too (~5.8% of edges lose their
         # reverse message on the real graphs), not only same-relation pairs such as comorbid_with.
-        if o.dedup:   # STR-07: one message per symmetric pair, parallel edges count once
+        if o.dedup and edge_weight is not None:   # explanation mask: dedup over the weighted copies
+            dup = self._masked_dedup(src, dst, rel, weight, nodes)
+            w_f = weight / dup.copies
+            w_r = w_f * dup.no_reverse
+        elif o.dedup:   # STR-07: one message per symmetric pair, parallel edges count once
             top_rel = int(rel.max()) + 1 if rel.numel() else 1
             key = src * nodes + dst
             _, inverse, counts = torch.unique(key * top_rel + rel, return_inverse=True, return_counts=True)
@@ -889,6 +904,29 @@ class MPStack(nn.Module):
             anchor=self._anchor(src, rel, w_f, metadata, nodes) if o.glob == 2 else None,
             recv2=torch.cat((dst, src)), send2=torch.cat((src, dst)))
         return g
+
+    @staticmethod
+    def _masked_dedup(src, dst, rel, weight, nodes):
+        """STR-07 under an explanation mask: what deleting the zero-weight edges would give.
+
+        Copies: a (src, dst, relation) group of k parallel edges splits its message over the summed
+        weight of the group, ``w / max(sum w, 1)`` (the DropEdge re-split), so with weights in {0, 1}
+        the j surviving copies carry 1/j each as in the graph without the dropped ones. Reverse
+        channel: an edge (a, b) sends no reverse message while edges on (b, a) of any relation carry
+        weight; it is scaled by ``1 - min(sum of their weights, 1)`` (self-loops are never mirrors),
+        so masking every mirror to 0 restores the reverse message as deletion would. With all
+        weights 1 both rules equal the unmasked STR-07 values.
+        """
+        top_rel = int(rel.max()) + 1 if rel.numel() else 1
+        key = src * nodes + dst
+        _, inverse, counts = torch.unique(key * top_rel + rel, return_inverse=True, return_counts=True)
+        alive = weight.new_zeros((counts.numel(),)).index_add(0, inverse, weight)
+        edges = src.numel()
+        pairs, pair_inverse = torch.unique(torch.cat((key, dst * nodes + src)), return_inverse=True)
+        pair_mass = weight.new_zeros((pairs.numel(),)).index_add(0, pair_inverse[:edges], weight)
+        mirror = pair_mass[pair_inverse[edges:]].clamp(min=0.0, max=1.0) * (src != dst).to(weight.dtype)
+        return SimpleNamespace(base=weight, inverse=inverse, groups=counts.numel(),
+                               copies=alive[inverse].clamp_min(1.0), no_reverse=1.0 - mirror)
 
     def _anchor(self, src, rel, weight, metadata, nodes):
         """STR-05: index visit per graph = source of a live (weight > 0) index_visit_of edge, else the
@@ -915,6 +953,7 @@ class MPStack(nn.Module):
 
     # -------------------------------------------------------------- forward
     def forward(self, h, edge_index, context, metadata, *, edge_weight=None, node_time=None):
+        """``edge_weight`` is the explanation edge mask (module docstring); None = unmasked."""
         g = self._graph(h, edge_index, context, metadata, edge_weight, node_time)
         edges = edge_index.size(1)
         states, alphas, share = [h], [], None

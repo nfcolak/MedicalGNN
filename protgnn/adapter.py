@@ -84,7 +84,7 @@ class _RelationPayloadLayer(nn.Module):
         self.norm = nn.LayerNorm(hidden)
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, node_state, edge_index, edge_context):
+    def forward(self, node_state, edge_index, edge_context, edge_mask=None):
         node_count = node_state.size(0)
         if edge_index.numel() == 0:
             aggregate = torch.zeros_like(node_state)
@@ -92,10 +92,25 @@ class _RelationPayloadLayer(nn.Module):
             source, target = edge_index
             messages = self.message_mlp(torch.cat(
                 [node_state[source], node_state[target], edge_context], dim=-1))
+            # `edge_mask` (e.g. GraphXAI's GNNExplainer, via the owning
+            # adapter's `forward(external_edge_mask=...)`) scales both the
+            # message numerator AND its degree-normalisation weight, exactly
+            # once -- not just the numerator -- so a masked-to-zero edge is
+            # truly removed from the mean rather than merely diluting it, and
+            # `edge_mask=None`/all-ones reproduces the original unweighted
+            # mean exactly (the default keeps every existing caller of this
+            # layer unchanged).
+            if edge_mask is not None:
+                if edge_mask.ndim != 1 or edge_mask.numel() != target.numel():
+                    raise ValueError("edge_mask must contain one value per edge")
+                weight = edge_mask.unsqueeze(-1)
+                messages = messages * weight
+            else:
+                weight = node_state.new_ones((target.numel(), 1))
             aggregate = torch.zeros_like(node_state)
             aggregate.index_add_(0, target, messages)
             degree = node_state.new_zeros((node_count, 1))
-            degree.index_add_(0, target, node_state.new_ones((target.numel(), 1)))
+            degree.index_add_(0, target, weight)
             aggregate = aggregate / degree.clamp_min_(1.0)
         update = self.update_mlp(torch.cat([node_state, aggregate], dim=-1))
         return self.norm(node_state + self.dropout(update))
@@ -178,6 +193,10 @@ class ProtGNNAdapter(ClinicalMethodAdapter):
                                float, minimum=0.0)
         if self.min_atoms > self.max_atoms:
             raise ValueError("min_atoms cannot exceed max_atoms")
+        # Default off: every epoch may be selected (historical behaviour).
+        self.select_after_projection = bool(
+            _arg_value(args, ("select_after_projection",), False))
+        self._epoch_projection_record = None
 
         self.num_prototypes = self.num_classes * self.prototypes_per_class
         self.token_embedding = nn.Embedding(self.num_tokens, self.token_dim,
@@ -209,14 +228,26 @@ class ProtGNNAdapter(ClinicalMethodAdapter):
         with torch.no_grad():
             correct = prototype_identity.t()
             self.prototype_classifier.weight.copy_(correct + (-0.5) * (1.0 - correct))
+        # Not part of the state dict: a model rebuilt from a checkpoint has not
+        # seen the projection, so its counts are unknown rather than zero.
         self.projection_summary = {
             "epoch": None,
-            "projected_prototypes": 0,
-            "unmatched_prototypes": self.num_prototypes,
+            "projected_prototypes": None,
+            "unmatched_prototypes": None,
             "candidate_graphs_by_class": {},
+            "source": "not_recorded_in_checkpoint",
         }
 
-    def _node_and_graph_embeddings(self, batch):
+    def embed_tokens(self, batch) -> torch.Tensor:
+        """The token-embedding rows [N, token_dim] that forward() looks up for
+        this batch; forward(token_vectors=...) accepts a replacement of exactly
+        this shape."""
+        token = getattr(batch, "token", None)
+        if token is None:
+            raise ValueError("ProtGNN requires token")
+        return self.token_embedding(token.long())
+
+    def _node_and_graph_embeddings(self, batch, edge_mask=None, token_vectors=None):
         x = getattr(batch, "x", None)
         token = getattr(batch, "token", None)
         node_type = getattr(batch, "node_type", None)
@@ -263,16 +294,21 @@ class ProtGNNAdapter(ClinicalMethodAdapter):
         if edge_triple.numel() and (edge_triple.min() < 0 or
                                     edge_triple.max() >= self.num_triples):
             raise ValueError("edge_triple index is outside the fitted meta-relation vocabulary")
+        if token_vectors is not None and (
+                token_vectors.ndim != 2
+                or token_vectors.shape != (x.size(0), self.token_dim)):
+            raise ValueError("token_vectors must have shape [nodes, token_dim]")
 
         node_state = self.node_encoder(torch.cat(
-            [x, self.token_embedding(token.long())], dim=-1))
+            [x, self.token_embedding(token.long())
+             if token_vectors is None else token_vectors], dim=-1))
         node_state = self.input_norm(node_state + self.node_type_embedding(node_type.long()))
         node_state = F.gelu(node_state)
         edge_context = (self.relation_embedding(edge_relation.long())
                         + self.triple_embedding(edge_triple.long())
                         + self.edge_feature_projection(edge_attr))
         for layer in self.layers:
-            node_state = layer(node_state, edge_index.long(), edge_context)
+            node_state = layer(node_state, edge_index.long(), edge_context, edge_mask=edge_mask)
 
         batch_index = getattr(batch, "batch", None)
         if batch_index is None:
@@ -305,9 +341,16 @@ class ProtGNNAdapter(ClinicalMethodAdapter):
             raise FloatingPointError("ProtGNN produced a non-finite diagnostic")
         return result
 
-    def forward(self, batch, *, epoch: int) -> MethodOutput:
+    def forward(self, batch, *, epoch: int, external_edge_mask=None,
+                token_vectors=None) -> MethodOutput:
         del epoch  # The shared epoch hook owns phase changes and projection.
-        _, graph_embedding, _ = self._node_and_graph_embeddings(batch)
+        # Explanation hooks (the trainer never passes them; None is the
+        # training call): `external_edge_mask` weights every layer's messages
+        # and degrees, `token_vectors` [nodes, token_dim] replaces the
+        # token-embedding rows (embed_tokens).
+        _, graph_embedding, _ = self._node_and_graph_embeddings(
+            batch, edge_mask=external_edge_mask, token_vectors=token_vectors
+        )
         activations, distances = self._prototype_activations(graph_embedding)
         logits = self.prototype_classifier(activations)
 
@@ -523,6 +566,74 @@ class ProtGNNAdapter(ClinicalMethodAdapter):
                     best_state, best_score = coalition, rewards[coalition]
         return embeddings[best_state], best_score, best_state
 
+    @torch.no_grad()
+    def explain_detail(self, batch, target_class: int | None = None) -> dict:
+        """ProtGNN's own case-based explanation of one graph's prediction.
+
+        For the predicted class, take the prototype of that class that contributes
+        most to the predicted logit (classifier weight x activation), then run the
+        model's own deterministic MCTS (the same search used for prototype
+        projection) on this graph to find the connected subgraph whose re-encoded
+        embedding is closest to that prototype. No new scoring is introduced here.
+
+        This is a search for "which part of the patient looks most like the
+        prototype", not a proof that this part drove the logit; faithfulness of the
+        subgraph is exactly what fidelity measures. `subgraph_nodes` is empty when
+        no connected component has at least `min_atoms` nodes.
+        """
+        was_training = self.training
+        self.eval()
+        try:
+            node_state, graph_embedding, graph_index = self._node_and_graph_embeddings(batch)
+            if graph_embedding.size(0) != 1:
+                raise ValueError("ProtGNN's built-in explanation scores one graph at a time")
+            activations, distances = self._prototype_activations(graph_embedding)
+            logits = self.prototype_classifier(activations)
+            model_prediction = int(logits.argmax(dim=-1).item())
+            predicted = model_prediction if target_class is None else int(target_class)
+            contributions = self.prototype_classifier.weight[predicted] * activations[0]
+            own = torch.nonzero(self.prototype_class_ids == predicted, as_tuple=False).view(-1)
+            prototype = int(own[contributions[own].argmax()].item())
+            candidate = self._projection_candidate(batch, 0, node_state, graph_index)
+            _, similarity, coalition = self._mcts_project(candidate, self.prototype_vectors[prototype])
+            return {
+                "kind": "prototype_mcts_subgraph",
+                "predicted_class": model_prediction,
+                "explained_class": predicted,
+                "prototype_index": prototype,
+                "prototype_activation": float(activations[0, prototype].item()),
+                "prototype_distance": float(distances[0, prototype].item()),
+                "logit_contribution": float(contributions[prototype].item()),
+                "prototype_contributions": [float(v) for v in contributions.tolist()],
+                "subgraph_nodes": [int(n) for n in coalition],
+                "subgraph_similarity": float(similarity) if coalition else None,
+                "node_count": int(node_state.size(0)),
+                "prototypes_projected_onto_training_subgraphs":
+                    self.projection_summary["projected_prototypes"],
+                "prototypes_unmatched": self.projection_summary["unmatched_prototypes"],
+                "projection_summary_source": self.projection_summary["source"],
+            }
+        finally:
+            if was_training:
+                self.train()
+
+    @torch.no_grad()
+    def explain(self, batch, target_class: int | None = None) -> torch.Tensor:
+        """Per-node built-in importance: 1 for nodes in ProtGNN's own prototype
+        subgraph, 0 elsewhere. Binary by nature (the model's explanation is a
+        subgraph, not a ranking), so only the first `len(subgraph)` removal steps
+        of a deletion curve are informative. Raises when the model found no
+        connected subgraph of at least `min_atoms` nodes, rather than returning
+        all zeros that a tie-break would turn into an arbitrary ranking."""
+        detail = self.explain_detail(batch, target_class)
+        if not detail["subgraph_nodes"]:
+            raise RuntimeError(
+                "ProtGNN found no connected subgraph of at least "
+                f"{self.min_atoms} nodes in this graph")
+        importance = torch.zeros(detail["node_count"])
+        importance[detail["subgraph_nodes"]] = 1.0
+        return importance
+
     def _project_from_training_loader(self, train_loader, epoch):
         if train_loader is None:
             raise ValueError("ProtGNN projection requires the training loader")
@@ -548,6 +659,7 @@ class ProtGNNAdapter(ClinicalMethodAdapter):
                         candidates[label].append(candidate)
 
         projected = 0
+        distance_before = distance_after = 0.0
         with torch.no_grad():
             for class_id, class_candidates in enumerate(candidates):
                 if not class_candidates:
@@ -562,7 +674,12 @@ class ProtGNNAdapter(ClinicalMethodAdapter):
                         if vector is not None and similarity > best_similarity:
                             best_vector, best_similarity = vector, similarity
                     if best_vector is not None:
+                        # Squared L2 to the chosen training subgraph embedding, before/after the copy.
+                        distance_before += float(
+                            (self.prototype_vectors[prototype_id] - best_vector).square().sum().item())
                         self.prototype_vectors[prototype_id].copy_(best_vector)
+                        distance_after += float(
+                            (self.prototype_vectors[prototype_id] - best_vector).square().sum().item())
                         projected += 1
         counts = {str(class_id): len(graphs)
                   for class_id, graphs in enumerate(candidates)}
@@ -571,7 +688,25 @@ class ProtGNNAdapter(ClinicalMethodAdapter):
             "projected_prototypes": int(projected),
             "unmatched_prototypes": int(self.num_prototypes - projected),
             "candidate_graphs_by_class": counts,
+            "source": "computed_in_process",
         }
+        self._epoch_projection_record = {
+            "epoch": int(epoch) + 1,
+            "epoch_index": int(epoch),
+            "prototypes_projected": int(projected),
+            "prototypes_unmatched": int(self.num_prototypes - projected),
+            "mean_distance_before": distance_before / projected if projected else None,
+            "mean_distance_after": distance_after / projected if projected else None,
+        }
+
+    def selection_start_epoch(self):
+        """Runner hook: first epoch index eligible for checkpoint selection (None = all)."""
+        return int(self.proj_epochs) if self.select_after_projection else None
+
+    def epoch_record(self):
+        """Runner hook: projection record of the epoch that just started, else None."""
+        record, self._epoch_projection_record = self._epoch_projection_record, None
+        return record
 
     def on_epoch_start(self, epoch: int, train_loader) -> None:
         epoch = int(epoch)

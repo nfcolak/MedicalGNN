@@ -1,0 +1,408 @@
+{
+ "protocol": "fair_v10t",
+ "protocol_note": "Decisions (checkpoint, HPO, baseline choice) use VALIDATION; every reported result is on TEST (scored once per run at the validation-selected checkpoint).",
+ "notes": [],
+ "task": {
+  "top_k_labels": 20,
+  "num_classes": 20,
+  "seed": 1234,
+  "train_rows": 10000,
+  "folds": {
+   "test": {
+    "rows": 4174,
+    "patients": 3151,
+    "K": 20
+   },
+   "validation": {
+    "rows": 4183,
+    "patients": 3142,
+    "K": 20
+   }
+  }
+ },
+ "bootstrap": {
+  "B": 2000,
+  "rng_patients": 20261016,
+  "levels": "patients only (one seed)"
+ },
+ "binding_differences_between_arms": {
+  "graphcare": [
+   "active_parameter_count",
+   "edge_dim",
+   "edge_direction",
+   "edge_feature_layout",
+   "meta_relations",
+   "method_config.architecture.edge_dim",
+   "method_config.architecture.num_relations",
+   "method_config.architecture.num_triples",
+   "method_config.architecture.parameter_count",
+   "num_meta_relations",
+   "num_relations",
+   "parameter_count",
+   "selected_test.epoch",
+   "selected_test.epoch_index",
+   "selected_test.prediction_sha256",
+   "selected_validation.epoch",
+   "selected_validation.epoch_index",
+   "selected_validation.metric_value",
+   "selected_validation.prediction_sha256"
+  ],
+  "gsat": [
+   "active_parameter_count",
+   "edge_dim",
+   "edge_direction",
+   "edge_feature_layout",
+   "meta_relations",
+   "method_config.architecture.edge_dim",
+   "method_config.architecture.num_relations",
+   "method_config.architecture.num_triples",
+   "method_config.architecture.parameter_count",
+   "num_meta_relations",
+   "num_relations",
+   "parameter_count",
+   "selected_test.epoch",
+   "selected_test.epoch_index",
+   "selected_test.prediction_sha256",
+   "selected_validation.epoch",
+   "selected_validation.epoch_index",
+   "selected_validation.metric_value",
+   "selected_validation.prediction_sha256"
+  ],
+  "protgnn": [
+   "active_parameter_count",
+   "edge_dim",
+   "edge_direction",
+   "edge_feature_layout",
+   "meta_relations",
+   "method_config.architecture.edge_dim",
+   "method_config.architecture.joint_active_parameter_count",
+   "method_config.architecture.num_relations",
+   "method_config.architecture.num_triples",
+   "method_config.architecture.parameter_count",
+   "method_config.architecture.warmup_active_parameter_count",
+   "num_meta_relations",
+   "num_relations",
+   "parameter_count",
+   "selected_test.epoch",
+   "selected_test.epoch_index",
+   "selected_test.prediction_sha256",
+   "selected_validation.epoch",
+   "selected_validation.epoch_index",
+   "selected_validation.metric_value",
+   "selected_validation.prediction_sha256"
+  ]
+ },
+ "runs": {
+  "cei_mp2": {
+   "name": "cei_mp2",
+   "selected_epoch": 26,
+   "parameter_count": 211296,
+   "train_rows": 10000,
+   "minutes": 12.4,
+   "edge_direction": "forward",
+   "val_macro_f1": 0.6591101690284675,
+   "val_accuracy": 0.6729619890031078,
+   "test_macro_f1": 0.6632578507901238,
+   "test_accuracy": 0.6799233349305223
+  },
+  "graphcare_forward": {
+   "name": "graphcare_forward",
+   "selected_epoch": 39,
+   "parameter_count": 134396,
+   "train_rows": 10000,
+   "minutes": 6.8,
+   "edge_direction": "forward",
+   "val_macro_f1": 0.6459012330282297,
+   "val_accuracy": 0.6602916567057135,
+   "test_macro_f1": 0.6436976992853365,
+   "test_accuracy": 0.6593195975083852
+  },
+  "graphcare_bidirectional": {
+   "name": "graphcare_bidirectional",
+   "selected_epoch": 29,
+   "parameter_count": 140796,
+   "train_rows": 10000,
+   "minutes": 8.4,
+   "edge_direction": "bidirectional",
+   "val_macro_f1": 0.641336921158322,
+   "val_accuracy": 0.6543150848673202,
+   "test_macro_f1": 0.628816246248193,
+   "test_accuracy": 0.6478198370867274
+  },
+  "gsat_forward": {
+   "name": "gsat_forward",
+   "selected_epoch": 31,
+   "parameter_count": 211576,
+   "train_rows": 10000,
+   "minutes": 10.9,
+   "edge_direction": "forward",
+   "val_macro_f1": 0.6320095768319971,
+   "val_accuracy": 0.6461869471671049,
+   "test_macro_f1": 0.6316282374618437,
+   "test_accuracy": 0.6415908001916627
+  },
+  "gsat_bidirectional": {
+   "name": "gsat_bidirectional",
+   "selected_epoch": 36,
+   "parameter_count": 217976,
+   "train_rows": 10000,
+   "minutes": 12.8,
+   "edge_direction": "bidirectional",
+   "val_macro_f1": 0.6353201575179186,
+   "val_accuracy": 0.6492947645230696,
+   "test_macro_f1": 0.634124467621273,
+   "test_accuracy": 0.6538092956396742
+  },
+  "protgnn_forward": {
+   "name": "protgnn_forward",
+   "selected_epoch": 13,
+   "parameter_count": 420784,
+   "train_rows": 10000,
+   "minutes": 10.6,
+   "edge_direction": "forward",
+   "val_macro_f1": 0.635634434148447,
+   "val_accuracy": 0.6512072675113555,
+   "test_macro_f1": 0.633289140114903,
+   "test_accuracy": 0.6542884523239099
+  },
+  "protgnn_bidirectional": {
+   "name": "protgnn_bidirectional",
+   "selected_epoch": 29,
+   "parameter_count": 427184,
+   "train_rows": 10000,
+   "minutes": 12.8,
+   "edge_direction": "bidirectional",
+   "val_macro_f1": 0.6409785414151694,
+   "val_accuracy": 0.6538369591202486,
+   "test_macro_f1": 0.6390629427346488,
+   "test_accuracy": 0.6564446574029708
+  }
+ },
+ "pairs": [
+  {
+   "pair": "GraphCare bidirectional - forward",
+   "a": "graphcare_bidirectional",
+   "b": "graphcare_forward",
+   "test": {
+    "f1_a": 0.628816246248193,
+    "f1_b": 0.6436976992853365,
+    "delta": -0.0148814530371435,
+    "ci95": [
+     -0.02640223139271774,
+     -0.003767112927864613
+    ],
+    "p_delta_gt_0": 0.0035
+   },
+   "validation": {
+    "f1_a": 0.641336921158322,
+    "f1_b": 0.6459012330282297,
+    "delta": -0.004564311869907689,
+    "ci95": [
+     -0.015598252555857292,
+     0.006509754357556603
+    ],
+    "p_delta_gt_0": 0.2325
+   }
+  },
+  {
+   "pair": "GSAT bidirectional - forward",
+   "a": "gsat_bidirectional",
+   "b": "gsat_forward",
+   "test": {
+    "f1_a": 0.634124467621273,
+    "f1_b": 0.6316282374618437,
+    "delta": 0.0024962301594292358,
+    "ci95": [
+     -0.010003952263245287,
+     0.015785742554770374
+    ],
+    "p_delta_gt_0": 0.666
+   },
+   "validation": {
+    "f1_a": 0.6353201575179186,
+    "f1_b": 0.6320095768319971,
+    "delta": 0.0033105806859214937,
+    "ci95": [
+     -0.009327240896544778,
+     0.015871300353093955
+    ],
+    "p_delta_gt_0": 0.699
+   }
+  },
+  {
+   "pair": "ProtGNN bidirectional - forward",
+   "a": "protgnn_bidirectional",
+   "b": "protgnn_forward",
+   "test": {
+    "f1_a": 0.6390629427346488,
+    "f1_b": 0.633289140114903,
+    "delta": 0.005773802619745805,
+    "ci95": [
+     -0.008277559882648878,
+     0.019654262187924397
+    ],
+    "p_delta_gt_0": 0.8095
+   },
+   "validation": {
+    "f1_a": 0.6409785414151694,
+    "f1_b": 0.635634434148447,
+    "delta": 0.005344107266722409,
+    "ci95": [
+     -0.007968924504205024,
+     0.01770403910668134
+    ],
+    "p_delta_gt_0": 0.7825
+   }
+  },
+  {
+   "pair": "CEI-GNN mp2 - GraphCare bidirectional",
+   "a": "cei_mp2",
+   "b": "graphcare_bidirectional",
+   "test": {
+    "f1_a": 0.6632578507901238,
+    "f1_b": 0.628816246248193,
+    "delta": 0.03444160454193079,
+    "ci95": [
+     0.022632492758006523,
+     0.04644249362322999
+    ],
+    "p_delta_gt_0": 1.0
+   },
+   "validation": {
+    "f1_a": 0.6591101690284675,
+    "f1_b": 0.641336921158322,
+    "delta": 0.01777324787014556,
+    "ci95": [
+     0.005148738741536962,
+     0.03104443722177458
+    ],
+    "p_delta_gt_0": 0.9975
+   }
+  },
+  {
+   "pair": "CEI-GNN mp2 - GSAT bidirectional",
+   "a": "cei_mp2",
+   "b": "gsat_bidirectional",
+   "test": {
+    "f1_a": 0.6632578507901238,
+    "f1_b": 0.634124467621273,
+    "delta": 0.029133383168850835,
+    "ci95": [
+     0.01627553128587169,
+     0.041200485183963007
+    ],
+    "p_delta_gt_0": 1.0
+   },
+   "validation": {
+    "f1_a": 0.6591101690284675,
+    "f1_b": 0.6353201575179186,
+    "delta": 0.023790011510548936,
+    "ci95": [
+     0.010918814692622712,
+     0.036719817836034944
+    ],
+    "p_delta_gt_0": 1.0
+   }
+  },
+  {
+   "pair": "CEI-GNN mp2 - ProtGNN bidirectional",
+   "a": "cei_mp2",
+   "b": "protgnn_bidirectional",
+   "test": {
+    "f1_a": 0.6632578507901238,
+    "f1_b": 0.6390629427346488,
+    "delta": 0.024194908055474973,
+    "ci95": [
+     0.011365204894516095,
+     0.03715252369956522
+    ],
+    "p_delta_gt_0": 1.0
+   },
+   "validation": {
+    "f1_a": 0.6591101690284675,
+    "f1_b": 0.6409785414151694,
+    "delta": 0.018131627613298118,
+    "ci95": [
+     0.005720751880949934,
+     0.03116567406372197
+    ],
+    "p_delta_gt_0": 0.998
+   }
+  },
+  {
+   "pair": "CEI-GNN mp2 - GraphCare forward",
+   "a": "cei_mp2",
+   "b": "graphcare_forward",
+   "test": {
+    "f1_a": 0.6632578507901238,
+    "f1_b": 0.6436976992853365,
+    "delta": 0.019560151504787293,
+    "ci95": [
+     0.007957727836954693,
+     0.031110023945869123
+    ],
+    "p_delta_gt_0": 0.9995
+   },
+   "validation": {
+    "f1_a": 0.6591101690284675,
+    "f1_b": 0.6459012330282297,
+    "delta": 0.01320893600023787,
+    "ci95": [
+     0.0009478317869268477,
+     0.0261213222244433
+    ],
+    "p_delta_gt_0": 0.9815
+   }
+  },
+  {
+   "pair": "CEI-GNN mp2 - GSAT forward",
+   "a": "cei_mp2",
+   "b": "gsat_forward",
+   "test": {
+    "f1_a": 0.6632578507901238,
+    "f1_b": 0.6316282374618437,
+    "delta": 0.03162961332828007,
+    "ci95": [
+     0.018095121684167617,
+     0.045646714397641765
+    ],
+    "p_delta_gt_0": 1.0
+   },
+   "validation": {
+    "f1_a": 0.6591101690284675,
+    "f1_b": 0.6320095768319971,
+    "delta": 0.02710059219647043,
+    "ci95": [
+     0.01370248209715281,
+     0.04112100147049171
+    ],
+    "p_delta_gt_0": 1.0
+   }
+  },
+  {
+   "pair": "CEI-GNN mp2 - ProtGNN forward",
+   "a": "cei_mp2",
+   "b": "protgnn_forward",
+   "test": {
+    "f1_a": 0.6632578507901238,
+    "f1_b": 0.633289140114903,
+    "delta": 0.029968710675220778,
+    "ci95": [
+     0.017060785239486766,
+     0.04324071160193936
+    ],
+    "p_delta_gt_0": 1.0
+   },
+   "validation": {
+    "f1_a": 0.6591101690284675,
+    "f1_b": 0.635634434148447,
+    "delta": 0.023475734880020527,
+    "ci95": [
+     0.011048787932288215,
+     0.03637252932168541
+    ],
+    "p_delta_gt_0": 1.0
+   }
+  }
+ ]
+}

@@ -13,6 +13,11 @@ Forward (``h0`` = encoder output, ``h`` = message-passing state)::
                                                   # branches: rows, extra blocks, LCL-02/LCL-04
                                                   # terms are computed per branch state, then averaged
     logits = bias + sum of the rows               # ledger_keys() lists the additive row blocks
+                                                  # ablation switches (defaults = the line above):
+                                                  #   ev_combine=mlp  logits = bias + MLP(five block totals)
+                                                  #   ev_pair=0 / ev_edge=0  those row blocks are zero (and their heads removed)
+                                                  #   mp_feed=none    no stack, all heads read h0
+                                                  #   readout=pool    logits = MLP(pooled h); no evidence rows
 
 Under the LEGACY option values every operation, the global-RNG consumption of construction and of
 the forward, the state-dict names (``mp_layers.`` -> ``mp_stack.layers.``) and the values reproduce
@@ -38,7 +43,10 @@ from .layers import MPStack
 
 __all__ = ['EvidenceNetworkMP2']
 
-FEEDS = ('all', 'dual', 'node', 'gates')
+FEEDS = ('all', 'dual', 'node', 'gates', 'none')
+COMBINES = ('sum', 'mlp')
+READOUTS = ('evidence', 'pool')
+COMBINE_HIDDEN = 32                   # width of the ev_combine='mlp' hidden layer (ablation)
 NODE_READOUTS = ('global', 'kind_budget')
 PLE_MODES = ('hat', 'robust_cum')
 PLE_CLIP = 10.0                       # NUMERIC_POLICY zscore_clip_10
@@ -124,6 +132,12 @@ class EvidenceNetworkMP2(EvidenceNetworkV3):
         self.mp_shrink, self.mp_split_rows = float(o['mp_shrink']), bool(int(o['mp_split_rows']))
         self.mp_mask_rate, self.ple_mode = float(o['mp_mask_rate']), str(o['ple_mode'])
         self.mp_time_decay, self.mp_jk = bool(int(o['mp_time_decay'])), bool(int(o['mp_jk']))
+        self.ev_combine, self.readout = str(o.get('ev_combine', 'sum')), str(o.get('readout', 'evidence'))
+        self.ev_pair, self.ev_edge = bool(int(o.get('ev_pair', 1))), bool(int(o.get('ev_edge', 1)))
+        self.pool_hidden = int(o.get('pool_hidden', 0))
+        if self.extra_block_names and (self.ev_combine != 'sum' or self.readout != 'evidence'):
+            raise ValueError(f'extra blocks (comorbid_block) are additive terms; they contradict '
+                             f'ev_combine={self.ev_combine!r} / readout={self.readout!r}')
         node_types = self.node_type_embedding.num_embeddings
         self.num_node_types = int(node_types)
 
@@ -132,7 +146,9 @@ class EvidenceNetworkMP2(EvidenceNetworkV3):
                           num_triples=self.num_triples, num_node_types=node_types,
                           relation_names=self.relation_names, node_kinds=tuple(NODE_KINDS),
                           options=options)
-        if self.mp_branches == 1:
+        if self.mp_feed == 'none':   # ablation: no message passing; the heads read the node-local state
+            pass
+        elif self.mp_branches == 1:
             self.mp_stack = MPStack(hidden, name='mp_layers', **stack_args)
         else:   # ERR-04: K narrow stacks, h_k = h0 + up_k(MP_k(down_k(h0)))
             width = min(int(o['mp_branch_width']), hidden)
@@ -222,13 +238,53 @@ class EvidenceNetworkMP2(EvidenceNetworkV3):
         self.register_buffer('mask_skip_kinds', torch.tensor(
             [NODE_KINDS.index(kind) for kind in ('patient', 'visit')], dtype=torch.long),
             persistent=False)
+        self._build_ablation_heads()
 
     # ------------------------------------------------------------------ construction helpers
+
+    @property
+    def ledger_additive(self):
+        """True iff ``logits = bias + sum of the ledger rows`` (False for ev_combine='mlp' and readout='pool')."""
+        return self.ev_combine == 'sum' and self.readout == 'evidence'
+
+    def _build_ablation_heads(self):
+        """Ablation heads, built LAST and only from per-tensor generators (the global RNG stream and the creation
+        order of every Full tensor are untouched); removed heads were created first and are dropped here, so the
+        global stream is consumed exactly as in Full."""
+        seed, hidden, classes = self.seed, self.hidden, self.num_classes
+        if not self.ev_pair:
+            del self.pair_projection, self.pair_vote, self.pair_gate
+        if not self.ev_edge:
+            del self.edge_source, self.edge_target, self.edge_context_vote, self.edge_context_gate
+        if self.ev_combine == 'mlp':   # input: node, edge, pair, neighbourhood, absence block totals
+            self.combine = nn.Sequential(
+                _linear(5 * classes, COMBINE_HIDDEN, seed=seed, name='combine.0', bias=True), nn.GELU(),
+                _linear(COMBINE_HIDDEN, classes, seed=seed, name='combine.2', bias=True))
+        if self.readout == 'pool':     # plain GNN head: pooled message state -> MLP, no evidence mechanism
+            for name in ('node_head', 'edge_source', 'edge_target', 'edge_context_vote', 'edge_context_gate',
+                         'pair_projection', 'pair_vote', 'pair_gate', 'bias', 'absence_vote', 'absence_gate'):
+                if name in self._parameters or name in self._modules:
+                    delattr(self, name)
+            self.absence_active = False
+            self.pool_norm = nn.LayerNorm(2 * hidden)
+            self.pool_head = nn.Sequential(
+                _linear(2 * hidden, self.pool_hidden, seed=seed, name='pool_head.0', bias=True), nn.ReLU(),
+                nn.Identity(),
+                _linear(self.pool_hidden, classes, seed=seed, name='pool_head.3', bias=True))
 
     @staticmethod
     def _check_options(o):
         if str(o['mp_feed']) not in FEEDS:
             raise ValueError(f"mp_feed must be one of {list(FEEDS)}, got {o['mp_feed']!r}")
+        if str(o.get('ev_combine', 'sum')) not in COMBINES:
+            raise ValueError(f"ev_combine must be one of {list(COMBINES)}")
+        if str(o.get('readout', 'evidence')) not in READOUTS:
+            raise ValueError(f"readout must be one of {list(READOUTS)}")
+        for key in ('ev_pair', 'ev_edge'):
+            if int(o.get(key, 1)) not in (0, 1):
+                raise ValueError(f'{key} must be 0 or 1, got {o[key]!r}')
+        if str(o.get('readout', 'evidence')) == 'pool' and int(o.get('pool_hidden', 0)) < 1:
+            raise ValueError("readout='pool' needs pool_hidden >= 1")
         if str(o['node_readout']) not in NODE_READOUTS:
             raise ValueError(f"node_readout must be one of {list(NODE_READOUTS)}")
         if str(o['ple_mode']) not in PLE_MODES:
@@ -280,6 +336,9 @@ class EvidenceNetworkMP2(EvidenceNetworkV3):
 
     def ledger_keys(self):
         """Additive row blocks of this configuration: ``logits = bias + sum of their rows``."""
+        if not self.ledger_additive:
+            raise ValueError(f'no additive ledger: ev_combine={self.ev_combine!r}, readout={self.readout!r} '
+                             'do not make the logits a sum of per-row contributions')
         keys = ['node_contributions', 'edge_contributions', 'pair_contributions']
         if self.mp_dual_read:
             keys += ['node_contributions_message', 'edge_contributions_message',
@@ -383,6 +442,8 @@ class EvidenceNetworkMP2(EvidenceNetworkV3):
 
     def _message_passing(self, h0, edge_index, context, metadata, node_time):
         """``(list of per-branch h, list of stack infos)``."""
+        if self.mp_feed == 'none':   # no stack: h = h0, no message shares
+            return [h0], [{'edge_share': h0.new_zeros((edge_index.size(1),)), 'alpha': None}]
         edge_weight = self._edge_weight()
         if self.mp_branches == 1:
             h, info = self.mp_stack(h0, edge_index, context, metadata, edge_weight=edge_weight,
@@ -501,20 +562,25 @@ class EvidenceNetworkMP2(EvidenceNetworkV3):
             vote_h = gate_h = edge_h = h0
         pair_h = edge_h
         node = self._node_stream(rc, vote_h, gate_h, self.node_head)
-        gate_logit = rc.edge_gate_logit
-        if feed == 'gates':
-            gate_logit = gate_logit + self.edge_gate_nbr(h[src] + h[dst])
-        edge_gate = gate_logit.sigmoid()
-        if edge_gate.size(-1) != self.num_classes:
-            edge_gate = edge_gate.expand(-1, self.num_classes)
-        owned = not (self._legacy_edge_heads and branch == 0)
-        edge_vote = (self._edge_apply(self.edge_source, edge_h[src],
-                                      f'edge_source.b{branch}' if owned else None, rc.noise)
-                     + self._edge_apply(self.edge_target, edge_h[dst],
-                                        f'edge_target.b{branch}' if owned else None, rc.noise)
-                     + rc.edge_context_vote)
-        edge = self._edge_stream(rc, edge_vote, edge_gate)
-        pair = self._pair_stream(rc, pair_h, self.pair_projection, self.pair_vote,
+        if self.ev_edge:
+            gate_logit = rc.edge_gate_logit
+            if feed == 'gates':
+                gate_logit = gate_logit + self.edge_gate_nbr(h[src] + h[dst])
+            edge_gate = gate_logit.sigmoid()
+            if edge_gate.size(-1) != self.num_classes:
+                edge_gate = edge_gate.expand(-1, self.num_classes)
+            owned = not (self._legacy_edge_heads and branch == 0)
+            edge_vote = (self._edge_apply(self.edge_source, edge_h[src],
+                                          f'edge_source.b{branch}' if owned else None, rc.noise)
+                         + self._edge_apply(self.edge_target, edge_h[dst],
+                                            f'edge_target.b{branch}' if owned else None, rc.noise)
+                         + rc.edge_context_vote)
+            edge = self._edge_stream(rc, edge_vote, edge_gate)
+        else:   # ablation ev_edge=0: exact-zero edge rows (heads removed)
+            edge_gate = None
+            edge = {'parts': h0.new_zeros((rc.edge_count, self.num_classes)),
+                    'total': h0.new_zeros((rc.graph_count, self.num_classes))}
+        pair = self._pair_stream(rc, pair_h, getattr(self, 'pair_projection', None), getattr(self, 'pair_vote', None),   # None only under ev_pair=0 (no pairs, heads removed)
                                  tag=None if branch == 0 else f'pair.b{branch}')
         rows = {'node_contributions': node['parts'], 'node_total': node['total'],
                 'node_gates': node['gate'], 'node_denominator': node['den'],
@@ -575,7 +641,7 @@ class EvidenceNetworkMP2(EvidenceNetworkV3):
         keys = {'logits', 'node_contributions', 'edge_contributions', 'pair_contributions', 'pairs', 'bias',
                 'pair_gates', 'pair_denominator', 'node_gates', 'node_denominator', 'absence_contributions',
                 'absence_items', 'absence_gates', 'absence_denominator', 'mp_layers', 'mp_edge_weights',
-                'mp_alpha'}
+                'mp_alpha', 'ledger_additive'}
         if self.mp_dual_read:
             keys |= {f'{kind}_contributions_{suffix}' for kind in ('node', 'edge', 'pair')
                      for suffix in ('message', 'local')} | {'aux_local_logits'}
@@ -618,20 +684,25 @@ class EvidenceNetworkMP2(EvidenceNetworkV3):
                    + self.triple_embedding(metadata.edge_triple)
                    + self.edge_feature_projection(metadata.edge_attr))
         h_list, infos = self._message_passing(h0, edge_index, context, metadata, node_time)
+        if self.readout == 'pool':
+            return self._pooled_forward(h_list[0], infos, metadata, graph_count, features, return_parts)
         # mp2rev-net-05: with ERR-04 branches every term below is evaluated per branch state and
         # averaged (as the ledger rows are); there is no 'mean of branch states' anywhere
         node_count, batch_index = int(features.size(0)), metadata.batch_index
-        pairs = within_visit_pairs(
-            membership, metadata.node_type, node_count,
-            **({'node_graph': batch_index, 'visit_graph': visit_graph}
-               if visit_graph is not None else {}))
+        if self.ev_pair:
+            pairs = within_visit_pairs(
+                membership, metadata.node_type, node_count,
+                **({'node_graph': batch_index, 'visit_graph': visit_graph}
+                   if visit_graph is not None else {}))
+        else:   # ablation ev_pair=0: no pairs, so the pair rows are empty and the pair total exactly zero
+            pairs = torch.zeros((2, 0), dtype=torch.long, device=features.device)
         rc = SimpleNamespace(
             edge_index=edge_index, src=edge_index[0], dst=edge_index[1], node_count=node_count,
             edge_count=edge_index.size(1), graph_count=graph_count, batch_index=batch_index,
             node_type=metadata.node_type, pairs=pairs, pair_count=pairs.size(1),
             pair_kind=kind_pair_index(metadata.node_type, pairs) if pairs.size(1) else None,
-            edge_context_vote=self.edge_context_vote(context),
-            edge_gate_logit=self.edge_context_gate(context),
+            edge_context_vote=self.edge_context_vote(context) if self.ev_edge else None,
+            edge_gate_logit=self.edge_context_gate(context) if self.ev_edge else None,
             keep_n=None, keep_e=None, keep_p=None, noise=self.training)
         self._row_keeps(rc, h0)
         # (mp2v2-net-03): with mp_feed='dual' the v3 rows read h0 only, so they are
@@ -645,12 +716,16 @@ class EvidenceNetworkMP2(EvidenceNetworkV3):
             rows = self._mean_rows([self._readout(rc, h0, h, feed=self.mp_feed, dual_read=self.mp_dual_read,
                                                   branch=k) for k, h in enumerate(h_list)])
 
-        logits = self.bias + rows['node_total'] + rows['edge_total'] + rows['pair_total']
-        if self.mp_dual_read:
-            logits = (logits + rows['node_total_message'] + rows['edge_total_message']
-                      + rows['pair_total_message'])
-        if self.mp_feed == 'dual':
-            logits = logits + rows['nbr_total']
+        if self.ev_combine == 'mlp':   # ablation: the five block totals enter an MLP instead of a sum
+            zeros = rows['node_total'].new_zeros((graph_count, classes))
+            logits = None
+        else:
+            logits = self.bias + rows['node_total'] + rows['edge_total'] + rows['pair_total']
+            if self.mp_dual_read:
+                logits = (logits + rows['node_total_message'] + rows['edge_total_message']
+                          + rows['pair_total_message'])
+            if self.mp_feed == 'dual':
+                logits = logits + rows['nbr_total']
         absence_total = None
         if self.absence_active:
             absence_total, absence_parts = self._absence_block(features, metadata, membership, visit_graph)
@@ -667,7 +742,12 @@ class EvidenceNetworkMP2(EvidenceNetworkV3):
             extra_total, extra_parts = self._branch_extra_terms(
                 h_list, edge_index, metadata, self._exported_keys())
             total = extra_total if total is None else total + extra_total
-        if total is not None:
+        if self.ev_combine == 'mlp':
+            blocks = (rows['node_total'], rows['edge_total'], rows['pair_total'],
+                      rows['nbr_total'] if self.mp_feed == 'dual' else zeros,
+                      absence_total if absence_total is not None else zeros)
+            logits = self.bias + self.combine(torch.cat(blocks, dim=-1))
+        elif total is not None:
             logits = logits + total
         if not return_parts:
             return logits
@@ -693,7 +773,10 @@ class EvidenceNetworkMP2(EvidenceNetworkV3):
             # ERR-01: CE(bias + R0 terms); R0 reads h0 only (absence / extra blocks are not R0)
             result['aux_local_logits'] = (self.bias + rows['node_total'] + rows['edge_total']
                                           + rows['pair_total'])
-        result['mp_layers'] = torch.full((1,), self.mp_layer_count, dtype=torch.long,
+        if not self.ledger_additive:   # the rows are real but do not sum to the logits: say so
+            result['ledger_additive'] = torch.zeros((), dtype=torch.bool, device=features.device)
+        result['mp_layers'] = torch.full((1,), 0 if self.mp_feed == 'none' else self.mp_layer_count,
+                                         dtype=torch.long,
                                          device=features.device)
         shares = [info['edge_share'] for info in infos]
         result['mp_edge_weights'] = shares[0] if len(shares) == 1 else torch.stack(shares).mean(0)
@@ -715,6 +798,23 @@ class EvidenceNetworkMP2(EvidenceNetworkV3):
         if self.mp_split_rows and not self.training:   # LCL-04: explanation-time only, no training cost
             result.update(self._split_rows(rc, h0, rows, logits, graph_count, extra_total))
         return result
+
+    def _pooled_forward(self, h, infos, metadata, graph_count, features, return_parts):
+        """readout='pool' (ablation): logits = MLP(LayerNorm([sum, mean] of the message state over the graph's nodes))."""
+        batch = metadata.batch_index
+        total = h.new_zeros((graph_count, h.size(1))).index_add(0, batch, h)
+        count = h.new_zeros((graph_count,)).index_add(0, batch, h.new_ones((h.size(0),))).clamp_min(1.0)
+        z = self.pool_norm(torch.cat((total, total / count[:, None]), dim=-1))
+        z = self.pool_head[1](self.pool_head[0](z))
+        logits = self.pool_head[3](self._dropout(z, 'pool_head', self.training))
+        if not return_parts:
+            return logits
+        device = features.device
+        return {'logits': logits, 'pairs': torch.zeros((2, 0), dtype=torch.long, device=device),
+                'absence_items': torch.zeros((2, 0), dtype=torch.long, device=device),
+                'ledger_additive': torch.zeros((), dtype=torch.bool, device=device),
+                'mp_layers': torch.full((1,), self.mp_layer_count, dtype=torch.long, device=device),
+                'mp_edge_weights': infos[0]['edge_share']}
 
     # ------------------------------------------------------------------ training extras / reporting
 

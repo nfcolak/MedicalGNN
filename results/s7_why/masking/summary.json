@@ -1,0 +1,1001 @@
+{
+ "bootstrap": {
+  "B": 1000,
+  "rng": 20261017,
+  "unit": "patient"
+ },
+ "drop_definition": "metric(none) - metric(mask); difference = CEI drop - baseline drop (negative = CEI drops less)",
+ "fold": "test",
+ "ks": {
+  "10": {
+   "cei_minus_baseline_drop": {
+    "graphcare": {
+     "history": {
+      "accuracy": {
+       "ci95": [
+        -0.006331,
+        0.005018
+       ],
+       "difference": -0.000735
+      },
+      "macro_f1": {
+       "ci95": [
+        -0.007604,
+        0.005225
+       ],
+       "difference": -0.001387
+      },
+      "seeds": [
+       1234,
+       2025,
+       7
+      ]
+     },
+     "labs": {
+      "accuracy": {
+       "ci95": [
+        -0.03389,
+        -0.014344
+       ],
+       "difference": -0.023937
+      },
+      "macro_f1": {
+       "ci95": [
+        -0.038507,
+        -0.015782
+       ],
+       "difference": -0.027292
+      },
+      "seeds": [
+       1234,
+       2025,
+       7
+      ]
+     },
+     "triage": {
+      "accuracy": {
+       "ci95": [
+        -0.005527,
+        0.022409
+       ],
+       "difference": 0.007244
+      },
+      "macro_f1": {
+       "ci95": [
+        -0.022453,
+        0.004572
+       ],
+       "difference": -0.010037
+      },
+      "seeds": [
+       1234,
+       2025,
+       7
+      ]
+     }
+    },
+    "protgnn": {
+     "history": {
+      "accuracy": {
+       "ci95": [
+        -0.001675,
+        0.009554
+       ],
+       "difference": 0.00399
+      },
+      "macro_f1": {
+       "ci95": [
+        -0.002996,
+        0.009358
+       ],
+       "difference": 0.003153
+      },
+      "seeds": [
+       1234,
+       2025,
+       7
+      ]
+     },
+     "labs": {
+      "accuracy": {
+       "ci95": [
+        -0.007588,
+        0.009587
+       ],
+       "difference": 0.00147
+      },
+      "macro_f1": {
+       "ci95": [
+        -0.017297,
+        0.003776
+       ],
+       "difference": -0.006723
+      },
+      "seeds": [
+       1234,
+       2025,
+       7
+      ]
+     },
+     "triage": {
+      "accuracy": {
+       "ci95": [
+        -0.007153,
+        0.017591
+       ],
+       "difference": 0.004724
+      },
+      "macro_f1": {
+       "ci95": [
+        -0.013496,
+        0.011032
+       ],
+       "difference": -0.002122
+      },
+      "seeds": [
+       1234,
+       2025,
+       7
+      ]
+     }
+    }
+   },
+   "methods": [
+    "cei_mp2",
+    "protgnn",
+    "graphcare"
+   ],
+   "seed_mean": {
+    "cei_mp2": {
+     "history": {
+      "accuracy": 0.749921,
+      "accuracy_drop": 0.004409,
+      "macro_f1": 0.756614,
+      "macro_f1_drop": 0.004603,
+      "seeds": 3
+     },
+     "labs": {
+      "accuracy": 0.689554,
+      "accuracy_drop": 0.064777,
+      "macro_f1": 0.69421,
+      "macro_f1_drop": 0.067007,
+      "seeds": 3
+     },
+     "none": {
+      "accuracy": 0.754331,
+      "accuracy_drop": 0.0,
+      "macro_f1": 0.761217,
+      "macro_f1_drop": 0.0,
+      "seeds": 3
+     },
+     "triage": {
+      "accuracy": 0.454173,
+      "accuracy_drop": 0.300157,
+      "macro_f1": 0.473183,
+      "macro_f1_drop": 0.288034,
+      "seeds": 3
+     }
+    },
+    "graphcare": {
+     "history": {
+      "accuracy": 0.749186,
+      "accuracy_drop": 0.005144,
+      "macro_f1": 0.75688,
+      "macro_f1_drop": 0.00599,
+      "seeds": 3
+     },
+     "labs": {
+      "accuracy": 0.665617,
+      "accuracy_drop": 0.088714,
+      "macro_f1": 0.66857,
+      "macro_f1_drop": 0.094299,
+      "seeds": 3
+     },
+     "none": {
+      "accuracy": 0.754331,
+      "accuracy_drop": 0.0,
+      "macro_f1": 0.76287,
+      "macro_f1_drop": 0.0,
+      "seeds": 3
+     },
+     "triage": {
+      "accuracy": 0.461417,
+      "accuracy_drop": 0.292913,
+      "macro_f1": 0.464799,
+      "macro_f1_drop": 0.298071,
+      "seeds": 3
+     }
+    },
+    "protgnn": {
+     "history": {
+      "accuracy": 0.744672,
+      "accuracy_drop": 0.00042,
+      "macro_f1": 0.749531,
+      "macro_f1_drop": 0.00145,
+      "seeds": 3
+     },
+     "labs": {
+      "accuracy": 0.681785,
+      "accuracy_drop": 0.063307,
+      "macro_f1": 0.67725,
+      "macro_f1_drop": 0.07373,
+      "seeds": 3
+     },
+     "none": {
+      "accuracy": 0.745092,
+      "accuracy_drop": 0.0,
+      "macro_f1": 0.750981,
+      "macro_f1_drop": 0.0,
+      "seeds": 3
+     },
+     "triage": {
+      "accuracy": 0.449659,
+      "accuracy_drop": 0.295433,
+      "macro_f1": 0.460824,
+      "macro_f1_drop": 0.290157,
+      "seeds": 3
+     }
+    }
+   },
+   "seeds_scored": {
+    "cei_mp2": [
+     1234,
+     2025,
+     7
+    ],
+    "graphcare": [
+     1234,
+     2025,
+     7
+    ],
+    "protgnn": [
+     1234,
+     2025,
+     7
+    ]
+   },
+   "task": {
+    "K": 10,
+    "class_set": [
+     "Back or spine pain",
+     "Diabetes mellitus",
+     "GI bleed",
+     "Head injury",
+     "Heart failure",
+     "Limb injury or pain",
+     "Lower respiratory disease",
+     "Major depressive disorder",
+     "Skin or soft-tissue infection",
+     "UTI or pyelonephritis"
+    ],
+    "fold": "test",
+    "patients": 2497,
+    "rows": 3175,
+    "rows_full_fold": 3175,
+    "seeds": [
+     1234,
+     2025,
+     7
+    ]
+   }
+  },
+  "20": {
+   "cei_minus_baseline_drop": {
+    "graphcare": {
+     "history": {
+      "accuracy": {
+       "ci95": [
+        0.00056,
+        0.010806
+       ],
+       "difference": 0.00551
+      },
+      "macro_f1": {
+       "ci95": [
+        0.000268,
+        0.012671
+       ],
+       "difference": 0.006403
+      },
+      "seeds": [
+       1234,
+       2025,
+       7
+      ]
+     },
+     "labs": {
+      "accuracy": {
+       "ci95": [
+        -0.025858,
+        -0.008662
+       ],
+       "difference": -0.016691
+      },
+      "macro_f1": {
+       "ci95": [
+        -0.025107,
+        -0.003555
+       ],
+       "difference": -0.014359
+      },
+      "seeds": [
+       1234,
+       2025,
+       7
+      ]
+     },
+     "triage": {
+      "accuracy": {
+       "ci95": [
+        -0.037055,
+        -0.012902
+       ],
+       "difference": -0.024677
+      },
+      "macro_f1": {
+       "ci95": [
+        -0.039723,
+        -0.01448
+       ],
+       "difference": -0.02703
+      },
+      "seeds": [
+       1234,
+       2025,
+       7
+      ]
+     }
+    },
+    "protgnn": {
+     "history": {
+      "accuracy": {
+       "ci95": [
+        0.0,
+        0.01018
+       ],
+       "difference": 0.004951
+      },
+      "macro_f1": {
+       "ci95": [
+        -0.000462,
+        0.011958
+       ],
+       "difference": 0.005626
+      },
+      "seeds": [
+       1234,
+       2025,
+       7
+      ]
+     },
+     "labs": {
+      "accuracy": {
+       "ci95": [
+        -0.009022,
+        0.007137
+       ],
+       "difference": -0.000878
+      },
+      "macro_f1": {
+       "ci95": [
+        -0.019752,
+        0.002231
+       ],
+       "difference": -0.009017
+      },
+      "seeds": [
+       1234,
+       2025,
+       7
+      ]
+     },
+     "triage": {
+      "accuracy": {
+       "ci95": [
+        -0.001364,
+        0.020363
+       ],
+       "difference": 0.009743
+      },
+      "macro_f1": {
+       "ci95": [
+        0.006643,
+        0.02983
+       ],
+       "difference": 0.01811
+      },
+      "seeds": [
+       1234,
+       2025,
+       7
+      ]
+     }
+    }
+   },
+   "methods": [
+    "cei_mp2",
+    "protgnn",
+    "graphcare"
+   ],
+   "seed_mean": {
+    "cei_mp2": {
+     "history": {
+      "accuracy": 0.699888,
+      "accuracy_drop": 0.004392,
+      "macro_f1": 0.684939,
+      "macro_f1_drop": 0.004437,
+      "seeds": 3
+     },
+     "labs": {
+      "accuracy": 0.632247,
+      "accuracy_drop": 0.072033,
+      "macro_f1": 0.602252,
+      "macro_f1_drop": 0.087124,
+      "seeds": 3
+     },
+     "none": {
+      "accuracy": 0.70428,
+      "accuracy_drop": 0.0,
+      "macro_f1": 0.689376,
+      "macro_f1_drop": 0.0,
+      "seeds": 3
+     },
+     "triage": {
+      "accuracy": 0.393867,
+      "accuracy_drop": 0.310414,
+      "macro_f1": 0.388154,
+      "macro_f1_drop": 0.301222,
+      "seeds": 3
+     }
+    },
+    "graphcare": {
+     "history": {
+      "accuracy": 0.688788,
+      "accuracy_drop": -0.001118,
+      "macro_f1": 0.673317,
+      "macro_f1_drop": -0.001966,
+      "seeds": 3
+     },
+     "labs": {
+      "accuracy": 0.598946,
+      "accuracy_drop": 0.088724,
+      "macro_f1": 0.569868,
+      "macro_f1_drop": 0.101483,
+      "seeds": 3
+     },
+     "none": {
+      "accuracy": 0.68767,
+      "accuracy_drop": 0.0,
+      "macro_f1": 0.671351,
+      "macro_f1_drop": 0.0,
+      "seeds": 3
+     },
+     "triage": {
+      "accuracy": 0.352579,
+      "accuracy_drop": 0.33509,
+      "macro_f1": 0.343099,
+      "macro_f1_drop": 0.328252,
+      "seeds": 3
+     }
+    },
+    "protgnn": {
+     "history": {
+      "accuracy": 0.685673,
+      "accuracy_drop": -0.000559,
+      "macro_f1": 0.666679,
+      "macro_f1_drop": -0.001189,
+      "seeds": 3
+     },
+     "labs": {
+      "accuracy": 0.612203,
+      "accuracy_drop": 0.072912,
+      "macro_f1": 0.569349,
+      "macro_f1_drop": 0.096141,
+      "seeds": 3
+     },
+     "none": {
+      "accuracy": 0.685114,
+      "accuracy_drop": 0.0,
+      "macro_f1": 0.66549,
+      "macro_f1_drop": 0.0,
+      "seeds": 3
+     },
+     "triage": {
+      "accuracy": 0.384443,
+      "accuracy_drop": 0.300671,
+      "macro_f1": 0.382379,
+      "macro_f1_drop": 0.283111,
+      "seeds": 3
+     }
+    }
+   },
+   "seeds_scored": {
+    "cei_mp2": [
+     1234,
+     2025,
+     7
+    ],
+    "graphcare": [
+     1234,
+     2025,
+     7
+    ],
+    "protgnn": [
+     1234,
+     2025,
+     7
+    ]
+   },
+   "task": {
+    "K": 20,
+    "class_set": [
+     "Acute kidney failure",
+     "Acute pharyngitis",
+     "Alcohol abuse with intoxication",
+     "Anemia",
+     "Back or spine pain",
+     "Diabetes mellitus",
+     "Epilepsy",
+     "GI bleed",
+     "Head injury",
+     "Heart failure",
+     "Hypokalemia",
+     "Limb injury or pain",
+     "Lower respiratory disease",
+     "Major depressive disorder",
+     "Non-ST elevation (NSTEMI) myocardial infarction",
+     "Sepsis",
+     "Skin or soft-tissue infection",
+     "UTI or pyelonephritis",
+     "Unsp intestnl obst",
+     "Unspecified atrial fibrillation"
+    ],
+    "fold": "test",
+    "patients": 3151,
+    "rows": 4174,
+    "rows_full_fold": 4174,
+    "seeds": [
+     1234,
+     2025,
+     7
+    ]
+   }
+  },
+  "30": {
+   "cei_minus_baseline_drop": {
+    "gsat": {
+     "history": {
+      "accuracy": {
+       "ci95": [
+        -0.000441,
+        0.009382
+       ],
+       "difference": 0.004672
+      },
+      "macro_f1": {
+       "ci95": [
+        0.000508,
+        0.016837
+       ],
+       "difference": 0.009283
+      },
+      "seeds": [
+       1234,
+       2025,
+       7
+      ]
+     },
+     "labs": {
+      "accuracy": {
+       "ci95": [
+        -0.021013,
+        -0.003855
+       ],
+       "difference": -0.012265
+      },
+      "macro_f1": {
+       "ci95": [
+        -0.018301,
+        0.006949
+       ],
+       "difference": -0.00534
+      },
+      "seeds": [
+       1234,
+       2025,
+       7
+      ]
+     },
+     "triage": {
+      "accuracy": {
+       "ci95": [
+        -0.035936,
+        -0.014391
+       ],
+       "difference": -0.024675
+      },
+      "macro_f1": {
+       "ci95": [
+        -0.020853,
+        0.005
+       ],
+       "difference": -0.00797
+      },
+      "seeds": [
+       1234,
+       2025,
+       7
+      ]
+     }
+    },
+    "protgnn": {
+     "history": {
+      "accuracy": {
+       "ci95": [
+        -0.003937,
+        0.005839
+       ],
+       "difference": 0.001022
+      },
+      "macro_f1": {
+       "ci95": [
+        -0.004547,
+        0.011035
+       ],
+       "difference": 0.003844
+      },
+      "seeds": [
+       1234,
+       2025,
+       7
+      ]
+     },
+     "labs": {
+      "accuracy": {
+       "ci95": [
+        -2e-06,
+        0.017245
+       ],
+       "difference": 0.008833
+      },
+      "macro_f1": {
+       "ci95": [
+        -0.021927,
+        0.001744
+       ],
+       "difference": -0.010743
+      },
+      "seeds": [
+       1234,
+       2025,
+       7
+      ]
+     },
+     "triage": {
+      "accuracy": {
+       "ci95": [
+        0.016198,
+        0.038368
+       ],
+       "difference": 0.027595
+      },
+      "macro_f1": {
+       "ci95": [
+        0.011645,
+        0.035318
+       ],
+       "difference": 0.023463
+      },
+      "seeds": [
+       1234,
+       2025,
+       7
+      ]
+     }
+    }
+   },
+   "methods": [
+    "cei_mp2",
+    "protgnn",
+    "gsat"
+   ],
+   "seed_mean": {
+    "cei_mp2": {
+     "history": {
+      "accuracy": 0.662505,
+      "accuracy_drop": 0.00365,
+      "macro_f1": 0.572905,
+      "macro_f1_drop": 0.005232,
+      "seeds": 3
+     },
+     "labs": {
+      "accuracy": 0.587385,
+      "accuracy_drop": 0.078771,
+      "macro_f1": 0.501068,
+      "macro_f1_drop": 0.077069,
+      "seeds": 3
+     },
+     "none": {
+      "accuracy": 0.666156,
+      "accuracy_drop": 0.0,
+      "macro_f1": 0.578137,
+      "macro_f1_drop": 0.0,
+      "seeds": 3
+     },
+     "triage": {
+      "accuracy": 0.331143,
+      "accuracy_drop": 0.335012,
+      "macro_f1": 0.258232,
+      "macro_f1_drop": 0.319905,
+      "seeds": 3
+     }
+    },
+    "gsat": {
+     "history": {
+      "accuracy": 0.649292,
+      "accuracy_drop": -0.001022,
+      "macro_f1": 0.561027,
+      "macro_f1_drop": -0.004051,
+      "seeds": 3
+     },
+     "labs": {
+      "accuracy": 0.557235,
+      "accuracy_drop": 0.091035,
+      "macro_f1": 0.474567,
+      "macro_f1_drop": 0.082409,
+      "seeds": 3
+     },
+     "none": {
+      "accuracy": 0.64827,
+      "accuracy_drop": 0.0,
+      "macro_f1": 0.556976,
+      "macro_f1_drop": 0.0,
+      "seeds": 3
+     },
+     "triage": {
+      "accuracy": 0.288582,
+      "accuracy_drop": 0.359688,
+      "macro_f1": 0.229101,
+      "macro_f1_drop": 0.327875,
+      "seeds": 3
+     }
+    },
+    "protgnn": {
+     "history": {
+      "accuracy": 0.644547,
+      "accuracy_drop": 0.002628,
+      "macro_f1": 0.555265,
+      "macro_f1_drop": 0.001388,
+      "seeds": 3
+     },
+     "labs": {
+      "accuracy": 0.577238,
+      "accuracy_drop": 0.069937,
+      "macro_f1": 0.468841,
+      "macro_f1_drop": 0.087813,
+      "seeds": 3
+     },
+     "none": {
+      "accuracy": 0.647175,
+      "accuracy_drop": 0.0,
+      "macro_f1": 0.556653,
+      "macro_f1_drop": 0.0,
+      "seeds": 3
+     },
+     "triage": {
+      "accuracy": 0.339758,
+      "accuracy_drop": 0.307417,
+      "macro_f1": 0.260212,
+      "macro_f1_drop": 0.296442,
+      "seeds": 3
+     }
+    }
+   },
+   "seeds_scored": {
+    "cei_mp2": [
+     1234,
+     2025,
+     7
+    ],
+    "gsat": [
+     1234,
+     2025,
+     7
+    ],
+    "protgnn": [
+     1234,
+     2025,
+     7
+    ]
+   },
+   "task": {
+    "K": 30,
+    "class_set": [
+     "Acute kidney failure",
+     "Acute pharyngitis",
+     "Acute upper respiratory infection",
+     "Alcohol abuse with intoxication",
+     "Anemia",
+     "Anxiety disorder",
+     "Back or spine pain",
+     "Cardiovascular risk factor",
+     "Dehydration",
+     "Diabetes mellitus",
+     "End stage renal disease",
+     "Epilepsy",
+     "GI bleed",
+     "Head injury",
+     "Heart failure",
+     "Hypokalemia",
+     "Hypotension",
+     "Hypothyroidism",
+     "Laceration w/o fb of l idx fngr w/o damage to nail",
+     "Limb injury or pain",
+     "Lower respiratory disease",
+     "Major depressive disorder",
+     "Multiple fractures of ribs",
+     "Non-ST elevation (NSTEMI) myocardial infarction",
+     "Sepsis",
+     "Skin or soft-tissue infection",
+     "UTI or pyelonephritis",
+     "Unsp intestnl obst",
+     "Unspecified asthma with (acute) exacerbation",
+     "Unspecified atrial fibrillation"
+    ],
+    "fold": "test",
+    "patients": 3404,
+    "rows": 4566,
+    "rows_full_fold": 4566,
+    "seeds": [
+     1234,
+     2025,
+     7
+    ]
+   }
+  }
+ },
+ "limit": null,
+ "mask_stats": {
+  "10": {
+   "history": {
+    "graphs": 3175,
+    "graphs_acuity_removed": 0,
+    "graphs_changed": 1508,
+    "mean_edges_before": 178.97511811023622,
+    "mean_edges_removed": 49.131023622047245,
+    "mean_nodes_before": 107.7407874015748,
+    "mean_nodes_removed": 23.61826771653543,
+    "mean_visits_removed": 0.8992125984251969
+   },
+   "labs": {
+    "graphs": 3175,
+    "graphs_acuity_removed": 0,
+    "graphs_changed": 3175,
+    "mean_edges_before": 178.97511811023622,
+    "mean_edges_removed": 141.7307086614173,
+    "mean_nodes_before": 107.7407874015748,
+    "mean_nodes_removed": 83.35874015748031,
+    "mean_visits_removed": 0.00031496062992125983
+   },
+   "none": {
+    "graphs": 3175,
+    "graphs_acuity_removed": 0,
+    "graphs_changed": 0,
+    "mean_edges_before": 178.97511811023622,
+    "mean_edges_removed": 0.0,
+    "mean_nodes_before": 107.7407874015748,
+    "mean_nodes_removed": 0.0,
+    "mean_visits_removed": 0.0
+   },
+   "triage": {
+    "graphs": 3175,
+    "graphs_acuity_removed": 3163,
+    "graphs_changed": 3171,
+    "mean_edges_before": 178.97511811023622,
+    "mean_edges_removed": 22.542992125984252,
+    "mean_nodes_before": 107.7407874015748,
+    "mean_nodes_removed": 15.293858267716535,
+    "mean_visits_removed": 0.0
+   }
+  },
+  "20": {
+   "history": {
+    "graphs": 4174,
+    "graphs_acuity_removed": 0,
+    "graphs_changed": 2002,
+    "mean_edges_before": 182.13871586008625,
+    "mean_edges_removed": 50.248442740776234,
+    "mean_nodes_before": 109.49353138476282,
+    "mean_nodes_removed": 24.176090081456636,
+    "mean_visits_removed": 0.917345471969334
+   },
+   "labs": {
+    "graphs": 4174,
+    "graphs_acuity_removed": 0,
+    "graphs_changed": 4174,
+    "mean_edges_before": 182.13871586008625,
+    "mean_edges_removed": 144.8217537134643,
+    "mean_nodes_before": 109.49353138476282,
+    "mean_nodes_removed": 85.1554863440345,
+    "mean_visits_removed": 0.00023957834211787255
+   },
+   "none": {
+    "graphs": 4174,
+    "graphs_acuity_removed": 0,
+    "graphs_changed": 0,
+    "mean_edges_before": 182.13871586008625,
+    "mean_edges_removed": 0.0,
+    "mean_nodes_before": 109.49353138476282,
+    "mean_nodes_removed": 0.0,
+    "mean_visits_removed": 0.0
+   },
+   "triage": {
+    "graphs": 4174,
+    "graphs_acuity_removed": 4154,
+    "graphs_changed": 4165,
+    "mean_edges_before": 182.13871586008625,
+    "mean_edges_removed": 22.576904647819838,
+    "mean_nodes_before": 109.49353138476282,
+    "mean_nodes_removed": 15.211787254432199,
+    "mean_visits_removed": 0.0
+   }
+  },
+  "30": {
+   "history": {
+    "graphs": 4566,
+    "graphs_acuity_removed": 0,
+    "graphs_changed": 2194,
+    "mean_edges_before": 181.48423127463863,
+    "mean_edges_removed": 49.681997371879106,
+    "mean_nodes_before": 109.14279456855016,
+    "mean_nodes_removed": 23.91765221200175,
+    "mean_visits_removed": 0.918090232150679
+   },
+   "labs": {
+    "graphs": 4566,
+    "graphs_acuity_removed": 0,
+    "graphs_changed": 4566,
+    "mean_edges_before": 181.48423127463863,
+    "mean_edges_removed": 144.24945247481384,
+    "mean_nodes_before": 109.14279456855016,
+    "mean_nodes_removed": 84.85830048182217,
+    "mean_visits_removed": 0.0002190100744634253
+   },
+   "none": {
+    "graphs": 4566,
+    "graphs_acuity_removed": 0,
+    "graphs_changed": 0,
+    "mean_edges_before": 181.48423127463863,
+    "mean_edges_removed": 0.0,
+    "mean_nodes_before": 109.14279456855016,
+    "mean_nodes_removed": 0.0,
+    "mean_visits_removed": 0.0
+   },
+   "triage": {
+    "graphs": 4566,
+    "graphs_acuity_removed": 4544,
+    "graphs_changed": 4556,
+    "mean_edges_before": 181.48423127463863,
+    "mean_edges_removed": 22.568112133158124,
+    "mean_nodes_before": 109.14279456855016,
+    "mean_nodes_removed": 15.178055190538764,
+    "mean_visits_removed": 0.0
+   }
+  }
+ },
+ "note": "CEI-GNN reads an absence block (\"items not observed\"); removing labs therefore also changes its absence evidence (intended).",
+ "parity": {
+  "max_abs_diff_over_runs": 1.430511474609375e-06,
+  "metric_implementation_max_diff_vs_core_train": 4.980289093348134e-07,
+  "runs_checked": 27,
+  "runs_passed": 27,
+  "tolerance": 0.0001
+ },
+ "seeds": [
+  1234,
+  2025,
+  7
+ ],
+ "selection_fold": "validation",
+ "threads": 2
+}
