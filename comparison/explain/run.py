@@ -139,7 +139,7 @@ def current_source_hashes():
     return hashes
 
 
-def plan_runs(runs, ks, methods, seeds, fold, sample_patients, out):
+def plan_runs(runs, ks, methods, seeds, fold, sample_patients, out, audit_subjects=0):
     """One entry per selected run, all bindings checked; nothing is executed."""
     runs, out = Path(runs), Path(out)
     entries = []
@@ -152,6 +152,8 @@ def plan_runs(runs, ks, methods, seeds, fold, sample_patients, out):
                 target = out / f'top{k}' / name
                 command = [sys.executable, '-m', 'core.explain.runner', '--run-dir', str(run_dir),
                            '--output', str(target), '--fold', fold, '--sample-patients', str(sample_patients)]
+                if audit_subjects:
+                    command += ['--audit-subjects', str(audit_subjects)]
                 entries.append({'k': k, 'method': method, 'seed': seed, 'run': f'top{k}/{name}',
                                 'output': f'top{k}/{name}', 'command': command})
     return entries
@@ -357,6 +359,9 @@ def main(argv=None, *, executor=run_command):
     parser.add_argument('--resume', action='store_true',
                         help='skip planned runs that already hold an explanation manifest')
     parser.add_argument('--jobs', type=int, default=1, help='runner processes at once (default 1)')
+    parser.add_argument('--audit-subjects', type=int, default=0,
+                        help='weight-randomisation and perturbation-stability controls on the first N explained visits '
+                             'of every run (default 0 = off; each audited visit costs about three more explanations)')
     parser.add_argument('--allow-mixed-code', action='store_true',
                         help='with --resume: accept finished runs written by other code than this checkout')
     args = parser.parse_args(argv)
@@ -367,13 +372,16 @@ def main(argv=None, *, executor=run_command):
         raise SystemExit('--jobs: must be at least 1')
     if args.sample_patients < 0:
         raise SystemExit('--sample-patients: must be 0 (every patient) or a positive number')
+    if args.audit_subjects < 0:
+        raise SystemExit('--audit-subjects: must be 0 (off) or a positive number')
     check_methods(args.methods)
     if not args.resume:
         check_out(args.out)
     runs = Path(args.runs)
     if not runs.is_absolute():
         runs = REPO / runs
-    entries = plan_runs(runs, args.ks, args.methods, args.seeds, args.fold, args.sample_patients, args.out)
+    entries = plan_runs(runs, args.ks, args.methods, args.seeds, args.fold, args.sample_patients, args.out,
+                        args.audit_subjects)
     finished = {}
     if args.resume:
         hashes = None if args.allow_mixed_code else current_source_hashes()

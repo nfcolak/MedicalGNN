@@ -546,3 +546,18 @@ def test_jobs_must_be_positive(tmp_path):
 def test_default_executor_reports_status_and_peak_memory():
     result = driver.run_command([sys.executable, '-c', 'import sys; sys.exit(3)'], dict(os.environ))
     assert result['returncode'] == 3 and result['max_rss_mb'] > 0
+
+
+def test_audit_subjects_reach_the_runner_only_when_asked_for(tmp_path, capsys):
+    runs = make_runs(tmp_path / 'runs')
+    assert driver.main(args(runs, tmp_path / 'out', '--plan')) == 0
+    assert '--audit-subjects' not in capsys.readouterr().out
+    assert driver.main(args(runs, tmp_path / 'out', '--plan', '--audit-subjects', '40')) == 0
+    commands = [line for line in capsys.readouterr().out.splitlines() if 'core.explain.runner' in line]
+    assert len(commands) == 4 and all('--audit-subjects 40' in c for c in commands)
+
+
+def test_a_negative_audit_size_is_refused(tmp_path):
+    runs = make_runs(tmp_path / 'runs')
+    with pytest.raises(SystemExit, match='audit-subjects'):
+        driver.main(args(runs, tmp_path / 'out', '--plan', '--audit-subjects', '-1'))
