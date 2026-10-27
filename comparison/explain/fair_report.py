@@ -3,7 +3,9 @@
     python -m comparison.explain.fair_report --explanations <dir or run dirs...> --out <new dir> \
         [--bootstrap 2000] [--seed 1234]
 
-Reads the record files of `core.explain.runner` (inference-free). The patient is the unit: a
+Reads the record files of `core.explain.runner` (inference-free). By default the seeds of one method are
+pooled (`--per-seed` reports each run alone): a patient's number is then the mean over its visits and seeds,
+and comparisons are between methods, never between seeds. The patient is the unit: a
 patient's number is the mean over its visits, intervals are percentile intervals of a patient-level
 bootstrap, and a difference between two things is taken on the patients that have both.
 
@@ -24,6 +26,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from collections import defaultdict
 from pathlib import Path
 
@@ -45,6 +48,18 @@ def load_runs(paths) -> dict[str, list[dict]]:
     if not runs:
         raise SystemExit("no explanation records found")
     return runs
+
+
+def pool_seeds(runs: dict[str, list[dict]]) -> dict[str, list[dict]]:
+    """One entry per method and K: the records of all its seeds (`top20/cei_mp2_seed7` -> `top20/cei_mp2`).
+
+    A patient's number is then the mean over its visits and over the seeds, so the interval is the patient-level
+    sampling uncertainty of the pooled result; the spread between seeds is not in it (the summary table gives that)."""
+    pooled: dict[str, list[dict]] = {}
+    for name, records in runs.items():
+        match = re.match(r"^(.*)_seed\d+$", name)
+        pooled.setdefault(match.group(1) if match else name, []).extend(records)
+    return pooled
 
 
 def by_patient(records, value) -> dict[str, float]:
@@ -329,11 +344,15 @@ def main(argv=None) -> int:
     parser.add_argument("--out", required=True, type=Path)
     parser.add_argument("--bootstrap", type=int, default=2000)
     parser.add_argument("--seed", type=int, default=1234)
+    parser.add_argument("--per-seed", action="store_true",
+                        help="report every seed run on its own instead of one result per method pooled over its seeds")
     args = parser.parse_args(argv)
     if args.out.exists() and any(args.out.iterdir()):
         raise SystemExit(f"--out must be new or empty: {args.out}")
     args.out.mkdir(parents=True, exist_ok=True)
     runs = load_runs(args.explanations)
+    if not args.per_seed:
+        runs = pool_seeds(runs)
     kwargs = dict(bootstrap=args.bootstrap, seed=args.seed)
     document = ["# Fairness checks on the explanation results", "",
                 f"Patient-level bootstrap, {args.bootstrap} resamples, 95% percentile intervals; intervals are withheld "

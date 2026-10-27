@@ -113,3 +113,34 @@ def test_the_cli_refuses_a_filled_output_directory(tmp_path):
     (out / "something").write_text("x")
     with pytest.raises(SystemExit):
         report.main(["--explanations", str(folder), "--out", str(out)])
+
+
+def test_seeds_are_pooled_per_method_and_a_patient_counts_once():
+    runs = {"top20/m1_seed1": [record("a", 1, s=(0.0, 1, 1))], "top20/m1_seed2": [record("a", 1, s=(1.0, 1, 1))],
+            "top20/m2_seed1": [record("a", 1, s=(0.5, 1, 1))], "top20/other": [record("a", 1, s=(0.5, 1, 1))]}
+    pooled = report.pool_seeds(runs)
+    assert sorted(pooled) == ["top20/m1", "top20/m2", "top20/other"] and len(pooled["top20/m1"]) == 2
+    values = report.by_patient(pooled["top20/m1"], lambda r: r["fidelity_v2"]["s"]["fidelity_plus"]["prob"])
+    assert values == {"a": 0.5}                              # the mean over its seeds, one patient
+
+
+def test_pooled_report_compares_methods_never_seeds_and_per_seed_keeps_the_runs(tmp_path):
+    root = tmp_path / "expl" / "top20"
+    for method, seeds in (("m1", (1, 2)), ("m2", (1, 2))):
+        for seed in seeds:
+            folder = root / f"{method}_seed{seed}"
+            folder.mkdir(parents=True)
+            for i in range(12):
+                (folder / f"subject_{i}.json").write_text(json.dumps(record(f"p{i}", 1, s=(0.1 * seed + 0.01 * i, 4, 4))))
+    pooled, per_seed = tmp_path / "pooled", tmp_path / "per_seed"
+    assert report.main(["--explanations", str(root), "--out", str(pooled), "--bootstrap", "20"]) == 0
+    assert report.main(["--explanations", str(root), "--out", str(per_seed), "--bootstrap", "20", "--per-seed"]) == 0
+    text = (pooled / "fair_report.md").read_text()
+    assert "top20/m1" in text and "_seed" not in text
+    across = json.loads((pooled / "fair_report.json").read_text())["paired"]["across_methods"]
+    pairs = {key.split("|")[-1] for key in across}
+    assert pairs == {"top20/m1 - top20/m2"}
+    individual = json.loads((pooled / "fair_report.json").read_text())["paired"]["top20/m1"]["fidelity+"]["individual"]["s"]
+    assert individual["n"] == 12 and individual["mean"] == pytest.approx(0.15 + 0.055)     # 12 patients, both seeds
+    seeds_text = (per_seed / "fair_report.md").read_text()
+    assert "top20/m1_seed1" in seeds_text and "top20/m1_seed2" in seeds_text
