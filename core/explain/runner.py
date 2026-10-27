@@ -60,6 +60,7 @@ from torch_geometric.loader import DataLoader
 from core import train
 from core.contracts import VISIT_MEMBERSHIP_FILENAME, iter_graphs_with_membership, sample_ids_sha256
 from core.explain import audit as audit_mod
+from core.explain import fair_checks
 from core.explain import fidelity_v2 as fv2
 from core.explain import ig_clinical
 from core.explain.explanation_contract_v2 import build_cohort_v2, validate_cohort_v2
@@ -981,8 +982,19 @@ def explain_subject(wrapper, data, *, method: str, conv: str | None,
 
     collected = _collect_importances(wrapper, batch, x, method=explained_method, steps=steps,
                                      epochs=epochs, ig=ig, prediction=prediction, seed=seed)
-    fidelity_v2, random_info = evaluate(
-        _source_vectors(collected, skip=FIDELITY_SKIPPED_SOURCES), prediction)
+    source_vectors = _source_vectors(collected, skip=FIDELITY_SKIPPED_SOURCES)
+    fidelity_v2, random_info = evaluate(source_vectors, prediction)
+    try:
+        matched_budget = fair_checks.matched_budget(scorer, source_vectors, prediction, seed=seed)
+    except Exception as exc:  # noqa: BLE001 - a check must not sink the record
+        matched_budget = {"status": "failed", "error": str(exc)}
+    prototype_check = None
+    if method == "protgnn" and collected["builtin_detail"]:
+        try:
+            prototype_check = fair_checks.protgnn_prototype_check(
+                wrapper.adapter, scorer, collected["builtin_detail"], prediction, seed=seed)
+        except Exception as exc:  # noqa: BLE001
+            prototype_check = {"status": "failed", "error": str(exc)}
 
     try:
         if method in CEI_METHODS:
@@ -1030,6 +1042,7 @@ def explain_subject(wrapper, data, *, method: str, conv: str | None,
         "builtin_detail": collected["builtin_detail"],
         "graphxai": collected["graphxai"],
         "fidelity_v2": fidelity_v2,
+        "matched_budget": matched_budget,
         "fidelity_v2_intervention": intervention_record(deletion_check["combo_source"]),
         "fidelity_v2_skipped_sources": [name for name in FIDELITY_SKIPPED_SOURCES
                                         if name in collected["graphxai"]],
@@ -1063,6 +1076,9 @@ def explain_subject(wrapper, data, *, method: str, conv: str | None,
             }
         except Exception as exc:  # noqa: BLE001
             record["true_class_explanations"] = {"status": "failed", "error": str(exc)}
+
+    if prototype_check is not None:
+        record["protgnn_prototype_check"] = prototype_check
 
     if audit is not None:
         record["audit"] = _audit_subject(wrapper, batch, x, _source_vectors(collected), prediction,
