@@ -63,3 +63,5 @@ docs/cleanup-sections-*.json
 comparison/standardized/hpo_*/
 comparison/standardized/final_compare_*/
 comparison/standardized/k4_fit/
+comparison/standardized/explain_*/
+comparison/standardized/graph_types_*/
