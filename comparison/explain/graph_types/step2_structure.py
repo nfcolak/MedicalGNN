@@ -66,7 +66,7 @@ def load_features():
 def load_scores(n):
     """{(key, source): per-visit mean of the headline over the ok seeds (nan when ok in < 2 seeds)} and the counts of
     visits dropped for the keys used."""
-    keep = {'gsat', 'graphcare', *VERSIONS}
+    keep = {'gsat', 'graphcare', 'protgnn', *VERSIONS}
     sums, cnts = {}, {}
     with open(DATA / 'visit_scores.csv', newline='', encoding='utf-8') as handle:
         for r in csv.DictReader(handle):
@@ -153,13 +153,22 @@ def comparisons():
                         other=('gsat', 'IG')))
         out.append(dict(ver=ver, code='bi/GCGrad', family='GraphCare', expl='builtin', cei=(ver, 'builtin'),
                         other=('graphcare', 'Grad')))
+        # ProtGNN: added after the first run of this step for GSAT and GraphCare; same rules.
+        for src in ('IG', 'Grad', 'GNNExp'):
+            out.append(dict(ver=ver, code=f'{src}/PG', family='ProtGNN', expl=src, cei=(ver, src), other=('protgnn', src)))
+        out.append(dict(ver=ver, code='bi/PGbi', family='ProtGNN', expl='builtin', cei=(ver, 'builtin'),
+                        other=('protgnn', 'builtin')))
+        out.append(dict(ver=ver, code='bi/PGIG', family='ProtGNN', expl='builtin', cei=(ver, 'builtin'),
+                        other=('protgnn', 'IG')))
     return out
 
 
 LEGEND = ('Column codes: `X/GSAT` = CEI source X minus GSAT source X; `X/GC` = CEI source X minus GraphCare source X '
           '(X = IG, Grad, GNNExp); `bi/GSATbi` = CEI built-in minus GSAT built-in; `bi/GSATIG` = CEI built-in minus '
           'GSAT IG; `bi/GCGrad` = CEI built-in minus GraphCare Grad (GraphCare built-in is not usable). Positive = CEI '
-          'is better (headline del = deletion_mean_change_vs_random).')
+          'is better (headline del = deletion_mean_change_vs_random). ProtGNN (added later, same rules): `X/PG` = CEI source X '
+          'minus ProtGNN source X, `bi/PGbi` = CEI built-in minus ProtGNN built-in, `bi/PGIG` = CEI built-in minus ProtGNN IG; '
+          'visits where the ProtGNN subgraph has no eligible evidence are nan in the built-in columns.')
 
 
 def conf_dummies(conf):
@@ -296,7 +305,7 @@ def main():
     for tag in ('raw', 'adj'):
         for f in features:
             for s in strata_of[f]:
-                for family in ('GSAT', 'GraphCare'):
+                for family in ('GSAT', 'GraphCare', 'ProtGNN'):
                     for sign in (1, -1):
                         hits = []
                         for ci_, c in enumerate(comps):
@@ -351,7 +360,7 @@ def main():
     L('')
     L('**Visits dropped (ok in fewer than 2 of 3 seeds) per model and source**: ' +
       '; '.join(f'{k[0]} {k[1]}: {small(v)}' for k, v in sorted(dropped.items()) if v) + '.' if any(dropped.values())
-      else '**Visits dropped (ok in fewer than 2 of 3 seeds)**: none for gsat, graphcare, cei_final, cei_R1_ls0.')
+      else '**Visits dropped (ok in fewer than 2 of 3 seeds)**: none for gsat, graphcare, protgnn, cei_final, cei_R1_ls0.')
     L('')
 
     L('## 2. All visits (paired difference, CEI minus other)')

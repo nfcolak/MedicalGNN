@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Graph-type analysis, step 3: clinical context and confidence axis.
 
-Paired per-visit differences d = CEI - comparator (comparator = GSAT or GraphCare), CEI = cei_final and, separately,
+Paired per-visit differences d = CEI - comparator (comparator = GSAT, GraphCare or ProtGNN), CEI = cei_final and, separately,
 cei_R1_ls0, stratified by
   true class (20) | clinically grouped classes (6) | correctness pattern | seed agreement |
   CEI confidence | comparator confidence | confidence difference | joint confidence grid (3 x 3, the matched comparison).
@@ -57,7 +57,7 @@ MIN_PRINT = 10
 MIN_INTERPRET = 30
 
 CEI_KEYS = ["cei_final", "cei_R1_ls0"]
-COMP_KEYS = {"gsat": "GSAT", "graphcare": "GraphCare"}
+COMP_KEYS = {"gsat": "GSAT", "graphcare": "GraphCare", "protgnn": "ProtGNN"}
 METRICS = {
     "del": "deletion_mean_change_vs_random",
     "ins": "insertion_mean_change_vs_random",
@@ -70,8 +70,14 @@ COMPARISONS = {
              ("built-in", "builtin", "builtin"), ("built-in vs GSAT IG", "builtin", "IG")],
     "graphcare": [("IG", "IG", "IG"), ("Grad", "Grad", "Grad"), ("GNNExp", "GNNExp", "GNNExp"),
                   ("built-in vs GC Grad", "builtin", "Grad")],
+    # ProtGNN was added after steps 2-6 had been run for GSAT and GraphCare (the supervisor's comparison names GSAT and
+    # ProtGNN); the rules of this script are applied to it unchanged. Its built-in subgraph has no eligible evidence in
+    # part of the visits (nan there), and those visits drop out of the built-in comparisons.
+    "protgnn": [("IG", "IG", "IG"), ("Grad", "Grad", "Grad"), ("GNNExp", "GNNExp", "GNNExp"),
+                ("built-in", "builtin", "builtin"), ("built-in vs ProtGNN IG", "builtin", "IG")],
 }
-SAME_SOURCE = {"gsat": ["IG", "Grad", "GNNExp", "built-in"], "graphcare": ["IG", "Grad", "GNNExp"]}
+SAME_SOURCE = {"gsat": ["IG", "Grad", "GNNExp", "built-in"], "graphcare": ["IG", "Grad", "GNNExp"],
+               "protgnn": ["IG", "Grad", "GNNExp", "built-in"]}
 CONF_COL = "dConf"
 
 CLASS_GROUPS = {
@@ -410,8 +416,9 @@ L.append("Test fold, K=20, primary_dx_v4, fair_v10t, 1,345 visits of 1,000 patie
          "visit counted only if the source is ok in >= 2 of 3 seeds); positive d = CEI scores higher. Headline score "
          "`del` = deletion_mean_change_vs_random (higher is better). For `fid-` (fidelity-) lower is better, so there "
          "a negative d favours CEI. CEI = cei_final (label smoothing 0.1) and, separately, cei_R1_ls0 (no label "
-         "smoothing). Comparators: GSAT and GraphCare. Columns IG / Grad / GNNExp compare the same explainer in both "
-         "models; `built-in` is CEI built-in vs GSAT built-in; `built-in vs GSAT IG` and `built-in vs GC Grad` compare "
+         "smoothing). Comparators: GSAT, GraphCare and ProtGNN (ProtGNN was added later, same rules; its built-in subgraph "
+         "has no eligible evidence in part of the visits, which then drop out of the built-in comparisons). Columns IG / Grad / GNNExp compare the same explainer in both "
+         "models; `built-in` is CEI built-in vs the comparator's built-in (GSAT, ProtGNN); `built-in vs GSAT IG`, `built-in vs GC Grad` and `built-in vs ProtGNN IG` compare "
          "the CEI built-in explanation with the comparator's best post-hoc explainer (GraphCare's built-in is not "
          "usable, so it is not compared). 95% CIs: patient-cluster bootstrap, 2,000 draws, seed 20261025. **Bold** = "
          "CI excludes 0 (n >= 30). † = 10 <= n < 30, shown but not interpreted; cells under 10 visits are not "
