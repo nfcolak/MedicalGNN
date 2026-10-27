@@ -115,7 +115,7 @@ def test_plan_only_prints_and_missing_runs_stop(tmp_path, capsys):
     assert "nothing executed" in capsys.readouterr().out and not (tmp_path / "out").exists()
     with pytest.raises(SystemExit, match="missing"):
         rs.main(["run", "--runs", runs, "--out", str(tmp_path / "out"), "--ks", "2", "--methods", "gsat",
-                 "--seeds", "7", "2025"])
+                 "--seeds", "7,2025"])
 
 
 def test_run_and_report_end_to_end(tmp_path):

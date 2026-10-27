@@ -1,7 +1,7 @@
 """Do the trained models depend on which nodes their relations connect?
 
     python -m comparison.explain.relation_shuffle run    --runs <dir with top<K>/<method>_seed<N>> --out <new dir> \
-        [--ks 20] [--methods cei_mp2 gsat graphcare protgnn] [--seeds 1234 2025 7] [--fold test] \
+        [--ks 10,20,30] [--methods cei_mp2,gsat,graphcare,protgnn] [--seeds 1234,2025,7] [--fold test] \
         [--sample-patients 500] [--draws 3] [--execute]
     python -m comparison.explain.relation_shuffle report --probes <out of run> --out <new dir> [--bootstrap 2000]
 
@@ -159,7 +159,8 @@ def plan_runs(root, ks, methods, seeds) -> list[tuple[int, str, int, Path]]:
 
 
 def run_command(args) -> int:
-    planned = plan_runs(args.runs, args.ks, args.methods, args.seeds)
+    planned = plan_runs(args.runs, [int(k) for k in args.ks.split(",")], args.methods.split(","),
+                        [int(s) for s in args.seeds.split(",")])
     sample = None if args.sample_patients == 0 else args.sample_patients
     for k, method, seed, run_dir in planned:
         print(f"top{k}/{method}_seed{seed}: fold {args.fold}, {sample or 'all'} patients, {args.draws} shuffles per arm")
@@ -308,9 +309,9 @@ def main(argv=None) -> int:
     run = sub.add_parser("run")
     run.add_argument("--runs", required=True, type=Path)
     run.add_argument("--out", required=True, type=Path)
-    run.add_argument("--ks", nargs="+", type=int, default=[20])
-    run.add_argument("--methods", nargs="+", default=list(METHODS))
-    run.add_argument("--seeds", nargs="+", type=int, default=list(SEEDS))
+    run.add_argument("--ks", default="10,20,30")
+    run.add_argument("--methods", default=",".join(METHODS))
+    run.add_argument("--seeds", default=",".join(map(str, SEEDS)))
     run.add_argument("--fold", default="test", choices=("test", "validation", "dev"))
     run.add_argument("--sample-patients", type=int, default=SAMPLE_PATIENTS, help="0 = every patient of the fold")
     run.add_argument("--sample-seed", type=int, default=1234)
