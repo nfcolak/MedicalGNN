@@ -1,7 +1,7 @@
 """Are explanations consistent for clinically similar patients?
 
     python -m comparison.explain.similar_patients --explanations <dir or run dirs...> \
-        --graphs <graphs.jsonl> --out <new dir> [--bootstrap 2000] [--seed 1234]
+        --graphs <graphs.jsonl> [--runs <trained runs root>] [--k K] --out <new dir> [--bootstrap 2000] [--seed 1234]
 
 Reads the record files of `core.explain.runner` (inference-free) and the graph file the runs were
 built from. "Similar" is decided from the inputs alone, so the same visit pairs are used for every
@@ -10,8 +10,8 @@ method and explainer:
 * an evidence item of a visit is an eligible node's token with its level and scope where it has
   them (`lab:50963|high|index`, `cc:dyspnea`); eligible kinds are those of the fidelity cut;
 * two visits are similar when they are of different patients, their true diagnosis classes are in
-  the same diagnosis group (`CLASS_GROUPS`, the grouping of `graph_types/step3_clinical.py`) and
-  they share at least MIN_SHARED evidence items; the NEIGHBOURS most similar visits of a visit
+  the same diagnosis group (`CLASS_GROUPS`, the grouping of `graph_types/step3_clinical.py`, kept by
+  class name because class ids depend on K; classes outside its 20 are left out) and they share at least MIN_SHARED evidence items; the NEIGHBOURS most similar visits of a visit
   (Jaccard of the item sets) are its similar pairs;
 * two baselines on the same visits, drawn with a seeded generator: BASELINE_PAIRS random visits of
   the same group that are not neighbours (`same_group`), and BASELINE_PAIRS of other groups
@@ -44,8 +44,17 @@ import numpy as np
 from comparison.explain.fair_report import MIN_PATIENTS_FOR_INTERVAL, interval, load_runs, paired_interval, sources_of
 from comparison.explain.seed_agreement import fmt, group_runs, pair_agreement, source_vector
 
-# Same grouping as comparison/explain/graph_types/step3_clinical.py (checked by a test).
-CLASS_GROUPS = {
+# The 20 classes of the K=20 runs in their label order. The class ids of a run depend on K (K=10 and K=30 number the
+# same diagnoses differently), so the diagnosis groups below are kept by class NAME and a run's ids are translated
+# through its own label order (`binding.json` of the trained run). Classes outside these 20 (K=30 adds ten) have no
+# group and are left out of this analysis.
+K20_LABELS = [
+    "Acute kidney failure", "Acute pharyngitis", "Alcohol abuse with intoxication", "Anemia", "Back or spine pain",
+    "Diabetes mellitus", "Epilepsy", "GI bleed", "Head injury", "Heart failure", "Hypokalemia", "Limb injury or pain",
+    "Lower respiratory disease", "Major depressive disorder", "Non-ST elevation (NSTEMI) myocardial infarction", "Sepsis",
+    "Skin or soft-tissue infection", "UTI or pyelonephritis", "Unsp intestnl obst", "Unspecified atrial fibrillation"]
+# Same grouping as comparison/explain/graph_types/step3_clinical.py, whose class ids are the K=20 ids (checked by a test).
+CLASS_GROUPS_K20_IDS = {
     "cardiac": [9, 14, 19],
     "infection": [15, 17, 16, 1, 12],
     "injury_pain": [8, 11, 4],
@@ -53,7 +62,9 @@ CLASS_GROUPS = {
     "metabolic_renal_heme": [0, 3, 5, 10],
     "neuro_psych_substance": [6, 13, 2],
 }
-GROUP_OF = {cls: group for group, classes in CLASS_GROUPS.items() for cls in classes}
+CLASS_GROUPS = {group: [K20_LABELS[i] for i in ids] for group, ids in CLASS_GROUPS_K20_IDS.items()}
+GROUP_OF_NAME = {name: group for group, names in CLASS_GROUPS.items() for name in names}
+DEFAULT_RUNS = "comparison/standardized/clinical_runs_fair_v10t_20261011"
 MIN_SHARED = 5
 NEIGHBOURS = 5
 BASELINE_PAIRS = 5
@@ -182,14 +193,25 @@ def merge_seeds(per_seed: list[dict]) -> dict[str, dict[str, dict[str, float]]]:
     return {kind: {m: {p: float(np.mean(v)) for p, v in merged[kind][m].items()} for m in METRICS} for kind in PAIR_TYPES}
 
 
-def build_visits(records_by_run, nodes_of) -> tuple[list[dict], dict[str, dict[int, str]]]:
+def label_order(runs_root, run_names) -> list[str]:
+    """The class names of the explained runs, by class id: `label_order` of a trained run's binding.json
+    (every method of one K shares it). `run_names` look like `top<K>/<method>_seed<N>`."""
+    for name in run_names:
+        path = Path(runs_root) / name / "binding.json"
+        if path.is_file():
+            return json.loads(path.read_text())["label_order"]
+    raise SystemExit(f"no trained run's binding.json under {runs_root} for {sorted(run_names)[:3]}: "
+                     "pass --runs <root of the trained runs>")
+
+
+def build_visits(records_by_run, nodes_of, labels) -> tuple[list[dict], dict[str, dict[int, str]]]:
     """Visits explained by every run, with their evidence items (inputs only)."""
     ids = set.intersection(*(set(r["sample_id"] for r in records) for records in records_by_run.values()))
     first = {r["sample_id"]: r for r in next(iter(records_by_run.values()))}
     visits, items_of = [], {}
     for sample_id in sorted(ids):
         record = first[sample_id]
-        group = GROUP_OF.get(record["true_class_id"])
+        group = GROUP_OF_NAME.get(labels[record["true_class_id"]])
         if sample_id not in nodes_of or group is None:
             continue
         eligible = set(record.get("fidelity_v2_intervention", {}).get("eligible_node_kinds", ()))
@@ -200,7 +222,7 @@ def build_visits(records_by_run, nodes_of) -> tuple[list[dict], dict[str, dict[i
     return visits, items_of
 
 
-def similar_report(runs, nodes_of, *, bootstrap: int, seed: int):
+def similar_report(runs, nodes_of, labels, *, bootstrap: int, seed: int):
     lines = ["## Agreement of explanations across similar patients", "",
              f"Similar = different patients, same diagnosis group, at least {MIN_SHARED} shared evidence items; each visit's "
              f"{NEIGHBOURS} most similar visits by Jaccard of their item sets. Baselines: up to {BASELINE_PAIRS} random "
@@ -211,7 +233,7 @@ def similar_report(runs, nodes_of, *, bootstrap: int, seed: int):
     if not grouped:
         raise SystemExit("no run folder is named <method>_seed<N>")
     visits, items_of = build_visits({f"{m}_seed{s}": records for m, by in grouped.items() for s, records in by.items()},
-                                    nodes_of)
+                                    nodes_of, labels)
     pairs = choose_pairs(visits, seed=seed)
     by_id = {v["sample_id"]: v for v in visits}
     sizes = defaultdict(set)
@@ -256,6 +278,9 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--explanations", nargs="+", required=True)
     parser.add_argument("--graphs", required=True, type=Path, help="graphs.jsonl the runs were built from")
+    parser.add_argument("--runs", default=DEFAULT_RUNS, type=Path,
+                        help="root of the trained runs (top<K>/<method>_seed<N>/binding.json): class names by id")
+    parser.add_argument("--k", type=int, default=None, help="K of the explained runs when their folder names do not say")
     parser.add_argument("--out", required=True, type=Path)
     parser.add_argument("--bootstrap", type=int, default=2000)
     parser.add_argument("--seed", type=int, default=1234)
@@ -268,7 +293,12 @@ def main(argv=None) -> int:
     nodes_of = read_nodes(args.graphs, wanted)
     if len(nodes_of) < len(wanted):
         print(f"warning: {len(wanted) - len(nodes_of)} of {len(wanted)} visits not found in {args.graphs}; they are left out")
-    lines, data = similar_report(runs, nodes_of, bootstrap=args.bootstrap, seed=args.seed)
+    ks = {m.group(1) for name in runs if (m := re.search(r"top(\d+)/", name + "/"))} or (
+        {str(args.k)} if args.k else set())
+    if len(ks) != 1:
+        raise SystemExit(f"cannot tell K from the run folders ({sorted(ks)}); pass --k with one K per call")
+    labels = label_order(args.runs, [f"top{next(iter(ks))}/{n.split('/')[-1]}" for n in runs])
+    lines, data = similar_report(runs, nodes_of, labels, bootstrap=args.bootstrap, seed=args.seed)
     document = ["# Explanation consistency across similar patients", "",
                 f"Patient-level bootstrap, {args.bootstrap} resamples, 95% percentile intervals; intervals are withheld "
                 f"below {MIN_PATIENTS_FOR_INTERVAL} patients.", ""] + lines

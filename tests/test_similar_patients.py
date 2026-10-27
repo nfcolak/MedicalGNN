@@ -20,7 +20,7 @@ def test_class_groups_match_the_graph_type_analysis():
     source = Path(sp.__file__).parent / "graph_types" / "step3_clinical.py"
     for node in ast.walk(ast.parse(source.read_text())):
         if isinstance(node, ast.Assign) and getattr(node.targets[0], "id", "") == "CLASS_GROUPS":
-            assert ast.literal_eval(node.value) == sp.CLASS_GROUPS
+            assert ast.literal_eval(node.value) == sp.CLASS_GROUPS_K20_IDS
             return
     pytest.fail("CLASS_GROUPS not found in step3_clinical.py")
 
@@ -116,11 +116,43 @@ def test_end_to_end_cli_similar_pairs_agree_more_than_other_group(tmp_path):
         for r in recs:
             (folder / f"subject_{r['sample_id']}.json").write_text(json.dumps(r))
     out = tmp_path / "out"
-    assert sp.main(["--explanations", str(runs), "--graphs", str(graphs), "--out", str(out), "--bootstrap", "50"]) == 0
+    trained = tmp_path / "trained" / "top20" / "m_seed1"
+    trained.mkdir(parents=True)
+    (trained / "binding.json").write_text(json.dumps({"label_order": sp.K20_LABELS}))
+    cli = ["--explanations", str(runs), "--graphs", str(graphs), "--runs", str(tmp_path / "trained"), "--k", "20"]
+    assert sp.main(cli + ["--out", str(out), "--bootstrap", "50"]) == 0
     data = json.loads((out / "similar_patients.json").read_text())
     similar = data["m/builtin"]["similar"]["rank_correlation"]["mean"]
     other = data["m/builtin"]["other_group"]["rank_correlation"]["mean"]
     assert similar > 0.9 and other < -0.9
     assert data["m/builtin"]["similar_minus_other_group"]["rank_correlation"]["mean"] > 1.5
     with pytest.raises(SystemExit):
-        sp.main(["--explanations", str(runs), "--graphs", str(graphs), "--out", str(out)])
+        sp.main(cli + ["--out", str(out)])
+    with pytest.raises(SystemExit, match="cannot tell K"):
+        sp.main(["--explanations", str(runs), "--graphs", str(graphs), "--runs", str(tmp_path / "trained"),
+                 "--out", str(tmp_path / "out2")])
+    with pytest.raises(SystemExit, match="binding.json"):
+        sp.main(["--explanations", str(runs), "--graphs", str(graphs), "--runs", str(tmp_path / "none"), "--k", "20",
+                 "--out", str(tmp_path / "out3")])
+
+
+def test_groups_follow_class_names_so_the_same_ids_group_differently_at_other_k():
+    k10 = ["Back or spine pain", "Diabetes mellitus", "GI bleed", "Head injury", "Heart failure"]
+    assert sp.GROUP_OF_NAME["Heart failure"] == "cardiac"
+    assert sp.CLASS_GROUPS["cardiac"] == ["Heart failure", "Non-ST elevation (NSTEMI) myocardial infarction",
+                                          "Unspecified atrial fibrillation"]
+    # class id 4 is Heart failure in this K=10 order but Back or spine pain in the K=20 order
+    record = {"sample_id": "a", "subject_id": "p1", "true_class_id": 4,
+              "fidelity_v2_intervention": {"eligible_node_kinds": ELIGIBLE}}
+    nodes = {"a": [("measurement", f"lab:{i}") for i in range(6)]}
+    visits, _ = sp.build_visits({"r": [record]}, nodes, k10)
+    assert visits[0]["group"] == "cardiac"
+    visits, _ = sp.build_visits({"r": [record]}, nodes, sp.K20_LABELS)
+    assert visits[0]["group"] == "injury_pain"
+
+
+def test_a_class_outside_the_twenty_has_no_group_and_is_left_out():
+    record = {"sample_id": "a", "subject_id": "p1", "true_class_id": 1,
+              "fidelity_v2_intervention": {"eligible_node_kinds": ELIGIBLE}}
+    visits, _ = sp.build_visits({"r": [record]}, {"a": [("measurement", "lab:1")]}, ["Sepsis", "Dehydration"])
+    assert visits == []
