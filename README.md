@@ -67,6 +67,21 @@ Check the rebuild against these sha256 values (`sha256sum` or `shasum -a 256`; t
 
 The graph hash is that of the `graphs.jsonl` file as produced by this repository. A full rebuild from the raw files reproduced all eight values.
 
+Graph hash recorded by the final runs. The 45 final runs were trained on the graph built on 2026-10-10, and their `binding.json` files record different graph hashes than the table above. Before publication one provenance label was renamed in the graph builder: the `reviewed_by` value of the source-checked knowledge rows (`edges[].provenance.reviewed_by` in `graphs.jsonl`, the `reviewed_by` column of `thresholds.csv`) changed to `automated-source-check-not-clinical-review`. No other field changed: nodes, edges, features, labels and the visit membership are identical.
+
+| File | Rebuilt by this repository | Trained file (recorded in the run bindings) |
+|---|---|---|
+| `graphs.jsonl` | `3aa1dc65…58dd`, 6,435,138,687 bytes | `53c92ea09159274528b2cb2ca454ad89ddb8064721007e29821a570f1ddf91ad`, 6,413,118,495 bytes |
+| `thresholds.csv` | `3571a87d…4b12`, 79,192 bytes | `0113be57055febb5dc26b1b3b8b8fe9cf1d44e802fb3477f4485339b355d2b04`, 78,820 bytes |
+| `visit_membership.jsonl` | `9e2399f3…90ed` | same |
+| `manifest.json` | differs | `e5d8028ac68e31658cec6cc6588064ded23dec9aa41832597ef9cb067ffff34b` (records build-machine paths and code hashes; not reproducible) |
+
+`comparison/final/graph_hash_check.py` hashes a rebuilt graph folder as it is and with the label swapped back in memory; the swapped hashes equal the trained files byte for byte (read-only, prints hashes only, about one minute):
+
+```bash
+env -u PYTHONPATH PYTHONDONTWRITEBYTECODE=1 /usr/bin/python3 -m comparison.final.graph_hash_check [--graph-dir DIR] [--binding <run>/binding.json]
+```
+
 ### Regenerate the comparison tables
 
 `comparison/final/compare_all.py` rebuilds the three result tables (K = 10, 20, 30) from the 45 stored final runs (5 methods x seeds 1234, 2025, 7) into a new folder. With `--check`, every produced file is compared with the stored tables.
@@ -249,7 +264,8 @@ comparison/
 │   ├── hpo.py                the light hyper-parameter search (K=17, 10k sample, 20 epochs, dev only)
 │   ├── hpo_all.py            recorded HPO of the four tuned methods: commands, best trials vs run.py flags (plan only by default)
 │   ├── build_split.py        rebuilds canonical_split.json from merged_ed.csv and compares (never overwrites it)
-│   └── split_check.py        read-only consistency check of the frozen canonical_split.json (never regenerates it)
+│   ├── split_check.py        read-only consistency check of the frozen canonical_split.json (never regenerates it)
+│   └── graph_hash_check.py   read-only: relates a rebuilt graph to the graph hashes recorded by the final runs
 ├── top3/
 │   └── compare.py            compares runs of one K: ranking (test), validation ranking as the selection column, mean +- SD, paired bootstrap
 ├── nasim/ ablation/ splits/  analysis packages of sections 2 and 4 (see "Analysis packages and their results")
