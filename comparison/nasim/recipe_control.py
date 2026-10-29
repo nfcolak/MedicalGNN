@@ -4,6 +4,9 @@ Arms (everything else is exactly the final CEI command of comparison/final/run.p
     R1_ls0      mp_label_smoothing=0.0 (final: 0.1)
     R2_ls0_wd   mp_label_smoothing=0.0 and mp_weight_decay=1.03e-6 (final: AdamW decoupled decay 0.01); the baseline-like recipe
     R3_ls0_wd_de0  R2 plus mp_dropedge=0.0 (final: default 0.2); the full baseline-like recipe: no label smoothing, small decay, no DropEdge
+    R4_wd       mp_weight_decay=1.03e-6 only (label smoothing and DropEdge as in the final recipe)
+    R5_de0      mp_dropedge=0.0 only (label smoothing and weight decay as in the final recipe)
+R1-R3 were trained with --date 20261012, R4 and R5 with --date 20261025 --arms R4_wd,R5_de0 (same training code).
 The reference arm is the existing final run set (clinical_runs_fair_v10t_20261011/top20/cei_mp2_seed*), not rerun.
 Each arm REPLACES the mp_label_smoothing option token of the final args (core.train keeps only the last value of a repeated key);
 mp_weight_decay is inserted right after it. Protocol stays fair_v10t (overrides []): validation selection, test scored once.
@@ -32,6 +35,8 @@ ARMS = {   # arm -> option tokens that replace FINAL_LS in the final args
     'R1_ls0': ['mp_label_smoothing=0.0'],
     'R2_ls0_wd': ['mp_label_smoothing=0.0', 'mp_weight_decay=1.03e-6'],
     'R3_ls0_wd_de0': ['mp_label_smoothing=0.0', 'mp_weight_decay=1.03e-6', 'mp_dropedge=0.0'],
+    'R4_wd': ['mp_label_smoothing=0.1', 'mp_weight_decay=1.03e-6'],
+    'R5_de0': ['mp_label_smoothing=0.1', 'mp_dropedge=0.0'],
 }
 PREFIX = ['nice', '-n', '5', 'env', '-u', 'PYTHONPATH', 'PYTHONDONTWRITEBYTECODE=1', '/usr/bin/python3', '-m', 'core.train']
 
@@ -57,7 +62,8 @@ def flag_diff(P, arm):
     base, mine = final_args(P, METHOD, K), arm_args(P, arm)
     drop = [t for t in base if t not in mine]
     add = [t for t in mine if t not in base]
-    return f"replaces --method-option {' '.join(drop)} with " + ' '.join(f'--method-option {t}' for t in add)
+    added = ' '.join(f'--method-option {t}' for t in add)
+    return f"replaces --method-option {' '.join(drop)} with {added}" if drop else f"adds {added}"
 
 
 def jobs(P, runs):
