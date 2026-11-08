@@ -82,6 +82,7 @@ final runs of the same K.
 | `relation_shuffle/relation_shuffle.{md,json}` | relation shuffling of the trained models (`comparison/explain/relation_shuffle.py`) |
 | `failure_types/k<K>/` | explanation score by kind of visit: `strata-report.md`, `strata-cells.csv`, `step1-report.md` (`analysis/failure_types/`) |
 | `cei_recipe_variants/comparison.{md,csv}`, `cei_recipe_variants/<variant>/` | the five recipe variants (see above) |
+| `predictive_confidence_test.md` | mean predicted-class probability of the four methods on the test fold, per K |
 | `predictive_per_seed_test.md` | test-fold AUROC and AUPRC per seed, plain and patient-weighted |
 
 All files are aggregates; no patient identifiers, rows or raw values. Not included: the per-visit records of the 36 runs
