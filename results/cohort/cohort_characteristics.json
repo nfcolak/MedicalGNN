@@ -1,0 +1,408 @@
+{
+ "flow": {
+  "all_visits_with_first_result": {
+   "visits": 185782,
+   "patients": 60240
+  },
+  "after_max_6_visits_per_patient": {
+   "visits": 100355,
+   "patients": 51961,
+   "raw_visits_in_cap_pool": 136894,
+   "excluded_by_window_rules": {
+    "eligible": 100355,
+    "end_before_start": 1,
+    "no_eligible_recorded_result_in_window": 2008,
+    "no_lab_charttime_in_window": 34531
+   }
+  },
+  "graphs": {
+   "visits": 100355,
+   "patients": 51961
+  },
+  "excluded_visits_total": 85427,
+  "excluded_patients_total": 8279,
+  "label_status": {
+   "no_frozen_class": 54553,
+   "labelled": 45692,
+   "outside_common_stays": 110
+  },
+  "label_reason_not_labelled": {
+   "no_class": 18991,
+   "r_symptom": 34678,
+   "unmapped_icd9": 154,
+   "override_none": 352,
+   "no_diagnosis": 160,
+   "z_code": 218,
+   "outside_common_stays": 110
+  },
+  "by_fold": {
+   "test": {
+    "index_visits": 10071,
+    "patients": 5236,
+    "samples": 10071
+   },
+   "train": {
+    "index_visits": 80246,
+    "patients": 41554,
+    "samples": 80246
+   },
+   "validation": {
+    "index_visits": 10038,
+    "patients": 5171,
+    "samples": 10038
+   }
+  }
+ },
+ "graphs": {
+  "graphs": 100355,
+  "nodes": 11326290,
+  "edges": 18949586,
+  "informative_edges": 10224119,
+  "manifest_counts": {
+   "ages_checked": 100355,
+   "diagnosis_nodes": 204367,
+   "edges": 18949586,
+   "graphs": 100355,
+   "informative_edges": 10224119,
+   "nodes": 11326290,
+   "structural_edges": 8725467
+  },
+  "manifest_coverage_by_fold": {
+   "test": {
+    "graphs": 10071,
+    "index_measurement_empty": 0,
+    "informative_edges": 1025289,
+    "with_baseline": 4664,
+    "with_complaint": 8718,
+    "with_knowledge": 10071,
+    "with_prior_diagnosis": 5405,
+    "with_vitals": 9919
+   },
+   "train": {
+    "graphs": 80246,
+    "index_measurement_empty": 0,
+    "informative_edges": 8164681,
+    "with_baseline": 37410,
+    "with_complaint": 69594,
+    "with_knowledge": 80246,
+    "with_prior_diagnosis": 43117,
+    "with_vitals": 78884
+   },
+   "validation": {
+    "graphs": 10038,
+    "index_measurement_empty": 0,
+    "informative_edges": 1034149,
+    "with_baseline": 4704,
+    "with_complaint": 8619,
+    "with_knowledge": 10038,
+    "with_prior_diagnosis": 5437,
+    "with_vitals": 9877
+   }
+  },
+  "complaint_vocabulary": {
+   "distinct_train_surface_forms": 5976,
+   "dropped_surface_forms": 5767,
+   "min_count": 50
+  },
+  "by_fold": {
+   "train": {
+    "graphs": 80246,
+    "mean_nodes": 112.75340826957107,
+    "mean_edges": 188.59751264860554,
+    "informative_share": 0.5394856125822607,
+    "mean_nodes_by_kind": {
+     "analyte": 27.453493008997334,
+     "complaint": 1.2554519851456771,
+     "diagnosis": 2.0325748323903996,
+     "knowledge": 25.960945093836454,
+     "measurement": 48.191336639832514,
+     "patient": 1.0,
+     "visit": 1.0,
+     "vital": 5.859606709368691
+    }
+   },
+   "validation": {
+    "graphs": 10038,
+    "mean_nodes": 113.8614265789998,
+    "mean_edges": 190.8792588164973,
+    "informative_share": 0.5397307789061432,
+    "mean_nodes_by_kind": {
+     "analyte": 27.527694759912333,
+     "complaint": 1.2417812313209802,
+     "diagnosis": 2.068539549711098,
+     "knowledge": 26.05827854154214,
+     "measurement": 49.09982068141064,
+     "patient": 1.0,
+     "visit": 1.0,
+     "vital": 5.8653118151026105
+    }
+   },
+   "test": {
+    "graphs": 10071,
+    "mean_nodes": 112.73349220534207,
+    "mean_edges": 188.5953728527455,
+    "informative_share": 0.5398121667270384,
+    "mean_nodes_by_kind": {
+     "analyte": 27.416244662893458,
+     "complaint": 1.2574719491609572,
+     "diagnosis": 2.035249726938735,
+     "knowledge": 25.999602819978154,
+     "measurement": 48.15609174858505,
+     "patient": 1.0,
+     "visit": 1.0,
+     "vital": 5.8688312977857215
+    }
+   }
+  }
+ },
+ "vocabulary": {
+  "10": {
+   "token_vocabulary": 863,
+   "token_min_count": 20,
+   "absence_items": 108,
+   "node_dim": 68,
+   "edge_dim": 26,
+   "num_relations": 19
+  },
+  "20": {
+   "token_vocabulary": 965,
+   "token_min_count": 20,
+   "absence_items": 121,
+   "node_dim": 68,
+   "edge_dim": 26,
+   "num_relations": 19
+  },
+  "30": {
+   "token_vocabulary": 991,
+   "token_min_count": 20,
+   "absence_items": 122,
+   "node_dim": 68,
+   "edge_dim": 26,
+   "num_relations": 19
+  }
+ },
+ "tasks": {
+  "10": {
+   "classes": 10,
+   "folds": {
+    "train": {
+     "visits": 25170,
+     "patients": 19983,
+     "age_mean": 57.30389352403655,
+     "age_sd": 21.329769279310543,
+     "age_median": 59.0,
+     "age_q1": 40.0,
+     "age_q3": 75.0,
+     "age_missing": 0,
+     "female": 13478,
+     "gender_missing": 0,
+     "acuity": {
+      "1": 1175,
+      "2": 10558,
+      "3": 12513,
+      "4": 785,
+      "5": 9
+     },
+     "acuity_missing": 130,
+     "majority_class_share": 0.1468414779499404,
+     "imbalance_largest_to_smallest": 3.1917098445595853,
+     "smallest_class_visits": 1158
+    },
+    "validation": {
+     "visits": 3165,
+     "patients": 2473,
+     "age_mean": 57.41927330173775,
+     "age_sd": 21.342657915078956,
+     "age_median": 59.0,
+     "age_q1": 41.0,
+     "age_q3": 75.0,
+     "age_missing": 0,
+     "female": 1762,
+     "gender_missing": 0,
+     "acuity": {
+      "1": 131,
+      "2": 1331,
+      "3": 1581,
+      "4": 104,
+      "5": 0
+     },
+     "acuity_missing": 18,
+     "majority_class_share": 0.1519747235387046,
+     "imbalance_largest_to_smallest": 3.0443037974683542,
+     "smallest_class_visits": 158
+    },
+    "test": {
+     "visits": 3175,
+     "patients": 2497,
+     "age_mean": 57.916850393700784,
+     "age_sd": 20.748911864818886,
+     "age_median": 60.0,
+     "age_q1": 41.0,
+     "age_q3": 74.0,
+     "age_missing": 0,
+     "female": 1740,
+     "gender_missing": 0,
+     "acuity": {
+      "1": 131,
+      "2": 1347,
+      "3": 1600,
+      "4": 83,
+      "5": 2
+     },
+     "acuity_missing": 12,
+     "majority_class_share": 0.1436220472440945,
+     "imbalance_largest_to_smallest": 3.234042553191489,
+     "smallest_class_visits": 141
+    }
+   }
+  },
+  "20": {
+   "classes": 20,
+   "folds": {
+    "train": {
+     "visits": 33532,
+     "patients": 25252,
+     "age_mean": 57.73267326732673,
+     "age_sd": 20.960824612031455,
+     "age_median": 60.0,
+     "age_q1": 41.0,
+     "age_q3": 75.0,
+     "age_missing": 0,
+     "female": 17383,
+     "gender_missing": 0,
+     "acuity": {
+      "1": 1914,
+      "2": 14877,
+      "3": 15685,
+      "4": 846,
+      "5": 10
+     },
+     "acuity_missing": 200,
+     "majority_class_share": 0.11022307049982107,
+     "imbalance_largest_to_smallest": 6.806629834254144,
+     "smallest_class_visits": 543
+    },
+    "validation": {
+     "visits": 4183,
+     "patients": 3142,
+     "age_mean": 57.66196509682047,
+     "age_sd": 21.086485949091472,
+     "age_median": 59.0,
+     "age_q1": 41.0,
+     "age_q3": 75.0,
+     "age_missing": 0,
+     "female": 2256,
+     "gender_missing": 0,
+     "acuity": {
+      "1": 214,
+      "2": 1863,
+      "3": 1966,
+      "4": 112,
+      "5": 0
+     },
+     "acuity_missing": 28,
+     "majority_class_share": 0.1149892421706909,
+     "imbalance_largest_to_smallest": 6.971014492753623,
+     "smallest_class_visits": 69
+    },
+    "test": {
+     "visits": 4174,
+     "patients": 3151,
+     "age_mean": 58.14662194537614,
+     "age_sd": 20.414400006433485,
+     "age_median": 60.0,
+     "age_q1": 43.0,
+     "age_q3": 74.0,
+     "age_missing": 0,
+     "female": 2227,
+     "gender_missing": 0,
+     "acuity": {
+      "1": 218,
+      "2": 1862,
+      "3": 1982,
+      "4": 90,
+      "5": 2
+     },
+     "acuity_missing": 20,
+     "majority_class_share": 0.10924772400574988,
+     "imbalance_largest_to_smallest": 6.422535211267606,
+     "smallest_class_visits": 71
+    }
+   }
+  },
+  "30": {
+   "classes": 30,
+   "folds": {
+    "train": {
+     "visits": 36592,
+     "patients": 27253,
+     "age_mean": 57.5,
+     "age_sd": 20.996442357588787,
+     "age_median": 60.0,
+     "age_q1": 41.0,
+     "age_q3": 75.0,
+     "age_missing": 0,
+     "female": 19164,
+     "gender_missing": 0,
+     "acuity": {
+      "1": 2184,
+      "2": 15999,
+      "3": 17295,
+      "4": 888,
+      "5": 13
+     },
+     "acuity_missing": 213,
+     "majority_class_share": 0.10100568430257979,
+     "imbalance_largest_to_smallest": 739.2,
+     "smallest_class_visits": 5
+    },
+    "validation": {
+     "visits": 4534,
+     "patients": 3388,
+     "age_mean": 57.48323775915306,
+     "age_sd": 21.14989221942681,
+     "age_median": 59.0,
+     "age_q1": 41.0,
+     "age_q3": 75.0,
+     "age_missing": 0,
+     "female": 2464,
+     "gender_missing": 0,
+     "acuity": {
+      "1": 239,
+      "2": 2004,
+      "3": 2140,
+      "4": 123,
+      "5": 0
+     },
+     "acuity_missing": 28,
+     "majority_class_share": 0.10608734009704456,
+     "imbalance_largest_to_smallest": 481.0,
+     "smallest_class_visits": 1
+    },
+    "test": {
+     "visits": 4566,
+     "patients": 3404,
+     "age_mean": 58.00153307052124,
+     "age_sd": 20.429543869342705,
+     "age_median": 60.0,
+     "age_q1": 42.0,
+     "age_q3": 74.0,
+     "age_missing": 0,
+     "female": 2465,
+     "gender_missing": 0,
+     "acuity": {
+      "1": 252,
+      "2": 2014,
+      "3": 2179,
+      "4": 97,
+      "5": 2
+     },
+     "acuity_missing": 22,
+     "majority_class_share": 0.09986859395532194,
+     "imbalance_largest_to_smallest": 91.2,
+     "smallest_class_visits": 5
+    }
+   }
+  }
+ }
+}
