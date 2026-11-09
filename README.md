@@ -156,6 +156,7 @@ Further analyses read the stored predictions of the final runs (no training). Ea
 | `comparison/s7_why` | section 7: class-support analysis, same classes across K (`support.py`), inference-time source masking (`masking.py`) | `results/s7_why/support/`, `results/s7_why/masking/` |
 | `comparison/s8_cost` | section 8: parameter counts, inference benchmark, inference memory, training cost | `results/s8_cost/` |
 | `comparison/s9_repro` | section 9: graph scan for the reproduction check | `results/s9_repro/` |
+| `analysis/cohort_characteristics.py` | cohort flow, graph statistics (nodes, edges, coverage, vocabulary and absence-item sizes) and the cohort table (age, sex, acuity, class balance per K and fold); aggregates only, counts below 25 suppressed | `results/cohort/` |
 | `comparison/explain` | explanations of the trained final models of GSAT, GraphCare, ProtGNN and CEI-GNN mp2 as they are: GradExplainer and GNNExplainer (vendored GraphXAI, `external/GraphXAI-main`, upstream a11e65f; GNNExplainer 50 epochs, seeded per visit, mean feature-mask penalty), Integrated Gradients from a not-recorded baseline (`core/explain/ig_clinical.py`; start step count chosen on validation, raised per visit until completeness holds or 256 steps are reached, the share of visits that met it is reported; the vendored zero-baseline IG stays in the records only) over the same input for every model (numeric row and token vector), and each model's own explanation (GSAT node attention, GraphCare last-layer visit attention, ProtGNN prototype subgraph from the model's own projection search with its recorded settings, CEI-GNN evidence ledger). Fidelity deletes the evidence from the graph record (with the concept nodes derived from it), re-encodes it with the run's preprocessing and scores the model's own forward (a combo threshold state goes with any of its required components and is evaluated again on the next-latest value with the artifact's threshold table, and only prior visits the deletion emptied are dropped); deletion/insertion curves and every number are compared with random deletion on the same graph, and the headline is the width-matched difference to random deletion. Not computed: the GraphXAI paper metrics that need ground truth (`run.py` drives `core/explain/runner.py` over the runs, `summarize.py` writes the aggregate tables, `replay_diff.py` shows how far a replay is from the stored predictions; `--checkpoint-dir <dir>` on the runner writes each explained visit's record there at once, so a long run that stopped is resumed by starting it again with the same directory). `recipe_tables.py` puts the final runs and the CEI-GNN recipe variants into one table (performance and every explanation score); `graph_types/` (steps 1-6) compares CEI-GNN with GSAT and GraphCare per visit across graph types | `results/explain_k20/` (K = 20, test fold, 1,000 patients / 1,345 visits; see its README) |
 
 Source masking (`results/s7_why/masking/`) scores the test fold with the stored final checkpoints (inference only; baselines chosen on validation; unmasked predictions match the stored test predictions in all 27 runs). `--fold validation` reproduces the earlier validation tables.
@@ -175,7 +176,7 @@ MedicalGNN/
 ├── data/           data pipeline, raw CSVs -> patient graphs (5 stages)
 ├── comparison/     final runner, comparison, split, inputs and results
 ├── tests/          unit tests for the kept code (run only in a testing phase)
-├── results/        result tables (aggregates only): test_top{10,20,30}.md and one folder per analysis package (baseline_fidelity_k20, s3_ledger, ablation_k20, split_replication_k20, s6_stats, s7_why, s8_cost, s9_repro)
+├── results/        result tables (aggregates only): test_top{10,20,30}.md and one folder per analysis package (baseline_fidelity_k20, s3_ledger, ablation_k20, split_replication_k20, s6_stats, s7_why, s8_cost, s9_repro, cohort, explain_k20, explain_final)
 ├── README.md       public front page
 ├── environment.yml / LICENSE / .gitignore
 ```
@@ -287,6 +288,8 @@ comparison/
 | I want ... | Look here |
 |---|---|
 | the final result tables | `results/test_top<K>.md` (aggregates; the full comparison files are in `comparison/standardized/final_compare_fv10t_test_20261019/`) |
+| the cohort table, the cohort flow and the graph statistics | `results/cohort/cohort_characteristics.md` |
+| the final explanation results (36 runs, K = 10, 20, 30; recipe variants) | `results/explain_final/` (see its README) |
 | the analysis tables (ablation, splits, statistics, class support, masking, cost) | `results/<package folder>/` (see "Analysis packages and their results") |
 | the test score of one run | `comparison/standardized/clinical_runs_fair_v10t_20261011/top<K>/<method>_seed<s>/result.json` (`test` key) |
 | the exact command / settings of a method | `comparison/final/run.py`, function `args()` (also under "Final commands" above) |
