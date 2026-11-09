@@ -404,5 +404,99 @@
     }
    }
   }
+ },
+ "pooled": {
+  "all_graphs": {
+   "visits": 100355,
+   "patients": 51961,
+   "age_mean": 57.49306960290967,
+   "age_sd": 20.181836245463664,
+   "age_median": 59.0,
+   "age_q1": 42.0,
+   "age_q3": 73.0,
+   "age_missing": 0,
+   "female": 54380,
+   "gender_missing": 0,
+   "acuity": {
+    "1": 5644,
+    "2": 41764,
+    "3": 50641,
+    "4": 1671,
+    "5": 23
+   },
+   "acuity_missing": 612,
+   "majority_class_share": 0.04616611030840516,
+   "imbalance_largest_to_smallest": 772.1666666666666,
+   "smallest_class_visits": 6
+  },
+  "K10": {
+   "visits": 31510,
+   "patients": 24953,
+   "age_mean": 57.377245318946365,
+   "age_sd": 21.2733902423473,
+   "age_median": 59.0,
+   "age_q1": 40.0,
+   "age_q3": 75.0,
+   "age_missing": 0,
+   "female": 16980,
+   "gender_missing": 0,
+   "acuity": {
+    "1": 1437,
+    "2": 13236,
+    "3": 15694,
+    "4": 972,
+    "5": 11
+   },
+   "acuity_missing": 160,
+   "majority_class_share": 0.14703268803554428,
+   "imbalance_largest_to_smallest": 3.149558123725357,
+   "smallest_class_visits": 1471
+  },
+  "K20": {
+   "visits": 41889,
+   "patients": 31545,
+   "age_mean": 57.76686003485402,
+   "age_sd": 20.919531404687906,
+   "age_median": 60.0,
+   "age_q1": 41.0,
+   "age_q3": 75.0,
+   "age_missing": 0,
+   "female": 21866,
+   "gender_missing": 0,
+   "acuity": {
+    "1": 2346,
+    "2": 18602,
+    "3": 19633,
+    "4": 1048,
+    "5": 12
+   },
+   "acuity_missing": 248,
+   "majority_class_share": 0.11060182864236434,
+   "imbalance_largest_to_smallest": 6.7242380261248185,
+   "smallest_class_visits": 689
+  },
+  "K30": {
+   "visits": 45692,
+   "patients": 34045,
+   "age_mean": 57.548454871749975,
+   "age_sd": 20.95589202649406,
+   "age_median": 60.0,
+   "age_q1": 41.0,
+   "age_q3": 75.0,
+   "age_missing": 0,
+   "female": 24093,
+   "gender_missing": 0,
+   "acuity": {
+    "1": 2675,
+    "2": 20017,
+    "3": 21614,
+    "4": 1108,
+    "5": 15
+   },
+   "acuity_missing": 263,
+   "majority_class_share": 0.10139630569902827,
+   "imbalance_largest_to_smallest": 772.1666666666666,
+   "smallest_class_visits": 6
+  }
  }
 }

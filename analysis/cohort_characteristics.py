@@ -75,6 +75,29 @@ def scan_graphs(path):
     return visit, size
 
 
+def summarize(rs, visit):
+    """Visit, patient, age, sex, acuity and class-balance summary of a list of target rows."""
+    ages = sorted(v[1] for r in rs if (v := visit.get(r["sample_id"])) and v[1] is not None)
+    gend = [v[2] for r in rs if (v := visit.get(r["sample_id"]))]
+    acu = [v[3] for r in rs if (v := visit.get(r["sample_id"]))]
+    cls = collections.Counter(r["label"] for r in rs if r["label"])
+    n = len(rs)
+    mean = sum(ages) / len(ages)
+    sd = math.sqrt(sum((x - mean) ** 2 for x in ages) / (len(ages) - 1))
+    out = {
+        "visits": n, "patients": len({r["subject_id"] for r in rs}),
+        "age_mean": mean, "age_sd": sd, "age_median": _quantile(ages, 0.5), "age_q1": _quantile(ages, 0.25), "age_q3": _quantile(ages, 0.75),
+        "age_missing": n - len(ages),
+        "female": sum(1 for x in gend if x == "F"), "gender_missing": sum(1 for x in gend if x not in ("F", "M")),
+        "acuity": {str(l): sum(1 for x in acu if x is not None and int(x) == l) for l in range(1, 6)},
+        "acuity_missing": sum(1 for x in acu if x is None),
+    }
+    if cls:
+        out.update({"majority_class_share": max(cls.values()) / n, "imbalance_largest_to_smallest": max(cls.values()) / max(1, min(cls.values())),
+                    "smallest_class_visits": min(cls.values())})
+    return out
+
+
 def label_sets(runs_root):
     """Class names of each K task, from a trained run's binding."""
     out = {}
@@ -114,7 +137,7 @@ def main():
     unc = json.load(open(os.path.join(a.cohort_uncapped, "manifest.json")))
     cap = json.load(open(os.path.join(a.cohort_capped, "manifest.json")))
 
-    res = {"flow": {}, "graphs": {}, "vocabulary": vocab_sizes(a.runs), "tasks": {}}
+    res = {"flow": {}, "graphs": {}, "vocabulary": vocab_sizes(a.runs), "tasks": {}, "pooled": {}}
     res["flow"] = {
         "all_visits_with_first_result": {"visits": unc["cohort_policy"]["index_visits"], "patients": unc["cohort_policy"]["patients"]},
         "after_max_6_visits_per_patient": {"visits": cap["cohort_policy"]["index_visits"], "patients": cap["cohort_policy"]["patients"],
@@ -139,29 +162,14 @@ def main():
                     for f, s in size.items()},
     }
 
+    res["pooled"]["all_graphs"] = summarize(targets, visit)
     for k in KS:
         keep = set(labels[k])
         rows = [r for r in targets if r["label_status"] == "labelled" and r["label"] in keep]
         res["tasks"][k] = {"classes": len(keep), "folds": {}}
         for f in FOLDS:
-            rs = [r for r in rows if r["split"] == f]
-            ages = sorted(v[1] for r in rs if (v := visit.get(r["sample_id"])) and v[1] is not None)
-            gend = [v[2] for r in rs if (v := visit.get(r["sample_id"]))]
-            acu = [v[3] for r in rs if (v := visit.get(r["sample_id"]))]
-            cls = collections.Counter(r["label"] for r in rs)
-            n = len(rs)
-            mean = sum(ages) / len(ages)
-            sd = math.sqrt(sum((x - mean) ** 2 for x in ages) / (len(ages) - 1))
-            res["tasks"][k]["folds"][f] = {
-                "visits": n, "patients": len({r["subject_id"] for r in rs}),
-                "age_mean": mean, "age_sd": sd, "age_median": _quantile(ages, 0.5), "age_q1": _quantile(ages, 0.25), "age_q3": _quantile(ages, 0.75),
-                "age_missing": sum(1 for g_ in rs if (visit.get(g_["sample_id"]) or (0, None))[1] is None),
-                "female": sum(1 for x in gend if x == "F"), "gender_missing": sum(1 for x in gend if x not in ("F", "M")),
-                "acuity": {str(l): sum(1 for x in acu if x is not None and int(x) == l) for l in range(1, 6)},
-                "acuity_missing": sum(1 for x in acu if x is None),
-                "majority_class_share": max(cls.values()) / n, "imbalance_largest_to_smallest": max(cls.values()) / max(1, min(cls.values())),
-                "smallest_class_visits": min(cls.values()),
-            }
+            res["tasks"][k]["folds"][f] = summarize([r for r in rows if r["split"] == f], visit)
+        res["pooled"][f"K{k}"] = summarize(rows, visit)
 
     os.makedirs(a.out, exist_ok=True)
     json.dump(res, open(os.path.join(a.out, "cohort_characteristics.json"), "w"), indent=1, default=float)
@@ -206,6 +214,15 @@ def write_md(res, path):
     for k in KS:
         v = res["vocabulary"][k]
         L.append(f"| {k} | {v['token_vocabulary']} | {v['token_min_count']} | {v['absence_items']} | {v['node_dim']} | {v['edge_dim']} | {v['num_relations']} |")
+    L += ["", "## Cohort characteristics, all folds pooled", "",
+          "Age in years at the visit (mean (SD); median [Q1, Q3]); female and acuity shares in % of visits (acuity 4 and 5 merged, since level 5 has fewer than "
+          f"{SMALL} visits); ESI triage level.", "",
+          "| Group | Visits | Patients | Age mean (SD) | Age median [Q1, Q3] | Female (%) | Acuity 1 (%) | 2 | 3 | 4-5 | Missing |", "|---|---|---|---|---|---|---|---|---|---|---|"]
+    for key, name in (("all_graphs", "All graphs (labelled or not)"), ("K20", "K = 20 task"), ("K10", "K = 10 task"), ("K30", "K = 30 task")):
+        t = res["pooled"][key]
+        n, ac = t["visits"], t["acuity"]
+        L.append(f"| {name} | {n:,} | {t['patients']:,} | {t['age_mean']:.1f} ({t['age_sd']:.1f}) | {t['age_median']:.0f} [{t['age_q1']:.0f}, {t['age_q3']:.0f}] | {_pct(t['female'], n)} | "
+                 f"{_pct(ac['1'], n)} | {_pct(ac['2'], n)} | {_pct(ac['3'], n)} | {_pct(ac['4'] + ac['5'], n)} | {_pct(t['acuity_missing'], n)} |")
     L += ["", "## Cohort characteristics per task and fold", "",
           "Labelled visits of the K most frequent diagnoses (ranked by training count). Age in years at the visit (mean ± SD; median [Q1, Q3]); acuity is the ESI triage level.", "",
           "| K | Fold | Visits | Patients | Age mean ± SD | Age median [Q1, Q3] | Age missing (%) | Female (%) | Sex missing (%) | Acuity 1 | 2 | 3 | 4 | 5 | Acuity missing (%) | Majority class (%) | Largest : smallest class |",

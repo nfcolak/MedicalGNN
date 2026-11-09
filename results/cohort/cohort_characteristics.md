@@ -71,6 +71,17 @@ Complaint vocabulary: 209 surface forms kept of 5,976 distinct in the training f
 | 20 | 965 | 20 | 121 | 68 | 26 | 19 |
 | 30 | 991 | 20 | 122 | 68 | 26 | 19 |
 
+## Cohort characteristics, all folds pooled
+
+Age in years at the visit (mean (SD); median [Q1, Q3]); female and acuity shares in % of visits (acuity 4 and 5 merged, since level 5 has fewer than 25 visits); ESI triage level.
+
+| Group | Visits | Patients | Age mean (SD) | Age median [Q1, Q3] | Female (%) | Acuity 1 (%) | 2 | 3 | 4-5 | Missing |
+|---|---|---|---|---|---|---|---|---|---|---|
+| All graphs (labelled or not) | 100,355 | 51,961 | 57.5 (20.2) | 59 [42, 73] | 54.2 | 5.6 | 41.6 | 50.5 | 1.7 | 0.6 |
+| K = 20 task | 41,889 | 31,545 | 57.8 (20.9) | 60 [41, 75] | 52.2 | 5.6 | 44.4 | 46.9 | 2.5 | 0.6 |
+| K = 10 task | 31,510 | 24,953 | 57.4 (21.3) | 59 [40, 75] | 53.9 | 4.6 | 42.0 | 49.8 | 3.1 | 0.5 |
+| K = 30 task | 45,692 | 34,045 | 57.5 (21.0) | 60 [41, 75] | 52.7 | 5.9 | 43.8 | 47.3 | 2.5 | 0.6 |
+
 ## Cohort characteristics per task and fold
 
 Labelled visits of the K most frequent diagnoses (ranked by training count). Age in years at the visit (mean ± SD; median [Q1, Q3]); acuity is the ESI triage level.
