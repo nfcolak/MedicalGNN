@@ -54,14 +54,14 @@ def test_plan_prints_one_command_per_run_and_executes_nothing(tmp_path, capsys):
 
 
 def test_default_plan_is_the_36_final_runs(tmp_path, capsys):
-    """3 K x 4 methods x 3 seeds, each (K, method, seed) once, GCHM-PNA absent."""
+    """3 K x 4 methods x 3 seeds, each (K, method, seed) once."""
     runs = make_runs(tmp_path / 'runs', ks=driver.DEFAULT_KS, methods=driver.DEFAULT_METHODS,
                      seeds=driver.DEFAULT_SEEDS)
     assert driver.main(['--runs', str(runs), '--out', str(tmp_path / 'out'), '--plan']) == 0
     text = capsys.readouterr().out
     outputs = [line.split('-> ')[1].split()[0] for line in text.splitlines() if line.startswith('  -> ')]
     assert len(outputs) == 36 and len(set(outputs)) == 36
-    assert 'gchm_pna' not in text and 'plan:' not in text and '36 runs' in text
+    assert 'plan:' not in text and '36 runs' in text
 
 
 def test_without_flag_prints_plan_and_exits_2(tmp_path, capsys):
@@ -129,10 +129,8 @@ def test_filled_out_dir_is_refused(tmp_path):
     assert driver.main(args(runs, out2, '--plan')) == 0
 
 
-def test_dropped_and_unknown_methods_are_refused(tmp_path):
+def test_unknown_methods_are_refused(tmp_path):
     runs = make_runs(tmp_path / 'runs')
-    with pytest.raises(SystemExit, match='not part of the explanation study'):
-        driver.main(args(runs, tmp_path / 'out', '--plan', methods='gchm_pna'))
     with pytest.raises(SystemExit, match='unknown method'):
         driver.main(args(runs, tmp_path / 'out', '--plan', methods='nope'))
 

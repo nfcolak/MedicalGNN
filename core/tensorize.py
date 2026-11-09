@@ -462,19 +462,6 @@ def encode_graph(graph, prep, visit_membership, edge_mode='all', drop_relations=
     return data
 
 
-def degree_histogram(datasets, max_degree=64):
-    """In-degree histogram for PNA-style aggregators; train split only."""
-    hist = torch.zeros(max_degree + 1, dtype=torch.long)
-    for data in datasets:
-        if data.edge_index.numel() == 0:
-            hist[0] += data.num_nodes
-            continue
-        deg = torch.bincount(data.edge_index[1], minlength=data.num_nodes)
-        deg = deg.clamp(max=max_degree)
-        hist += torch.bincount(deg, minlength=max_degree + 1)
-    return hist
-
-
 def preprocessing_state(prep):
     if prep.get('preprocessing_version') != PREPROCESSING_VERSION:
         raise ValueError('Incompatible preprocessing version; cannot relabel old state')

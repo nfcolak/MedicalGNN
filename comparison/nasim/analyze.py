@@ -5,7 +5,7 @@
         [--method gsat] --out <new dir>
 
 Every folder holds `<method>_seed<s>/` run dirs (result.json, binding.json, validation.npz, test.npz). The
-method key is the run-dir name without `_seed<s>` (so `gsat`, `cei_mp2`, `gchm_pna`). Read-only on the runs;
+method key is the run-dir name without `_seed<s>` (so `gsat`, `cei_mp2`). Read-only on the runs;
 `--out` must not exist. Statistics, reading rule and tables: see comparison/ablation/arms_vs_ref.py (test first).
 """
 import sys

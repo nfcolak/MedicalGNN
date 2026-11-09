@@ -366,7 +366,7 @@ def parity(ref_dir, rows, same_rows, methods, log):
     mine = {(r['fold'], r['K'], r['class']): r for r in rows}
     colmap = {'train_support': 'train_support', 'eval_support': 'eval_support', 'delta_best': 'delta_vs_best',
               'delta_mean': 'delta_vs_mean_of_4'}
-    short = {'cei_mp2': 'cei', 'gchm_pna': 'gchm'}
+    short = {'cei_mp2': 'cei'}
     for m in methods:
         colmap['f1_' + m] = 'f1_' + short.get(m, m)
         if m != FOCUS:

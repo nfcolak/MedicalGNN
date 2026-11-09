@@ -22,7 +22,7 @@ from comparison.final import run
 REPO = Path(__file__).resolve().parents[2]
 NAME = 'fv10_k17_20261011'
 N_TRIALS = 12
-METHODS = ['gsat', 'graphcare', 'protgnn', 'cei_mp2']   # GCHM-PNA is not tuned in new analyses
+METHODS = ['gsat', 'graphcare', 'protgnn', 'cei_mp2']
 SPECIFIC = {   # best.json param -> run.py flag
     'gsat': {'info_loss_coef': '--gsat-info-loss-coef'},
     'graphcare': {'decay_rate': '--graphcare-decay-rate'},

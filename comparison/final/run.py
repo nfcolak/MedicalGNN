@@ -18,8 +18,8 @@ TARGETS = 'targets_primary_v4_v5plus60_v5_test_20261011/targets.csv'
 V3_STATE = 'v3_state_L4_v5c_v10t_top{K}_20261011/K4.json'
 WORKERS, THREADS = 6, 3
 SEEDS = (1234, 2025, 7)
-METHODS = ['cei_mp2', 'protgnn', 'gchm_pna', 'gsat', 'graphcare']   # heavy first
-PLAN_ORDER = ['gsat', 'graphcare', 'cei_mp2', 'protgnn', 'gchm_pna']
+METHODS = ['cei_mp2', 'protgnn', 'gsat', 'graphcare']   # heavy first
+PLAN_ORDER = ['gsat', 'graphcare', 'cei_mp2', 'protgnn']
 
 
 class Paths:
@@ -34,7 +34,7 @@ class Paths:
         return self.events / V3_STATE.format(K=K)
 
 
-def args(P, m, K):   # HPO-tuned settings for gsat/graphcare/protgnn/cei_mp2 (comparison/final/hpo.py; cei_mp2 weight decay is mp_weight_decay 0.01, not the flag), GCHM-PNA = defaults; same for every K
+def args(P, m, K):   # HPO-tuned settings for gsat/graphcare/protgnn/cei_mp2 (comparison/final/hpo.py; cei_mp2 weight decay is mp_weight_decay 0.01, not the flag); same for every K
     return {
         'gsat': '--method gsat --optimizer adamw_cosine --lr 0.00369 --weight-decay 6.17e-5 --dropout 0.137 --gsat-info-loss-coef 0.104',
         'graphcare': '--method graphcare --optimizer adamw_cosine --lr 0.00281 --weight-decay 1.05e-6 --dropout 0.286 --graphcare-decay-rate 0.0116',
@@ -44,7 +44,6 @@ def args(P, m, K):   # HPO-tuned settings for gsat/graphcare/protgnn/cei_mp2 (co
                     '--method-option mp_root=bias --method-option mp_optimizer=adamw --method-option mp_lr_schedule=cosine '
                     '--method-option mp_label_smoothing=0.1 --lr 0.00237 --weight-decay 1.03e-6 --dropout 0.493'),
         'protgnn': '--method protgnn --optimizer adamw_cosine --lr 0.00261 --weight-decay 4.42e-6 --dropout 0.345 --protgnn-prototypes-per-class 5',
-        'gchm_pna': '--method clinical_gnn --conv gchm',
     }[m].split()
 
 

@@ -32,9 +32,9 @@ FOLDS = ('test', 'validation')      # reported fold first, decision fold second
 FOLD_FILE = {'validation': 'validation.npz', 'test': 'test.npz'}
 FOLD_RESULT_KEY = {'validation': 'metrics', 'test': 'test'}
 NAME = {'cei_mp2': 'CEI-GNN mp2', 'gsat': 'GSAT', 'graphcare': 'GraphCare-style (adapted)',
-        'protgnn': 'ProtGNN', 'gchm_pna': 'GCHM-PNA'}
+        'protgnn': 'ProtGNN'}
 # compare.py names (method of the binding) -> method names of this module
-COMPARE_NAMES = {'cei_gnn_mp2': 'cei_mp2', 'clinical_gnn:gchm': 'gchm_pna'}
+COMPARE_NAMES = {'cei_gnn_mp2': 'cei_mp2'}
 N_PATIENT_BOOT = 1000          # compare.py N_BOOT
 N_TWO_LEVEL_BOOT = 2000
 PATIENT_RNG = 2026             # compare.py SEED
@@ -711,7 +711,7 @@ def main(argv=None):
     ap.add_argument('--runs', required=True, help='directory with top<K>/<method>_seed<S>/ run folders')
     ap.add_argument('--out', required=True, help='NEW output directory (must not exist)')
     ap.add_argument('--methods', default=','.join(DEFAULT_METHODS),
-                    help='comma list; default excludes gchm_pna (pass it only for parity checks with older numbers)')
+                    help='comma list')
     ap.add_argument('--ks', default=','.join(map(str, KS))),
     ap.add_argument('--seeds', default=','.join(map(str, SEEDS)))
     ap.add_argument('--compare-dir', default=None, help='folder with compare_top<K>.json: print the max difference of the '

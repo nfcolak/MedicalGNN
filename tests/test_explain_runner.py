@@ -498,19 +498,6 @@ def test_a_missing_run_file_or_a_changed_preprocessing_json_is_refused(tmp_path)
         explain.load_run_bundle(run_dir)
 
 
-def test_gchm_runs_are_refused(tmp_path):
-    run_dir = train_one(tmp_path, "run_gchm_refused", method="gsat", conv=None)
-    binding_path = run_dir / "binding.json"
-    binding = json.loads(binding_path.read_text())
-    binding.update(method="clinical_gnn", conv="gchm")
-    binding_path.write_text(json.dumps(binding))
-    with pytest.raises(ValueError, match="GCHM-PNA is not part of the explanation study"):
-        explain.load_run_bundle(run_dir)
-    with pytest.raises(ValueError, match="GCHM-PNA is not part of the explanation study"):
-        explain.build_model(binding, {})
-    assert "gchm" not in explain.BLACK_BOX_CONVS
-
-
 def test_cei_mp2_is_registered_and_dispatched_through_the_bridge(monkeypatch):
     """The runner imports the bridge lazily, so a stub proves the dispatch (the bridge's own
     behaviour is covered in tests/test_cei_bridge.py)."""

@@ -1,12 +1,12 @@
 """Section 2 cross-method analysis: every recipe/fidelity arm minus every final baseline, K=20.
 
 Analysis from stored predictions only (no training, no model is loaded). Arms: the CEI-GNN mp2 training-recipe
-controls R1-R3, the ProtGNN projection-selected arm P1, the GCHM-PNA cosine-schedule arm C1 and the six-cell GSAT
+controls R1-R3, the ProtGNN projection-selected arm P1 and the six-cell GSAT
 grid G (one seed each); the final CEI-GNN mp2 is carried as an anchor row. Baselines: ProtGNN final and
-projection-selected, GraphCare, GSAT, GCHM-PNA final and cosine. Every pair is the paired two-level bootstrap of
+projection-selected, GraphCare, GSAT. Every pair is the paired two-level bootstrap of
 `comparison.ablation.arms_vs_ref` (matched seeds, then patients, one shared patient resample per replicate;
 `load_run`, `bootstrap_f1`, `two_level` are reused, not copied) on difference = arm - baseline. An arm is never
-compared with its own runs (P1 vs ProtGNN projection-selected, C1 vs GCHM-PNA cosine).
+compared with its own runs (P1 vs ProtGNN projection-selected).
 
     python -m comparison.nasim.cross_method --runs <comparison/standardized> --out <new dir> \
         [--fold test|validation] [--stored-section2 <section2-tables.md>]
@@ -38,22 +38,21 @@ FOLDS = ('test', 'validation')
 FOLD_TAG = {'test': 'test', 'validation': 'validation (decision fold)'}
 FINAL = 'clinical_runs_fair_v10t_20261011/top20'
 S2 = 'clinical_runs_nasim_s2_20261012'
-P1_DIR, C1_DIR = f'{S2}/P1_proj10_select/top20', f'{S2}/C1_cosine/top20'
+P1_DIR = f'{S2}/P1_proj10_select/top20'
 GRID = [(ib, r) for ib in ('1.0', '0.1', '0.01') for r in ('0.5', '0.7')]
 # label -> (run folder under --runs, method key)
 ARMS = {'Final CEI (anchor)': (FINAL, 'cei_mp2'),
         'R1': (f'{S2}/R1_ls0/top20', 'cei_mp2'),
         'R2': (f'{S2}/R2_ls0_wd/top20', 'cei_mp2'),
         'R3': (f'{S2}/R3_ls0_wd_de0/top20', 'cei_mp2'),
-        'P1': (P1_DIR, 'protgnn'),
-        'C1': (C1_DIR, 'gchm_pna')}
+        'P1': (P1_DIR, 'protgnn')}
 for _ib, _r in GRID:
     ARMS[f'G ib{_ib} r{_r}'] = (f'{S2}/G_ib{_ib}_r{_r}/top20', 'gsat')
 BASES = {'ProtGNN final': (FINAL, 'protgnn'), 'ProtGNN proj-select': (P1_DIR, 'protgnn'),
-         'GraphCare': (FINAL, 'graphcare'), 'GSAT': (FINAL, 'gsat'),
-         'GCHM-PNA final': (FINAL, 'gchm_pna'), 'GCHM-PNA cosine': (C1_DIR, 'gchm_pna')}
-# the five baseline columns of the earlier validation table (ProtGNN final was not a column there)
-EARLIER_FIVE = ('GCHM-PNA final', 'GCHM-PNA cosine', 'ProtGNN proj-select', 'GraphCare', 'GSAT')
+         'GraphCare': (FINAL, 'graphcare'), 'GSAT': (FINAL, 'gsat')}
+# the baseline columns of the earlier validation table that are still compared (ProtGNN final was not a column
+# there; columns of baselines no longer in BASES are skipped)
+EARLIER_BASELINES = ('ProtGNN proj-select', 'GraphCare', 'GSAT')
 PROTOCOL_NOTE = A.PROTOCOL_NOTE
 
 
@@ -126,7 +125,7 @@ def analyze(runs_root):
     for arm in ARMS:
         for fold in FOLDS:
             w = {}
-            for name, subset in (('all_baselines', tuple(BASES)), ('earlier_five', EARLIER_FIVE)):
+            for name, subset in (('all_baselines', tuple(BASES)), ('earlier_baselines', EARLIER_BASELINES)):
                 ps = [p for p in doc['pairs'] if p['arm'] == arm and p['baseline'] in subset]
                 vals = [x for p in ps for x in p[fold]['per_seed_delta']]
                 w[name] = {'ahead': int(sum(x > 0 for x in vals)), 'of': len(vals),
@@ -172,13 +171,13 @@ def render(doc, lead):
         for arm in ARMS:
             L.append(f'| {arm} | ' + ' | '.join(cell(pair_of(doc, arm, b), fold) for b in BASES) + ' |')
         L += ['', 'Matched-seed win counts (seeds in which the arm is ahead / matched-seed comparisons; min and max of the '
-                  'per-seed differences):', '', '| arm | all six baselines | the five baselines of the earlier validation table |',
+                  'per-seed differences):', '', '| arm | all four baselines | the three baselines of the earlier validation table |',
               '|---|---|---|']
         for arm in ARMS:
             w = doc['wins'][arm][fold]
             L.append(f"| {arm} | " + ' | '.join(
                 f"{w[k]['ahead']}/{w[k]['of']} ({w[k]['min']:+.4f} to {w[k]['max']:+.4f})"
-                for k in ('all_baselines', 'earlier_five')) + ' |')
+                for k in ('all_baselines', 'earlier_baselines')) + ' |')
     L += ['', '## Pair detail', '', '| arm | baseline | matched seeds | fold | d | CI seeds+patients | P(d>0) | CI patients only '
           '| per-seed d | reading |', '|---|---|---|---|---|---|---|---|---|---|']
     for p in doc['pairs']:
@@ -205,8 +204,11 @@ def parse_stored(text):
         parts = [c.strip() for c in l.strip().strip('|').split('|')]
         if len(parts) == len(bases) + 1 and parts[0] in ('Final', 'R1', 'R2', 'R3'):
             for (b, _), c in zip(bases, parts[1:]):
+                if b not in BASES:   # column of a baseline no longer compared
+                    continue
                 m = DELTA_CELL.fullmatch(c)
                 cells[(parts[0], b)] = tuple(float(x) for x in m.groups())
+    bases = [(b, m) for b, m in bases if b in BASES]
     sec1 = text.split('\n## 1.', 1)[1].split('\n## 2.', 1)[0]
     arm_means = {}
     for l in sec1.splitlines():

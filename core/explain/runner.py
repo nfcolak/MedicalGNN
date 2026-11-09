@@ -29,7 +29,7 @@ of ONE finished run, hash-pinned to that run's binding.json, written next to the
 Method coverage: gsat, protgnn, graphcare (through `core/explain/graphxai_wrapper.py`), CEI-GNN v3 / mp2
 (through `core/explain/cei_bridge.py`) and the black-box baselines (clinical_gnn with --conv
 edge_conditioned | hgt, explained post hoc only). Any other registered method is refused with a clear
-message; GCHM-PNA is not part of the explanation study.
+message.
 
 Outputs: every run writes to a new, empty, caller-chosen directory: one record per explained visit (record
 schema 3), cohort.json, `explanation_manifest.json` (settings, per-method disclosure, built-in explanation,
@@ -132,14 +132,6 @@ FOLD_ROLE = {"test": "report", "validation": "decision", "dev": "decision"}
 # Fallback replay rule when the byte-exact hash cannot reproduce (another machine or
 # thread count): every row within this of the stored <fold>.npz and 100% argmax agreement.
 REPLAY_TOLERANCE = 1e-4
-GCHM_REFUSAL = "GCHM-PNA is not part of the explanation study"
-
-
-def _refuse_gchm(binding: dict[str, Any]) -> None:
-    if binding.get("method") == "clinical_gnn" and str(binding.get("conv") or "").startswith("gchm"):
-        raise ValueError(GCHM_REFUSAL)
-
-
 def load_run_bundle(run_dir, fold: str = "test") -> RunBundle:
     """Load and hash-verify binding.json/preprocessing.json/best.pt. Refuses
     to proceed on any mismatch, before anything is explained."""
@@ -152,7 +144,6 @@ def load_run_bundle(run_dir, fold: str = "test") -> RunBundle:
         if not path.is_file():
             raise FileNotFoundError(f"{label} missing from run directory: {run_dir}")
     binding = json.loads(binding_path.read_text())
-    _refuse_gchm(binding)
     if sha256(prep_path) != binding.get("preprocessing_sha256"):
         raise ValueError(
             "preprocessing.json hash does not match binding.json's recorded "
@@ -385,7 +376,6 @@ def build_model(binding: dict[str, Any], state_dict: dict[str, torch.Tensor]):
     """
     method = binding["method"]
     conv = binding.get("conv")
-    _refuse_gchm(binding)
     node_dim, edge_dim = binding["node_dim"], binding["edge_dim"]
     num_classes = binding["num_classes"]
     num_tokens = binding["vocabulary_size"]
@@ -402,7 +392,6 @@ def build_model(binding: dict[str, Any], state_dict: dict[str, torch.Tensor]):
             use_message_passing=binding.get("message_passing", True),
             conv=conv, num_triples=num_triples, payload_dim=PAYLOAD_WIDTH,
             heads=binding.get("heads") or 4,
-            modulation=binding.get("modulation") or "multiplicative",
         )
         model.load_state_dict(state_dict)
         return model, False

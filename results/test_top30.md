@@ -7,10 +7,9 @@ Methods are in test-ranking order (mean test macro-F1 over seeds). Test macro-F1
 | Test rank | Method | Test macro-F1 (mean ± SD) | Test accuracy (mean) | Test top-3 accuracy (mean) | Selected validation macro-F1 (mean; decision fold) | Validation rank (decision) | Seeds |
 |---|---|---|---|---|---|---|---|
 | 1 | CEI-GNN mp2 | 0.5781 ± 0.0035 | 0.6662 | 0.8631 | 0.5708 | 1 | 1234, 2025, 7 |
-| 2 | GSAT | 0.5570 ± 0.0075 | 0.6483 | 0.8469 | 0.5548 | 4 | 1234, 2025, 7 |
+| 2 | GSAT | 0.5570 ± 0.0075 | 0.6483 | 0.8469 | 0.5548 | 3 | 1234, 2025, 7 |
 | 3 | ProtGNN | 0.5567 ± 0.0023 | 0.6472 | 0.8485 | 0.5632 | 2 | 1234, 2025, 7 |
-| 4 | GCHM-PNA | 0.5556 ± 0.0087 | 0.6479 | 0.8498 | 0.5602 | 3 | 1234, 2025, 7 |
-| 5 | GraphCare | 0.5467 ± 0.0020 | 0.6447 | 0.8437 | 0.5491 | 5 | 1234, 2025, 7 |
+| 4 | GraphCare | 0.5467 ± 0.0020 | 0.6447 | 0.8437 | 0.5491 | 4 | 1234, 2025, 7 |
 
 ## Paired comparison (test macro-F1, delta = A − B)
 
@@ -20,13 +19,9 @@ Pairs are ordered by test rank (A ranks above B on test). Patient-cluster bootst
 |---|---|---|---|---|
 | CEI-GNN mp2 | GSAT | +0.0212 | [+0.0098, +0.0347] | 1.000 |
 | CEI-GNN mp2 | ProtGNN | +0.0215 | [+0.0111, +0.0318] | 1.000 |
-| CEI-GNN mp2 | GCHM-PNA | +0.0225 | [+0.0091, +0.0362] | 1.000 |
 | CEI-GNN mp2 | GraphCare | +0.0314 | [+0.0213, +0.0429] | 1.000 |
 | GSAT | ProtGNN | +0.0003 | [-0.0104, +0.0097] | 0.507 |
-| GSAT | GCHM-PNA | +0.0013 | [-0.0081, +0.0116] | 0.599 |
 | GSAT | GraphCare | +0.0103 | [-0.0013, +0.0212] | 0.961 |
-| ProtGNN | GCHM-PNA | +0.0010 | [-0.0092, +0.0124] | 0.614 |
 | ProtGNN | GraphCare | +0.0099 | [-0.0010, +0.0200] | 0.958 |
-| GCHM-PNA | GraphCare | +0.0089 | [-0.0030, +0.0203] | 0.917 |
 
 Note: Hypothyroidism has 0 test rows at K = 30, so its F1 is 0 for every method; End stage renal disease has 5 test rows.

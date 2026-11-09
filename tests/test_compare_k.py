@@ -89,7 +89,7 @@ def test_y_disagreement_refused_same_order(tmp_path):
 
 
 def test_bootstrap_covers_all_pairs_of_all_methods(tmp_path):
-    names = ['gsat', 'graphcare', 'cei_gnn_mp2', 'protgnn', 'gchm_pna']
+    names = ['gsat', 'graphcare', 'cei_gnn_mp2', 'protgnn', 'hgt_control']
     for n in (4, 5):
         paths = [str(make_run(tmp_path, f'n{n}_{m}', 10, seed=i + 1, method=m))
                  for i, m in enumerate(names[:n])]

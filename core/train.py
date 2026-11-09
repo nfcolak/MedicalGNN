@@ -20,11 +20,7 @@ Arms share a class and explicit flags; bypassed layers change active capacity:
                                          edges so evidence can reach the visit hub
     --no-edge-payload                    blank the delta/interval/recency payload
     --no-message-passing                 skip propagation entirely (node-only control)
-    --conv edge_conditioned|hgt|gchm|gchm_v2|gchm_v3
-                                         shared message MLP, HGT typed attention,
-                                         GCHM-PNA, hub-gated compact GCHM-PNA v2, or
-                                         v3 (v2 + wide token path, label-wise readout,
-                                         jumping knowledge, edge dropout)
+    --conv edge_conditioned|hgt            shared message MLP or HGT typed attention
     --selection-fold validation|dev      epoch selection on validation (historical)
                                          or on a patient-disjoint dev split drawn from
                                          unused TRAIN patients (--dev-limit), after
@@ -77,14 +73,11 @@ from .contracts import (VISIT_MEMBERSHIP_CONTRACT_VERSION, VISIT_MEMBERSHIP_FILE
                         verify_graph_file, verify_target_binding,
                         verify_visit_membership_file)
 from .registry import CORE_METHODS, METHOD_REGISTRY, ClinicalMethodAdapter, build_method
-from gchm_pna.gchm_v2 import AGGREGATIONS, GCHMv2, READOUTS
-from gchm_pna.gchm_v3 import GCHMv3
-from gchm_pna.gchm_v3 import READOUTS as V3_READOUTS
 from .model import ClinicalGNN
 from .schema import sha256
 from .rewiring import REWIRING_POLICY
 from .tensorize import (ALL_RELATIONS, EDGE_DIRECTIONS, PAYLOAD_WIDTH, PREPROCESSING_VERSION,
-                        degree_histogram, edge_feature_layout, encode_graph,
+                        edge_feature_layout, encode_graph,
                         fit_preprocessing, preprocessing_state, relation_vocabulary,
                         triple_count)
 
@@ -104,15 +97,6 @@ METHOD_DEFAULTS = {
                       weight_decay=1e-5, batch_size=32, epochs=100,
                       patience=10, min_delta=0.005),
 }
-# GCHM-PNA v2 is a new arm, so it carries its own profile rather than inheriting the
-# v1 clinical_gnn defaults. hidden=92 keeps it below ProtGNN's 399,884 parameters on
-# the bidirectional view; dropout/weight decay answer v1's measured overfitting.
-GCHM_V2_DEFAULTS = dict(hidden=92, layers=3, dropout=0.3, lr=1e-3,
-                        weight_decay=1e-4, batch_size=64, epochs=40,
-                        patience=None, min_delta=None)
-# v3 keeps v2's optimiser profile; hidden 88 keeps it below the frozen ProtGNN count
-# (mechanism_check.v3_parameters_below_protgnn: 391,448 < 399,884 bidirectional).
-GCHM_V3_DEFAULTS = dict(GCHM_V2_DEFAULTS, hidden=88)
 # design decision 2026-10-04: the CEI v3 study setting is the DEFAULT for every method so
 # models are compared fairly. It overrides each method's epochs/patience (min_delta and
 # all other hyper-parameters stay native). An explicit CLI value still wins but is
@@ -161,11 +145,7 @@ METHOD_NATIVE_ARGUMENTS = {
 
 
 def method_defaults(method, conv=None):
-    """Native defaults of one arm; GCHM-PNA v2 carries its own profile."""
-    if method == 'clinical_gnn' and conv == 'gchm_v2':
-        return dict(GCHM_V2_DEFAULTS)
-    if method == 'clinical_gnn' and conv == 'gchm_v3':
-        return dict(GCHM_V3_DEFAULTS)
+    """Native defaults of one arm."""
     if method not in METHOD_DEFAULTS and method in METHOD_REGISTRY:
         return plugin_defaults(method)
     return dict(METHOD_DEFAULTS[method])
@@ -223,35 +203,6 @@ def normalize_method_args(args, parser=None):
         fail('--conv is only valid with --method clinical_gnn')
     if args.method == 'clinical_gnn' and getattr(args, 'conv', None) is None:
         args.conv = 'edge_conditioned'
-    is_gchm_v2 = args.method == 'clinical_gnn' and args.conv == 'gchm_v2'
-    v2_only = [flag for flag, name in (('--aggregation', 'aggregation'),
-                                       ('--readout', 'readout'))
-               if getattr(args, name, None) is not None]
-    if getattr(args, 'no_hub_gate', False):
-        v2_only.append('--no-hub-gate')
-    if v2_only and not is_gchm_v2:
-        fail(', '.join(v2_only) + ' only valid with --conv gchm_v2')
-    if is_gchm_v2:
-        args.aggregation = getattr(args, 'aggregation', None) or 'pna'
-        args.readout = getattr(args, 'readout', None) or 'hub'
-        if args.aggregation not in AGGREGATIONS or args.readout not in READOUTS:
-            fail('unknown gchm_v2 aggregation or readout')
-    is_gchm_v3 = args.method == 'clinical_gnn' and args.conv == 'gchm_v3'
-    v3_only = [flag for flag, name in (('--v3-readout', 'v3_readout'),
-                                       ('--edge-dropout', 'edge_dropout'))
-               if getattr(args, name, None) is not None]
-    v3_only += [flag for flag, name in (('--no-wide', 'no_wide'), ('--no-jk', 'no_jk'))
-                if getattr(args, name, False)]
-    if v3_only and not is_gchm_v3:
-        fail(', '.join(v3_only) + ' only valid with --conv gchm_v3')
-    if is_gchm_v3:
-        args.v3_readout = getattr(args, 'v3_readout', None) or 'labelwise'
-        if args.v3_readout not in V3_READOUTS:
-            fail('unknown gchm_v3 readout')
-        edge_dropout = getattr(args, 'edge_dropout', None)
-        args.edge_dropout = 0.1 if edge_dropout is None else float(edge_dropout)
-        if not 0.0 <= args.edge_dropout < 1.0:
-            fail('--edge-dropout must be in [0, 1)')
     # Fair protocol: every protocol key the caller left unset takes the FAIR_PROTOCOL
     # value; an explicit value wins and is reported as an override further below.
     # `--selection-fold validation` without --dev-limit keeps dev_limit absent.
@@ -265,11 +216,8 @@ def normalize_method_args(args, parser=None):
         if name in ('epochs', 'patience'):
             continue  # applied with the method profile below
         setattr(args, name, value)
-    for name, default in (('edge_direction', 'forward'), ('no_hub_gate', False),
-                          ('no_wide', False), ('no_jk', False), ('v3_readout', None),
-                          ('edge_dropout', None)):
-        if getattr(args, name, None) is None:
-            setattr(args, name, default)
+    if getattr(args, 'edge_direction', None) is None:
+        args.edge_direction = 'forward'
     if args.edge_direction not in EDGE_DIRECTIONS:
         fail('--edge-direction must be one of ' + ', '.join(EDGE_DIRECTIONS))
     if args.selection_fold not in SELECTION_FOLDS or args.final_eval not in FINAL_EVALS:
@@ -685,8 +633,6 @@ def run(args):
     edge_direction = args.edge_direction
     sample_seed = args.seed if args.sample_seed is None else args.sample_seed
     selection_fold, final_eval = args.selection_fold, args.final_eval
-    is_gchm_v2 = args.method == 'clinical_gnn' and args.conv == 'gchm_v2'
-    is_gchm_v3 = args.method == 'clinical_gnn' and args.conv == 'gchm_v3'
     out.mkdir(parents=True, mode=0o700)
     splits, prep = build_dataset(artifact, targets, args.edges, args.train_limit,
                                  args.token_min_count, args.seed, drop_relations,
@@ -722,52 +668,7 @@ def run(args):
     # index 0 = meta-relation unseen in train; reverse edges reuse the fitted triples.
     num_triples = triple_count(prep, edge_direction)
     num_relations = len(relation_vocabulary(edge_direction))
-    # PNA needs the in-degree distribution. Fit it on TRAIN graphs only, exactly as
-    # the vocabulary and scalers are, so no validation structure reaches the model.
-    hist = (degree_histogram(splits['train'])
-            if args.method == 'clinical_gnn' and args.conv in ('gchm', 'gchm_v2', 'gchm_v3')
-            else None)
-    if is_gchm_v3:
-        model = GCHMv3(num_tokens=len(prep['vocabulary']), node_dim=node_dim,
-                       edge_dim=edge_dim, num_classes=num_classes,
-                       num_relations=num_relations, degree_histogram=hist,
-                       hidden=args.hidden, layers=args.layers, dropout=args.dropout,
-                       token_dim=args.token_dim,
-                       use_edge_payload=not args.no_edge_payload,
-                       use_message_passing=not args.no_message_passing,
-                       readout=args.v3_readout, wide=not args.no_wide, jk=not args.no_jk,
-                       edge_dropout=args.edge_dropout).to(device)
-        method_config = {
-            'method': 'clinical_gnn',
-            'adaptation_version': 'clinical_graph_v2_gchm_pna_v3',
-            'native_defaults': dict(GCHM_V3_DEFAULTS),
-            'effective_settings': dict(model.settings),
-            'architecture': {
-                'parameter_count': model.parameter_count(),
-                'active_parameter_count': model.active_parameter_count(),
-            },
-        }
-    elif is_gchm_v2:
-        model = GCHMv2(num_tokens=len(prep['vocabulary']), node_dim=node_dim,
-                       edge_dim=edge_dim, num_classes=num_classes,
-                       num_relations=num_relations, degree_histogram=hist,
-                       hidden=args.hidden, layers=args.layers, dropout=args.dropout,
-                       token_dim=args.token_dim,
-                       use_edge_payload=not args.no_edge_payload,
-                       use_message_passing=not args.no_message_passing,
-                       modulation=args.modulation, aggregation=args.aggregation,
-                       readout=args.readout, hub_gate=not args.no_hub_gate).to(device)
-        method_config = {
-            'method': 'clinical_gnn',
-            'adaptation_version': 'clinical_graph_v2_gchm_pna_v2',
-            'native_defaults': dict(GCHM_V2_DEFAULTS),
-            'effective_settings': dict(model.settings),
-            'architecture': {
-                'parameter_count': model.parameter_count(),
-                'active_parameter_count': model.active_parameter_count(),
-            },
-        }
-    elif args.method == 'clinical_gnn':
+    if args.method == 'clinical_gnn':
         model = ClinicalGNN(num_classes=num_classes,
                             num_tokens=len(prep['vocabulary']), node_dim=node_dim,
                             edge_dim=edge_dim, hidden=args.hidden, layers=args.layers,
@@ -775,9 +676,7 @@ def run(args):
                             use_edge_payload=not args.no_edge_payload,
                             use_message_passing=not args.no_message_passing,
                             conv=args.conv, num_triples=num_triples,
-                            payload_dim=PAYLOAD_WIDTH, heads=args.heads,
-                            degree_histogram=hist,
-                            modulation=args.modulation).to(device)
+                            payload_dim=PAYLOAD_WIDTH, heads=args.heads).to(device)
         method_config = {
             'method': 'clinical_gnn',
             'adaptation_version': None,
@@ -942,17 +841,6 @@ def run(args):
         'message_passing': not args.no_message_passing,
         'conv': args.conv if args.method == 'clinical_gnn' else None,
         'heads': args.heads if args.method == 'clinical_gnn' and args.conv == 'hgt' else None,
-        'modulation': (args.modulation
-                       if args.method == 'clinical_gnn' and args.conv in ('gchm', 'gchm_v2')
-                       else None),
-        'aggregation': args.aggregation if is_gchm_v2 else None,
-        'readout': args.readout if is_gchm_v2 else None,
-        'hub_gate': (not args.no_hub_gate) if is_gchm_v2 else None,
-        'v3_readout': args.v3_readout if is_gchm_v3 else None,
-        'wide': (not args.no_wide) if is_gchm_v3 else None,
-        'jk': (not args.no_jk) if is_gchm_v3 else None,
-        'edge_dropout': args.edge_dropout if is_gchm_v3 else None,
-        'degree_histogram_fit': 'train fold only' if hist is not None else None,
         'dropped_relations': list(drop_relations),
         'rewired_relations': list(rewire_relations),
         'rewire_seed': args.seed if rewire_relations else None,
@@ -1210,8 +1098,6 @@ def run(args):
         # last epochs that actually ran)
         result['last5_dev_macro_f1_mean'] = round(float(np.mean(
             [row['macro_f1'] for row in history[-5:]])), 6)
-        if is_gchm_v2 or is_gchm_v3:
-            result['gate_mean_last_batch'] = model.gate_report()
     if test_final is not None:
         result['selection_fold'] = 'validation'
         result['test'] = {**test_final['metrics'], 'n': int(len(test_final['y']))}
@@ -1246,22 +1132,7 @@ def parser():
                         "Default 'forward' is the historical encoding.")
     p.add_argument('--no-edge-payload', action='store_true')
     p.add_argument('--no-message-passing', action='store_true')
-    p.add_argument('--conv', choices=['edge_conditioned', 'hgt', 'gchm', 'gchm_v2', 'gchm_v3'],
-                   default=None)
-    p.add_argument('--aggregation', choices=list(AGGREGATIONS), default=None,
-                   help="gchm_v2 only: 'sum' is the no-PNA ablation.")
-    p.add_argument('--readout', choices=list(READOUTS), default=None,
-                   help="gchm_v2 only: 'pool' drops the hub-state readout term.")
-    p.add_argument('--no-hub-gate', action='store_true',
-                   help='gchm_v2 only: gate on receiver and relation, not the hub.')
-    p.add_argument('--v3-readout', choices=list(V3_READOUTS), default=None,
-                   help="gchm_v3 only: 'pool' drops the label-wise attention readout.")
-    p.add_argument('--no-wide', action='store_true',
-                   help='gchm_v3 only: drop the linear per-token class-vote path.')
-    p.add_argument('--no-jk', action='store_true',
-                   help='gchm_v3 only: read the last layer instead of jumping knowledge.')
-    p.add_argument('--edge-dropout', type=float, default=None,
-                   help='gchm_v3 only: training-time edge drop rate (default 0.1).')
+    p.add_argument('--conv', choices=['edge_conditioned', 'hgt'], default=None)
     p.add_argument('--selection-fold', choices=list(SELECTION_FOLDS), default=None,
                    help="'dev' selects the epoch on a patient-disjoint split of unused "
                         'TRAIN patients (--dev-limit rows) instead of validation.')
@@ -1280,10 +1151,6 @@ def parser():
                    help='model only the K most frequent TRAIN labels; other labelled '
                         'rows are dropped (not merged). Changes the task, so scores '
                         'are not comparable with a 30-class run.')
-    p.add_argument('--modulation', choices=['multiplicative', 'additive'],
-                   default='multiplicative',
-                   help="gchm only: 'additive' is the capacity-matched control "
-                        'where the receiver gate can shift but not scale.')
     p.add_argument('--drop-relation', action='append', metavar='RELATION',
                    help='remove this relation before tensorization; repeatable. '
                         'Leave-one-relation-out: a score that RISES means the '

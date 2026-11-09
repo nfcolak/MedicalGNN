@@ -1,7 +1,7 @@
 # Self-Explainable GNN Diagnosis on MIMIC-IV ED Patient Graphs (final)
 
-This repository holds the final benchmark of five self-explainable graph neural networks (CEI-GNN mp2, ProtGNN, GSAT,
-GraphCare, GCHM-PNA) for primary-diagnosis prediction on multi-visit clinical graphs built from MIMIC-IV
+This repository holds the final benchmark of four self-explainable graph neural networks (CEI-GNN mp2, ProtGNN, GSAT,
+GraphCare) for primary-diagnosis prediction on multi-visit clinical graphs built from MIMIC-IV
 emergency-department data. Protocol `fair_v10t`: the K = 10 / 20 / 30 most frequent diagnoses, train = the whole TRAIN
 fold, checkpoint selection on validation, the held-out test fold scored once per run; 3 seeds per method. Decisions (checkpoint, hyper-parameters, baseline choice) use validation; every reported result is on test.
 It contains only the code and data behind the final results. The exact commands are listed under "Final commands" below.
@@ -69,7 +69,7 @@ The graph hash is that of the `graphs.jsonl` file as produced by this repository
 
 ### Regenerate the comparison tables
 
-`comparison/final/compare_all.py` rebuilds the three result tables (K = 10, 20, 30) from the 45 stored final runs (5 methods x seeds 1234, 2025, 7) into a new folder. With `--check`, every produced file is compared with the stored tables.
+`comparison/final/compare_all.py` rebuilds the three result tables (K = 10, 20, 30) from the 36 stored final runs (4 methods x seeds 1234, 2025, 7) into a new folder. With `--check`, every produced file is compared with the stored tables.
 
 ```bash
 env -u PYTHONPATH PYTHONDONTWRITEBYTECODE=1 /usr/bin/python3 -m comparison.final.compare_all \
@@ -114,19 +114,18 @@ Result (origin not re-derivable, consistency checked): 74,511 subjects; folds tr
 
 Protocol `fair_v10t`: K = 10 / 20 / 30 most frequent diagnoses; train = the whole TRAIN fold; checkpoint selected on validation; the test fold is scored once per run; 40 epochs; seeds 1234, 2025, 7.
 
-Each of the five methods is trained with `python3 -m core.train <method args> --top-k-labels <K> --artifact <graph dir> --targets <targets dir> --output <new run dir> --seed <seed> --cpu-threads <n> --execute`, where `<method args>` are (as in `comparison/final/run.py`, function `args()`):
+Each of the four methods is trained with `python3 -m core.train <method args> --top-k-labels <K> --artifact <graph dir> --targets <targets dir> --output <new run dir> --seed <seed> --cpu-threads <n> --execute`, where `<method args>` are (as in `comparison/final/run.py`, function `args()`):
 
 ```
 gsat       --method gsat --optimizer adamw_cosine --lr 0.00369 --weight-decay 6.17e-5 --dropout 0.137 --gsat-info-loss-coef 0.104
 graphcare  --method graphcare --optimizer adamw_cosine --lr 0.00281 --weight-decay 1.05e-6 --dropout 0.286 --graphcare-decay-rate 0.0116
 cei_mp2    --method cei_gnn_mp2 --method-option arm=C --method-option k=4 --method-option v3_state=<v3 state dir for K> --method-option mp_feed=dual --method-option mp_hub_max=1 --method-option mp_dedup=1 --method-option mp_ctx=table --method-option mp_root=bias --method-option mp_optimizer=adamw --method-option mp_lr_schedule=cosine --method-option mp_label_smoothing=0.1 --lr 0.00237 --weight-decay 1.03e-6 --dropout 0.493
 protgnn    --method protgnn --optimizer adamw_cosine --lr 0.00261 --weight-decay 4.42e-6 --dropout 0.345 --protgnn-prototypes-per-class 5
-gchm_pna   --method clinical_gnn --conv gchm
 ```
 
-The `--weight-decay 1.03e-6` flag of the cei_mp2 command is ignored: CEI-GNN builds its own AdamW with decoupled weight decay 0.01 on weight matrices only (0 on biases, norms and embeddings; `mp_weight_decay`, `cei/options.py`), a cosine schedule, label smoothing 0.1 and DropEdge 0.2. The other methods use no label smoothing and no DropEdge: GSAT, GraphCare and ProtGNN use AdamW with their tuned weight decay (6.17e-5, 1.05e-6, 4.42e-6) on all parameters and the same cosine schedule; GCHM-PNA keeps its defaults (AdamW, weight decay 1e-5, constant learning rate).
+The `--weight-decay 1.03e-6` flag of the cei_mp2 command is ignored: CEI-GNN builds its own AdamW with decoupled weight decay 0.01 on weight matrices only (0 on biases, norms and embeddings; `mp_weight_decay`, `cei/options.py`), a cosine schedule, label smoothing 0.1 and DropEdge 0.2. The other methods use no label smoothing and no DropEdge: GSAT, GraphCare and ProtGNN use AdamW with their tuned weight decay (6.17e-5, 1.05e-6, 4.42e-6) on all parameters and the same cosine schedule.
 
-`python3 -m comparison.final.run [--ks 10,20,30]` builds these commands for all 45 runs (`--plan` only checks them).
+`python3 -m comparison.final.run [--ks 10,20,30]` builds these commands for all 36 runs (`--plan` only checks them).
 
 ## Results
 
@@ -136,7 +135,6 @@ Test macro-F1, mean ± SD over 3 seeds (methods in test-ranking order of K = 10;
 |---|---|---|---|
 | GraphCare | 0.763 ± 0.003 | 0.671 ± 0.004 | 0.547 ± 0.002 |
 | CEI-GNN mp2 | 0.761 ± 0.009 | 0.689 ± 0.001 | 0.578 ± 0.004 |
-| GCHM-PNA | 0.756 ± 0.005 | 0.671 ± 0.010 | 0.556 ± 0.009 |
 | ProtGNN | 0.751 ± 0.006 | 0.665 ± 0.002 | 0.557 ± 0.002 |
 | GSAT | 0.751 ± 0.004 | 0.669 ± 0.004 | 0.557 ± 0.008 |
 
@@ -148,7 +146,7 @@ Further analyses read the stored predictions of the final runs (no training). Ea
 
 | Package | What it analyses | Tables |
 |---|---|---|
-| `comparison/nasim` | section 2: CEI-GNN with the baselines' training recipe (`recipe_control.py`, arms R1-R5: label smoothing, weight decay and DropEdge removed alone or together), GSAT grid, ProtGNN projection, GCHM-PNA cosine schedule (`analyze.py` arm vs its reference, `cross_method.py` arm vs every baseline, `edge_pilot.py` bidirectional-edge pilot on a 10k training sample) | `results/baseline_fidelity_k20/` |
+| `comparison/nasim` | section 2: CEI-GNN with the baselines' training recipe (`recipe_control.py`, arms R1-R5: label smoothing, weight decay and DropEdge removed alone or together), GSAT grid, ProtGNN projection (`analyze.py` arm vs its reference, `cross_method.py` arm vs every baseline, `edge_pilot.py` bidirectional-edge pilot on a 10k training sample) | `results/baseline_fidelity_k20/` |
 | `comparison/s3_ledger` | section 3: evidence-ledger probes of CEI-GNN (block shares, ledger exactness, node-removal gap, pair additivity) | `results/s3_ledger/` |
 | `comparison/ablation` | section 4: CEI-GNN component ablation at K = 20 | `results/ablation_k20/` |
 | `comparison/splits` | section 4/6: replication of the ablation on two further patient splits | `results/split_replication_k20/` |
@@ -171,7 +169,6 @@ MedicalGNN/
 ├── gsat/           GSAT
 ├── graphcare/      GraphCare
 ├── protgnn/        ProtGNN
-├── gchm_pna/       GCHM-PNA (trained as --method clinical_gnn --conv gchm)
 ├── core/           training engine shared by all methods
 ├── data/           data pipeline, raw CSVs -> patient graphs (5 stages)
 ├── comparison/     final runner, comparison, split, inputs and results
@@ -191,7 +188,6 @@ Rule of thumb: every method has its own top-level folder. Everything shared goes
 | `gsat/` | `adapter.py` (GIN predictor + stochastic attention) | `--method gsat` |
 | `graphcare/` | `adapter.py` (visit-conditioned attention) | `--method graphcare` |
 | `protgnn/` | `adapter.py` (prototype-based GNN) | `--method protgnn` |
-| `gchm_pna/` | `gchm_v2.py`, `gchm_v3.py` (hub-gated, relation-aware PNA layers used by `core/model.py`) | `--method clinical_gnn --conv gchm` |
 
 Methods are found automatically: `core/registry.py` imports every `plugin_*.py` inside the folders listed in `METHOD_FOLDERS`.
 
@@ -200,7 +196,7 @@ Methods are found automatically: `core/registry.py` imports every `plugin_*.py` 
 | File | Role |
 |---|---|
 | `train.py` | The one training entry point (`python3 -m core.train`). Holds the protocol (`PROTOCOL_NAME = 'fair_v10t'`, `FAIR_PROTOCOL`, `ALLOWED_TOP_K_LABELS = (10, 20, 30)`), loads data, trains, selects the checkpoint on validation and scores the test fold once. Without `--execute` it only prints the plan. |
-| `model.py` | Built-in GNN (`clinical_gnn`, incl. the `gchm` conv). |
+| `model.py` | Built-in GNN (`clinical_gnn`: `edge_conditioned` and `hgt` convs). |
 | `tensorize.py` | Turns a graph (JSON) into PyTorch Geometric tensors. |
 | `contracts.py` | Input checks and hashes written into each run's `binding.json`. |
 | `registry.py` / `method_base.py` | Method discovery and the common adapter interface. |
@@ -241,12 +237,12 @@ Raw MIMIC CSVs are NOT in this repo (see "Reproduce the data from raw").
 comparison/
 ├── canonical_split.json      patient split 80/10/10 train/validation/test (FROZEN, never regenerate)
 ├── final/                    everything for the final results
-│   ├── run.py                runs the 45 final trainings (5 methods x K 10/20/30 x 3 seeds); --plan = dry run
+│   ├── run.py                runs the 36 final trainings (4 methods x K 10/20/30 x 3 seeds); --plan = dry run
 │   ├── pipeline.sh           prints (EXECUTE=1 runs) the steps that build the final inputs from the raw CSVs:
 │   │                         events -> stays -> labels -> graph -> k4 (needs MIMIC_RAW_DIR)
 │   ├── common_stays.py       stay list incl. test rows (legacy max6, v5 max6, v5 +60 cohorts), used to restrict the labels
 │   ├── fit_k4.py             fits the CEI v3 state for one K
-│   ├── compare_all.py        regenerates the three comparison tables (K = 10/20/30) from the 45 runs; --check = compare with the stored tables (default: final_compare_fv10t_test_20261019)
+│   ├── compare_all.py        regenerates the three comparison tables (K = 10/20/30) from the 36 runs; --check = compare with the stored tables (default: final_compare_fv10t_test_20261109)
 │   ├── hpo.py                the light hyper-parameter search (K=17, 10k sample, 20 epochs, dev only)
 │   ├── hpo_all.py            recorded HPO of the four tuned methods: commands, best trials vs run.py flags (plan only by default)
 │   ├── build_split.py        rebuilds canonical_split.json from merged_ed.csv and compares (never overwrites it)
@@ -267,9 +263,9 @@ comparison/
     │   ├── first_recorded_lab_plus60_max6_v5_20261009/  +60 min event index (input of labels and graph)
     │   ├── v3_state_L4_v5c_v10t_top{10,20,30}_20261011/ CEI v3 state per K (K4.json; must match the run's K)
     │   └── v3_state_L4_v5c_top17_20261011/              v3 state of the HPO (K=17, 10k sample)
-    ├── clinical_runs_fair_v10t_20261011/                the 45 final runs
+    ├── clinical_runs_fair_v10t_20261011/                the 36 final runs
     │   ├── top10/ top20/ top30/                          one folder per K
-    │   │   └── <method>_seed<seed>/                     cei_mp2 | protgnn | gchm_pna | gsat | graphcare x 1234 | 2025 | 7
+    │   │   └── <method>_seed<seed>/                     cei_mp2 | protgnn | gsat | graphcare x 1234 | 2025 | 7
     │   │       ├── binding.json        exact settings, protocol, data and code hashes
     │   │       ├── result.json         selected epoch, validation and TEST metrics
     │   │       ├── history.json        per-epoch metrics

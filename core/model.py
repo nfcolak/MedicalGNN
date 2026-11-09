@@ -36,7 +36,6 @@ import math
 import torch
 import torch.nn as nn
 from torch_geometric.nn import MessagePassing
-from torch_geometric.nn.aggr import DegreeScalerAggregation
 from torch_geometric.utils import scatter, softmax
 
 from .tensorize import PAYLOAD_WIDTH
@@ -206,90 +205,14 @@ class HeteroGraphTransformerLayer(MessagePassing):
         return report
 
 
-class GatedConceptHubLayer(MessagePassing):
-    """GCHM's mechanism (gchm_analysis/model.py) ported to the typed v3 graph.
-
-    The native `GCHM` class cannot read this artifact: it requires `node_ids` into a
-    193-concept embedding, `node_type in {0,1,2}` with exactly one HUB_TYPE node per
-    graph, and a 132-wide numeric payload at slots 199: of a 331-wide vector. v3
-    supplies eight node kinds, a fitted token vocabulary, 14 node features and 22 edge
-    features. Only the MECHANISM transfers, so it is reimplemented here rather than
-    adapted, and the two distinctive ingredients are kept exactly:
-
-    1. **Multiplicative receiver gate (V1).** `content * sigmoid(W_g . x_i)`. The
-       receiver's state SCALES the incoming message instead of shifting it, which is
-       the second-order concept x state conjunction the native depth sweep isolated
-       (depth1 0.5581 -> depth2 0.5827, flat after). `modulation='additive'` is the
-       capacity-matched control: identical parameters, but the gate can only shift.
-    2. **PNA degree-scaled aggregation.** Four aggregators (mean/min/max/std) times
-       three scalers (identity/amplification/attenuation) = 12 x width, versus the
-       baseline's single sum. This is the part that distinguishes GCHM from the
-       plain edge-conditioned layer independently of the gate.
-
-    Unlike the native star-graph version the receiver here is not always a patient
-    hub -- v3 has measurement, analyte, diagnosis and knowledge receivers too -- so
-    the gate is applied on every typed edge, which is the same choice already made
-    for `EventGCHM` in event_graph_analysis/model.py.
-
-    The edge payload enters the message MLP as in the baseline, so the payload
-    ablation contract (`use_edge_payload=False`, parameter count unchanged) holds.
-    """
-
-    def __init__(self, dim, edge_dim, degree_histogram, dropout=0.1,
-                 use_edge_payload=True, modulation='multiplicative'):
-        if modulation not in ('multiplicative', 'additive'):
-            raise ValueError("modulation must be 'multiplicative' or 'additive'")
-        if degree_histogram.ndim != 1 or degree_histogram.numel() < 1:
-            raise ValueError('degree_histogram must be a nonempty vector')
-        super().__init__(
-            aggr=DegreeScalerAggregation(
-                aggr=['mean', 'min', 'max', 'std'],
-                scaler=['identity', 'amplification', 'attenuation'],
-                deg=degree_histogram.detach().clone(),
-                train_norm=False,
-            ),
-            node_dim=0,
-        )
-        # A fold whose training graphs are genuinely edgeless has average log degree
-        # zero; keep the histogram exact and only floor the numerical denominator.
-        self.aggr_module.init_avg_deg_log = max(self.aggr_module.init_avg_deg_log, 1e-6)
-        self.aggr_module.avg_deg_log.clamp_(min=1e-6)
-        self.use_edge_payload = use_edge_payload
-        self.modulation = modulation
-        self.message_mlp = nn.Sequential(
-            nn.Linear(2 * dim + edge_dim, dim), nn.ReLU(), nn.Linear(dim, dim))
-        self.gate = nn.Linear(dim, dim)
-        # 12 aggregator/scaler combinations plus the node's own state.
-        self.update_mlp = nn.Sequential(
-            nn.Linear(13 * dim, dim), nn.ReLU(), nn.Linear(dim, dim))
-        self.norm = nn.LayerNorm(dim)
-        self.dropout = nn.Dropout(dropout)
-
-    def forward(self, x, edge_index, edge_attr):
-        payload = edge_attr
-        if not self.use_edge_payload:
-            payload = edge_attr.clone()
-            payload[:, -PAYLOAD_WIDTH:] = 0
-        out = self.propagate(edge_index, x=x, edge_attr=payload)
-        out = self.update_mlp(torch.cat([x, out], dim=-1))
-        return self.norm(x + self.dropout(out))
-
-    def message(self, x_j, x_i, edge_attr):
-        content = self.message_mlp(torch.cat([x_j, x_i, edge_attr], dim=-1))
-        gate = torch.sigmoid(self.gate(x_i))
-        if self.modulation == 'multiplicative':
-            return content * gate
-        return content + gate
-
-
 class ClinicalGNN(nn.Module):
     def __init__(self, num_tokens, node_dim, edge_dim, num_classes=30,
                  hidden=96, layers=3, dropout=0.1, token_dim=32,
                  use_edge_payload=True, use_message_passing=True,
                  conv='edge_conditioned', num_triples=None, payload_dim=None,
-                 heads=4, degree_histogram=None, modulation='multiplicative'):
+                 heads=4):
         super().__init__()
-        if conv not in ('edge_conditioned', 'hgt', 'gchm'):
+        if conv not in ('edge_conditioned', 'hgt'):
             raise ValueError(f'unknown conv {conv!r}')
         self.use_message_passing = use_message_passing
         self.conv = conv
@@ -303,15 +226,6 @@ class ClinicalGNN(nn.Module):
             self.layers = nn.ModuleList([
                 HeteroGraphTransformerLayer(hidden, num_triples, payload_dim,
                                             heads, dropout, use_edge_payload)
-                for _ in range(layers)])
-        elif conv == 'gchm':
-            if degree_histogram is None:
-                raise ValueError('gchm requires a train-fitted degree_histogram')
-            self.register_buffer('degree_histogram',
-                                 torch.as_tensor(degree_histogram).float())
-            self.layers = nn.ModuleList([
-                GatedConceptHubLayer(hidden, edge_dim, self.degree_histogram,
-                                     dropout, use_edge_payload, modulation)
                 for _ in range(layers)])
         else:
             self.layers = nn.ModuleList([

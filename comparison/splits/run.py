@@ -2,7 +2,7 @@
 
 Arm options, recipe and a6 hyper-parameters are imported from comparison/ablation/run.py (nothing is copied); only the
 inputs change: the split's own graph, targets, v3 state and split file. Unlike the ablation runner, a1_full is trained for
-all five seeds (the 45 final runs belong to the canonical split).
+all five seeds (the 36 final runs belong to the canonical split).
 Usage (from the repo root):
     python3 -m comparison.splits.run --splits r1,r2 [--plan] [--seeds 7,42,1234,2025,3407] [--arms a1_full,a6_pool]
         --plan is the default: no --execute, prints one line per run (resolved protocol, overrides, epochs) and lists the

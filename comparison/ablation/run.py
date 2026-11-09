@@ -20,7 +20,7 @@ TARGETS = 'targets_primary_v4_v5plus60_v5_test_20261011/targets.csv'
 V3_STATE = 'v3_state_L4_v5c_v10t_top{K}_20261011/K4.json'
 WORKERS, THREADS = 6, 3
 SEEDS = (1234, 2025, 7, 42, 3407)
-# Full (a1) already exists for these seeds: the 45 final runs (same code, bit-identical logits); a1 is not rerun for them
+# Full (a1) already exists for these seeds: the 36 final runs (same code, bit-identical logits); a1 is not rerun for them
 FINAL_SEEDS = (1234, 2025, 7)
 DEFAULT_KS = (20,)
 # pooled-head width (arm a6) that matches Full's LIVE parameter count at each K: a6's 8,960 mp_ctx=table context

@@ -5,7 +5,7 @@ Setup of the recorded HPO: K=17, the old 10k TRAIN sample (seed 1234), 20 epochs
 previous setting. Objective = mean dev macro-F1 over epochs 16-20. hidden/layers fixed. The tuned values are the
 `args()` of comparison/final/run.py. K=17 and the 10k sample are protocol overrides here (allowed: tuning runs only).
 Output: comparison/standardized/hpo_<name>/<method>/ (study.db, trial logs, trials.json, best.json).
-Usage: python3 -m comparison.final.hpo gsat|graphcare|protgnn|gchm_pna|cei_mp2|cei_a6_pool N_TRIALS [--name fv10_k17_20261011]
+Usage: python3 -m comparison.final.hpo gsat|graphcare|protgnn|cei_mp2|cei_a6_pool N_TRIALS [--name fv10_k17_20261011]
 `cei_a6_pool` = ablation arm a6 (pooled head, mp_feed=all, pool width matched to Full's live parameters at K=17),
 tuned with the cei_mp2 search space; trial 0 = the final CEI values. Use a new --name (e.g. ablation_a6_k17_<date>).
 Real-data training: only with the user's approval.
@@ -31,7 +31,6 @@ BASE = {
     'gsat': ['--method', 'gsat'],
     'graphcare': ['--method', 'graphcare'],
     'protgnn': ['--method', 'protgnn'],
-    'gchm_pna': ['--method', 'clinical_gnn', '--conv', 'gchm'],
     'cei_mp2': ['--method', 'cei_gnn_mp2'] + sum((['--method-option', o] for o in [
         'arm=C', 'k=4', f'v3_state={K4}', 'mp_feed=dual', 'mp_hub_max=1', 'mp_dedup=1', 'mp_ctx=table',
         'mp_root=bias']), []),
@@ -45,7 +44,6 @@ DEFAULTS = {
     'gsat': dict(lr=1e-3, weight_decay=1e-6, dropout=0.3, optimizer='native', info_loss_coef=1.0),
     'graphcare': dict(lr=1e-3, weight_decay=1e-5, dropout=0.3, optimizer='native', decay_rate=0.03),
     'protgnn': dict(lr=1.79e-3, weight_decay=4.3e-5, dropout=0.51, optimizer='native', prototypes_per_class=3),
-    'gchm_pna': dict(lr=1e-3, weight_decay=1e-5, dropout=0.1, optimizer='native', batch_size=64),
     'cei_mp2': dict(lr=1.79e-3, weight_decay=4.3e-5, dropout=0.3, optimizer='adamw_cosine', label_smoothing=0.0),
     'cei_a6_pool': dict(lr=2.37e-3, weight_decay=1.03e-6, dropout=0.493, optimizer='adamw_cosine', label_smoothing=0.1),
 }
@@ -65,8 +63,6 @@ def space(model, trial):
         p['decay_rate'] = trial.suggest_float('decay_rate', 0.01, 0.1, log=True)
     elif model == 'protgnn':
         p['prototypes_per_class'] = trial.suggest_categorical('prototypes_per_class', [3, 5, 8])
-    elif model == 'gchm_pna':
-        p['batch_size'] = trial.suggest_categorical('batch_size', [32, 64, 128])
     else:
         p['label_smoothing'] = trial.suggest_categorical('label_smoothing', [0.0, 0.1])
     return p
@@ -93,8 +89,6 @@ def command(model, p, out):
         cmd += ['--graphcare-decay-rate', str(p['decay_rate'])]
     elif model == 'protgnn':
         cmd += ['--protgnn-prototypes-per-class', str(p['prototypes_per_class'])]
-    elif model == 'gchm_pna':
-        cmd += ['--batch-size', str(p['batch_size'])]
     return cmd
 
 

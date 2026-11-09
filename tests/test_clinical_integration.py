@@ -89,7 +89,7 @@ def args_for(artifact, targets, canonical, output, conv='edge_conditioned'):
                               final_eval='validation', sample_seed=None)
 
 
-@pytest.mark.parametrize('conv', ['edge_conditioned', 'hgt', 'gchm'])
+@pytest.mark.parametrize('conv', ['edge_conditioned', 'hgt'])
 def test_tiny_training_records_corrected_contract_and_visit_ids(tmp_path, conv):
     artifact, targets, canonical = tiny_artifact(tmp_path)
     output = tmp_path / 'run'

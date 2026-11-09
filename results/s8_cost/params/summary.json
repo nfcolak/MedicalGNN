@@ -42,8 +42,7 @@
   "gsat": "edge-attention extractor MLP",
   "protgnn": "prototype vectors + prototype classifier (last layer)",
   "cei_mp2": "none: evidence heads are the prediction path",
-  "graphcare": "none: no built-in explanation",
-  "gchm_pna": "none: no built-in explanation"
+  "graphcare": "none: no built-in explanation"
  },
  "records": [
   {

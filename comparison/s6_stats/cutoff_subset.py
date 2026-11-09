@@ -1,6 +1,6 @@
 """Cut-off subset: how do the stored final models score on the stays whose cut-off equals the ED discharge time?
 
-Inference-free analysis of stored predictions. For every stored final run (`<runs>/top<K>/<method>_seed<S>/`, 5 methods
+Inference-free analysis of stored predictions. For every stored final run (`<runs>/top<K>/<method>_seed<S>/`, 4 methods
 x 3 K x 3 seeds) the scored fold (`--fold`, default test, the reporting fold) is split by a per-stay flag:
 subset = the cut-off of the stay equals the ED discharge (`outtime`) time, i.e. the prediction is made at discharge
 (cutoff = min(first representable lab storetime + 60 min, ED outtime)); rest = every other stay. The cut-off comes from
@@ -10,7 +10,7 @@ loaded, and the outputs hold aggregates only (no sample, subject or stay ids).
 
     python -m comparison.s6_stats.cutoff_subset --runs <runs root> --cohort <graph dir>/cohort.csv \
         --events <event index dir>/events.sqlite --out <new dir> [--fold test|validation] [--ks 10,20,30] \
-        [--methods cei_mp2,gsat,graphcare,protgnn,gchm_pna] [--seeds 1234,2025,7] [--b 1000]
+        [--methods cei_mp2,gsat,graphcare,protgnn] [--seeds 1234,2025,7] [--b 1000]
 
 Metrics per run: accuracy and macro-F1 (mean per-class F1 over the classes with support > 0 in the scored rows, so a class
 that does not occur in the small subset is left out; the parity check against result.json uses its K-class mean). Gap = subset minus rest, averaged over the seeds. Interval: patient bootstrap (resampling
@@ -36,7 +36,7 @@ sys.path.insert(0, str(ROOT))
 from comparison.s6_stats.stats import (DEFAULT_METHODS, FOLD_FILE, FOLD_RESULT_KEY, KS, NAME, PATIENT_RNG,  # noqa: E402
                                        SEEDS, TOL, json_clean, md_table)
 
-METHODS = DEFAULT_METHODS + ('gchm_pna',)
+METHODS = DEFAULT_METHODS
 FOLDS = ('test', 'validation')
 STORED_STATEMENT = (8.5, 11.0)      # validation accuracy points on the subset, every method (stored statement)
 

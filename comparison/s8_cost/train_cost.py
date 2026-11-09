@@ -149,7 +149,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--runs', required=True)
     ap.add_argument('--out', required=True, help='NEW output directory (an existing one is refused)')
-    ap.add_argument('--methods', default=DEFAULT_METHODS, help=f'default {DEFAULT_METHODS}; gchm_pna only on explicit request')
+    ap.add_argument('--methods', default=DEFAULT_METHODS, help=f'default {DEFAULT_METHODS}')
     ap.add_argument('--ks', default=DEFAULT_KS)
     ap.add_argument('--ablation-extra', default=None, help='extra_metrics.json of the CEI ablation runs (optional)')
     ap.add_argument('--print-probe-plan', action='store_true',

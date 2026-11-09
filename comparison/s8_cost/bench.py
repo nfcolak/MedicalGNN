@@ -34,7 +34,7 @@ REPO = Path(__file__).resolve().parents[2]
 DEFAULT_RUNS = 'comparison/standardized/clinical_runs_fair_v10t_20261011'
 DEFAULT_ARTIFACT = 'comparison/standardized/event_inputs/clinical_graph_L4_plus60_v5c_20261009'
 DEFAULT_METHODS = 'cei_mp2,gsat,graphcare,protgnn'
-ALL_METHODS = ('cei_mp2', 'gsat', 'graphcare', 'protgnn', 'gchm_pna')
+ALL_METHODS = ('cei_mp2', 'gsat', 'graphcare', 'protgnn')
 DEFAULT_KS = '10,20,30'
 PARITY_TOLERANCE = 1e-4
 LOAD_LIMIT = 2.0
@@ -81,9 +81,8 @@ def worker(a):
     from torch_geometric.loader import DataLoader
     from core import train as T
     from core.contracts import iter_graphs_with_membership
-    from core.model import ClinicalGNN
     from core.registry import ClinicalMethodAdapter, build_method
-    from core.tensorize import PAYLOAD_WIDTH, encode_graph, load_preprocessing, triple_count
+    from core.tensorize import encode_graph, load_preprocessing, triple_count
     from comparison.final.run import Paths, args as final_args
 
     method, K, seed, bs = a.worker_method, a.worker_k, a.checkpoint_seed, a.batch_size
@@ -121,19 +120,12 @@ def worker(a):
     node_dim, edge_dim = data[0].x.size(1), data[0].edge_attr.size(1)
     num_triples = triple_count(prep, args.edge_direction)
     sd = torch.load(run_dir / 'best.pt', map_location='cpu')
-    if method == 'gchm_pna':
-        model = ClinicalGNN(num_classes=K, num_tokens=len(prep['vocabulary']), node_dim=node_dim, edge_dim=edge_dim,
-                            hidden=args.hidden, layers=args.layers, dropout=args.dropout, token_dim=args.token_dim,
-                            use_edge_payload=not args.no_edge_payload, use_message_passing=not args.no_message_passing,
-                            conv=args.conv, num_triples=num_triples, payload_dim=PAYLOAD_WIDTH, heads=args.heads,
-                            degree_histogram=sd['degree_histogram'], modulation=args.modulation)
-    else:
-        model = build_method(args.method, num_tokens=len(prep['vocabulary']), node_dim=node_dim, edge_dim=edge_dim,
-                             num_classes=K, hidden=args.hidden, layers=args.layers, dropout=args.dropout,
-                             token_dim=args.token_dim, num_triples=num_triples, args=args)
-        hook = getattr(model, 'verify_run_preprocessing', None)
-        if callable(hook):
-            hook(T.preprocessing_state(prep))
+    model = build_method(args.method, num_tokens=len(prep['vocabulary']), node_dim=node_dim, edge_dim=edge_dim,
+                         num_classes=K, hidden=args.hidden, layers=args.layers, dropout=args.dropout,
+                         token_dim=args.token_dim, num_triples=num_triples, args=args)
+    hook = getattr(model, 'verify_run_preprocessing', None)
+    if callable(hook):
+        hook(T.preprocessing_state(prep))
     model.load_state_dict(sd, strict=True)
     model.eval()
     is_adapter = isinstance(model, ClinicalMethodAdapter)
@@ -370,7 +362,7 @@ def main():
     ap.add_argument('--runs', default=DEFAULT_RUNS, help='root of the final runs (repo-relative)')
     ap.add_argument('--artifact', default=DEFAULT_ARTIFACT, help='graph artifact directory (repo-relative)')
     ap.add_argument('--out', help='new output directory (must not exist); required with --execute')
-    ap.add_argument('--methods', default=DEFAULT_METHODS, help='comma list; gchm_pna only for parity checks')
+    ap.add_argument('--methods', default=DEFAULT_METHODS, help='comma list')
     ap.add_argument('--ks', default=DEFAULT_KS)
     ap.add_argument('--graphs', type=int, default=500)
     ap.add_argument('--rounds', type=int, default=3)
@@ -392,8 +384,6 @@ def main():
     bad = [m for m in methods if m not in ALL_METHODS]
     if bad or min(a.graphs, a.rounds, a.passes, a.threads, a.batch_size) < 1:
         ap.error(f'unknown methods {bad} or a count below 1')
-    if 'gchm_pna' in methods:
-        print('note: gchm_pna is excluded from new analyses; it runs here only for a parity check')
     print(f'bench plan: protocol {PROTOCOL}, fold validation, {a.graphs} graphs (sample seed {a.sample_seed}, '
           f'drawn from {REPO_IDS(a)} validation), checkpoint seed {a.checkpoint_seed}')
     for line in plan_lines(a):

@@ -41,7 +41,7 @@ def register_plugins(modules, base_registry) -> dict:
     return registry
 
 
-METHOD_FOLDERS = ("cei", "gchm_pna", "graphcare", "gsat", "protgnn")
+METHOD_FOLDERS = ("cei", "graphcare", "gsat", "protgnn")
 
 
 def _discover_plugins():

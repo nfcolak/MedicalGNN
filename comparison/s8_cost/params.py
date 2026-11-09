@@ -23,14 +23,12 @@ EXPLANATION_PREFIXES = {   # state-dict name prefixes of explanation-specific tr
     'protgnn': ('prototype_vectors', 'prototype_classifier.'),
     'cei_mp2': (),
     'graphcare': (),
-    'gchm_pna': (),
 }
 EXPLANATION_NOTE = {
     'gsat': 'edge-attention extractor MLP',
     'protgnn': 'prototype vectors + prototype classifier (last layer)',
     'cei_mp2': 'none: evidence heads are the prediction path',
     'graphcare': 'none: no built-in explanation',
-    'gchm_pna': 'none: no built-in explanation',
 }
 
 
@@ -83,9 +81,8 @@ def rebuild(runs, rec, date):
     os.chdir(REPO)
     sys.path.insert(0, str(REPO))
     from core import train as T
-    from core.model import ClinicalGNN
     from core.registry import build_method
-    from core.tensorize import PAYLOAD_WIDTH, load_preprocessing, triple_count
+    from core.tensorize import load_preprocessing, triple_count
     from comparison.final.run import Paths, args as final_args
 
     K, m = rec['K'], rec['method']
@@ -99,19 +96,12 @@ def rebuild(runs, rec, date):
     sd = torch.load(run_dir / 'best.pt', map_location='cpu')
     node_dim, edge_dim = rec['node_dim'], rec['edge_dim']
     num_triples = triple_count(prep, args.edge_direction)
-    if m == 'gchm_pna':
-        model = ClinicalGNN(num_classes=K, num_tokens=len(prep['vocabulary']), node_dim=node_dim, edge_dim=edge_dim,
-                            hidden=args.hidden, layers=args.layers, dropout=args.dropout, token_dim=args.token_dim,
-                            use_edge_payload=not args.no_edge_payload, use_message_passing=not args.no_message_passing,
-                            conv=args.conv, num_triples=num_triples, payload_dim=PAYLOAD_WIDTH, heads=args.heads,
-                            degree_histogram=sd['degree_histogram'], modulation=args.modulation)
-    else:
-        model = build_method(args.method, num_tokens=len(prep['vocabulary']), node_dim=node_dim, edge_dim=edge_dim,
-                             num_classes=K, hidden=args.hidden, layers=args.layers, dropout=args.dropout,
-                             token_dim=args.token_dim, num_triples=num_triples, args=args)
-        hook = getattr(model, 'verify_run_preprocessing', None)
-        if callable(hook):
-            hook(T.preprocessing_state(prep))
+    model = build_method(args.method, num_tokens=len(prep['vocabulary']), node_dim=node_dim, edge_dim=edge_dim,
+                         num_classes=K, hidden=args.hidden, layers=args.layers, dropout=args.dropout,
+                         token_dim=args.token_dim, num_triples=num_triples, args=args)
+    hook = getattr(model, 'verify_run_preprocessing', None)
+    if callable(hook):
+        hook(T.preprocessing_state(prep))
     model.load_state_dict(sd, strict=True)
     trainable = sum(q.numel() for q in model.parameters() if q.requires_grad)
     prefixes = EXPLANATION_PREFIXES.get(m, ())
@@ -125,7 +115,7 @@ def main():
     ap.add_argument('--runs', required=True, help='final runs root, e.g. comparison/standardized/clinical_runs_fair_v10t_20261011')
     ap.add_argument('--out', required=True, help='NEW output directory (an existing one is refused)')
     ap.add_argument('--methods', default=DEFAULT_METHODS,
-                    help=f'comma-separated (default {DEFAULT_METHODS}); gchm_pna only on explicit request (parity checks)')
+                    help=f'comma-separated (default {DEFAULT_METHODS})')
     ap.add_argument('--ks', default=DEFAULT_KS)
     ap.add_argument('--execute', action='store_true',
                     help='rebuild the seed-1234 models, load best.pt strictly, recount (no training); exit 1 on any mismatch')

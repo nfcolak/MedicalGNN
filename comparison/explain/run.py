@@ -57,7 +57,6 @@ DEFAULT_METHODS = ('gsat', 'graphcare', 'protgnn', 'cei_mp2')
 BINDING_METHOD = {'gsat': 'gsat', 'graphcare': 'graphcare', 'protgnn': 'protgnn', 'cei_mp2': 'cei_gnn_mp2'}
 FOLDS = ('test', 'validation')
 FOLD_ROLE = {'test': 'report', 'validation': 'decision'}
-DROPPED = {'gchm_pna': 'GCHM-PNA is not part of the explanation study'}
 MANIFEST_NAME = 'driver_manifest.json'
 RUN_MANIFEST = 'explanation_manifest.json'
 
@@ -83,8 +82,6 @@ def parse_list(text, cast, what):
 
 def check_methods(methods):
     for method in methods:
-        if method in DROPPED:
-            raise SystemExit(f'--methods: {method}: {DROPPED[method]}')
         if method not in BINDING_METHOD:
             raise SystemExit(f'--methods: unknown method {method!r}; choose from {", ".join(DEFAULT_METHODS)}')
 

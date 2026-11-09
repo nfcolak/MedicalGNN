@@ -5,7 +5,7 @@
         [--method gsat] --out <new dir>
 
 Every folder holds `<method>_seed<s>/` run dirs (result.json, binding.json, validation.npz, test.npz). The
-method key is the run-dir name without `_seed<s>` (so `gsat`, `cei_mp2`, `gchm_pna`); the binding method is
+method key is the run-dir name without `_seed<s>` (so `gsat`, `cei_mp2`); the binding method is
 recorded alongside. Read-only on the runs; `--out` must not exist.
 
 Decisions (checkpoint, HPO, baseline choice) use VALIDATION; every reported result is on TEST (scored once per run

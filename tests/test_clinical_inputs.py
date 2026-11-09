@@ -208,7 +208,7 @@ def test_rewired_edge_count_uses_endpoint_multisets(tmp_path, monkeypatch, chang
     assert data.rewired_edge_count == expected
 
 
-@pytest.mark.parametrize('conv', ['edge_conditioned', 'hgt', 'gchm'])
+@pytest.mark.parametrize('conv', ['edge_conditioned', 'hgt'])
 def test_existing_gnn_consumes_new_context_width_without_architecture_changes(tmp_path, conv):
     from torch_geometric.data import Batch
     from core.model import ClinicalGNN
@@ -221,8 +221,7 @@ def test_existing_gnn_consumes_new_context_width_without_architecture_changes(tm
                         edge_dim=data[0].edge_attr.shape[1], hidden=16, layers=1,
                         num_classes=2, dropout=0, conv=conv,
                         num_triples=len(prep['triples']) + 1,
-                        payload_dim=tz.PAYLOAD_WIDTH,
-                        degree_histogram=tz.degree_histogram(data) if conv == 'gchm' else None)
+                        payload_dim=tz.PAYLOAD_WIDTH)
     model.eval()
     with torch.no_grad():
         output = model(Batch.from_data_list(data))

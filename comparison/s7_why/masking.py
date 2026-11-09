@@ -79,7 +79,7 @@ ALL_SEEDS = (1234, 2025, 7)
 BASELINES = ('gsat', 'graphcare', 'protgnn')
 MASKS = ('none', 'history', 'labs', 'triage')
 PRETTY = {'cei_mp2': 'CEI-GNN mp2', 'gsat': 'GSAT', 'graphcare': 'GraphCare-style (adapted)',
-          'protgnn': 'ProtGNN', 'gchm_pna': 'GCHM-PNA'}
+          'protgnn': 'ProtGNN'}
 V3_STATE = 'v3_state_L4_v5c_v10t_top{K}_20261011/K4.json'
 LAB_KINDS = frozenset({'measurement', 'analyte'})
 TRIAGE_KINDS = frozenset({'vital', 'complaint'})
@@ -321,23 +321,14 @@ def make_args(T, final_args, shim, a, method, k, seed):
 
 
 def build_model(T, M, method, args, prep, data0, k, state_dict):
-    if method == 'gchm_pna':
-        model = M['ClinicalGNN'](
-            num_classes=k, num_tokens=len(prep['vocabulary']), node_dim=data0.x.size(1),
-            edge_dim=data0.edge_attr.size(1), hidden=args.hidden, layers=args.layers, dropout=args.dropout,
-            token_dim=args.token_dim, use_edge_payload=not args.no_edge_payload,
-            use_message_passing=not args.no_message_passing, conv=args.conv,
-            num_triples=M['triple_count'](prep, args.edge_direction), payload_dim=M['PAYLOAD_WIDTH'],
-            heads=args.heads, degree_histogram=state_dict['degree_histogram'], modulation=args.modulation)
-    else:
-        model = M['build_method'](
-            args.method, num_tokens=len(prep['vocabulary']), node_dim=data0.x.size(1),
-            edge_dim=data0.edge_attr.size(1), num_classes=k, hidden=args.hidden, layers=args.layers,
-            dropout=args.dropout, token_dim=args.token_dim,
-            num_triples=M['triple_count'](prep, args.edge_direction), args=args)
-        hook = getattr(model, 'verify_run_preprocessing', None)
-        if callable(hook):
-            hook(T.preprocessing_state(prep))
+    model = M['build_method'](
+        args.method, num_tokens=len(prep['vocabulary']), node_dim=data0.x.size(1),
+        edge_dim=data0.edge_attr.size(1), num_classes=k, hidden=args.hidden, layers=args.layers,
+        dropout=args.dropout, token_dim=args.token_dim,
+        num_triples=M['triple_count'](prep, args.edge_direction), args=args)
+    hook = getattr(model, 'verify_run_preprocessing', None)
+    if callable(hook):
+        hook(T.preprocessing_state(prep))
     model.load_state_dict(state_dict, strict=True)
     model.eval()
     return model
@@ -348,12 +339,9 @@ def execute(a, plan):
     from torch_geometric.loader import DataLoader
     from core import train as T
     from core.registry import ClinicalMethodAdapter, build_method
-    from core.model import ClinicalGNN
-    from core.tensorize import (PAYLOAD_WIDTH, encode_graph, load_preprocessing, preprocessing_state,
-                                triple_count)
+    from core.tensorize import encode_graph, load_preprocessing, preprocessing_state, triple_count
     from comparison.final.run import args as final_args
-    M = dict(build_method=build_method, ClinicalGNN=ClinicalGNN, triple_count=triple_count,
-             PAYLOAD_WIDTH=PAYLOAD_WIDTH)
+    M = dict(build_method=build_method, triple_count=triple_count)
     torch.set_num_threads(a.threads)
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=False)
@@ -598,7 +586,7 @@ def main(argv=None):
     ap.add_argument('--limit', type=int, default=None, help='deterministic patient-level subsample of rows')
     ap.add_argument('--threads', type=int, default=2)
     ap.add_argument('--methods', default=None,
-                    help='explicit method list (parity checks only, e.g. cei_mp2,gchm_pna); default: CEI + '
+                    help='explicit method list (parity checks only); default: CEI + '
                          'two strongest validation baselines per K')
     ap.add_argument('--execute', action='store_true', help='load checkpoints and score (inference only)')
     a = ap.parse_args(argv)
