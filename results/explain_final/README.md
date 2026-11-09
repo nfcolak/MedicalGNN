@@ -17,7 +17,7 @@ test explanation results were seen, and the reported CEI-GNN stays the final mod
 | Replay check | every run reproduced its stored test predictions before it was explained (exact hash, or 1e-4 with the same argmax): 36 of 36, 0 failed visits |
 | Explainers | Integrated Gradients from the not-recorded clinical baseline, GradExplainer, GNNExplainer (50 epochs per visit), each model's built-in explanation (CEI-GNN evidence ledger, GSAT node attention, GraphCare visit attention, ProtGNN prototype subgraph) |
 | Headline | `deletion_mean_change_vs_random`: how much more the predicted-class probability drops when the top-ranked evidence is deleted than when random evidence of the same size is deleted (10 curve points, 50 random draws); higher is better |
-| Controls | weight randomisation and perturbation stability on the first 40 subjects of each run |
+| Controls | weight randomisation and perturbation stability on the first 40 explained visits of each run (31-33 patients) |
 | Code | explanation code identity `5f7518e193aa` (122 files, git head `58a4def`) in every run manifest |
 
 The trained graph inputs were reproduced from the repository rebuild with `analysis/trained_artifact.py` (the renamed
